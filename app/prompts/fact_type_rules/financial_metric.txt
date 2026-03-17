@@ -1,0 +1,9 @@
+Additional rules for FINANCIAL_METRIC:
+- metric_name (e.g. 营业收入, 净利润, 毛利率) must go into qualifiers.metric_name.
+- yoy and qoq percentages must go into qualifiers.yoy or qualifiers.qoq, NOT into value_num.
+- value_num should be the absolute metric value, not the growth rate.
+- If the metric is a ratio (e.g. 毛利率 35%), unit should be "%".
+- If the metric is a monetary amount, currency must be specified (CNY/USD/EUR).
+- report_scope (e.g. 合并口径, 母公司口径) goes into qualifiers.report_scope if stated.
+- is_forecast should be true if the value is a forecast/estimate/guidance.
+- Do not confuse revenue (营收) with profit (利润) or cost (成本).

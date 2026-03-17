@@ -1,0 +1,7 @@
+Additional rules for COMPETITIVE_RANKING:
+- If the text only says a company is in "TOP 10" or "入选榜单", do NOT invent an exact rank number.
+- qualifiers.rank must be null or absent if no exact rank is given in the evidence.
+- ranking_name, ranking_year, segment, and ranking_scope should go into qualifiers when explicitly stated.
+- predicate options: ranked_in_top10, ranked_no1_in, listed_in_ranking.
+- Do not confuse "入选" (listed/included) with "排名第一" (ranked #1).
+- If multiple companies are listed in the same ranking text, each company is a separate record.

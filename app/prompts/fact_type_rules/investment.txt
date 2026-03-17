@@ -1,0 +1,7 @@
+Additional rules for INVESTMENT:
+- Distinguish between: 总投资 (total investment), 注册资本 (registered capital), 项目投资 (project investment).
+- investment_type goes into qualifiers: project_investment, strategic_investment, equity_investment, etc.
+- purpose goes into qualifiers if stated (e.g. 扩建汽车涂料产线).
+- stage goes into qualifiers: signed, approved, under_construction, completed.
+- "拟投资" (planned) vs "已投资" (completed) are different — indicate in qualifiers.stage.
+- If the same sentence mentions both investment amount and capacity, extract as separate records.

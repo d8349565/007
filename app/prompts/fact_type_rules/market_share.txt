@@ -1,0 +1,8 @@
+Additional rules for MARKET_SHARE:
+- market_scope MUST be present in qualifiers when extracting a share percentage. If the evidence does not state the market scope, do NOT extract this fact.
+- Distinguish between single-company share and combined share (e.g. CR3/CR5/CR10/top10).
+- predicate should reflect the type: market_share_in_period (single company), cr10_in_period (top 10 combined), etc.
+- If the text says "前十强企业市占率96%", subject should be "前十强企业" (group), not a single company.
+- ranking_scope goes into qualifiers (e.g. top10, top5).
+- source_scope goes into qualifiers if stated (e.g. 按产值, 按产量).
+- unit for share is always "%".

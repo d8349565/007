@@ -1,0 +1,8 @@
+Additional rules for COOPERATION:
+- Both parties (subject and object) must be clearly identified from the evidence.
+- cooperation_type goes into qualifiers: strategic_cooperation, joint_development, supply_agreement, framework_agreement.
+- Distinguish between: "达成合作意向" (intention) vs "已签约" (signed) vs "正式启动" (started).
+- scope goes into qualifiers if stated (e.g. 新能源汽车涂层联合开发).
+- duration goes into qualifiers if stated.
+- Do not exaggerate the cooperation strength beyond what the evidence states.
+- Supply relationships (供应关系) and general cooperation (合作) should use different predicates.

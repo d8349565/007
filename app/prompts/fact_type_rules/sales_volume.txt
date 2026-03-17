@@ -1,0 +1,8 @@
+Additional rules for SALES_VOLUME:
+- metric_name (e.g. 总产量, 销量, 表观消费量, 出货量) must go into qualifiers.metric_name.
+- yoy and qoq percentages must go into qualifiers.yoy or qualifiers.qoq, NOT into value_num.
+- value_num should be the absolute volume number.
+- unit is typically 万吨, 吨, 万升, etc.
+- If multiple volume metrics appear in one evidence (e.g. 产量 and 消费量), extract each as a separate record.
+- scope (e.g. 全国, 某地区) goes into qualifiers.scope if stated.
+- Do not confuse output (产量) with sales (销量) with consumption (消费量).
