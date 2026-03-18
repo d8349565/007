@@ -46,52 +46,88 @@ fact_types:
   - PRICE_CHANGE
 
 # --- predicate 白名单 ---
+# 使用模糊匹配：LLM 输出的 predicate 包含白名单词根即视为匹配
 predicate_whitelist:
   FINANCIAL_METRIC:
-    - revenue_in_period
-    - profit_in_period
-    - net_profit_in_period
-    - gross_margin_in_period
-    - cost_in_period
+    - 实现
+    - 销售收入
+    - 新增销售收入
+    - 累计销售收入
+    - 收入为
+    - 营业收入
+    - 净利润
+    - 毛利率
+    - 价值增长
+    - 同比增长
+    - 同比下降
+    - 销售额
+    - 综合销售额
+    - 营收
+    - 利润总额
+    - 增长率
   SALES_VOLUME:
-    - output_in_period
-    - sales_in_period
-    - consumption_in_period
-    - shipment_in_period
+    - 实现
+    - 销售量
+    - 新接订单量
+    - 手持订单量
+    - 产量
+    - 出货量
+    - 完工量
+    - 交付量
+    - 消费量
   CAPACITY:
-    - capacity_in_period
-    - designed_capacity
-    - planned_capacity
-    - capacity_utilization_in_period
+    - 规划
+    - 新增年产
+    - 产能
+    - 扩建产能
+    - 建成产能
+    - 规划产能
+    - 年产能
+    - 设计产能
   INVESTMENT:
-    - invested_in
-    - investment_in_period
-    - capital_increased_for
-    - strategic_investment_in
+    - 计划总投资
+    - 投资额
+    - 总投资
+    - 签约投资
+    - 投资
   EXPANSION:
-    - expanded_in
-    - built_new_plant
-    - launched_project
-    - started_construction_of
+    - 新建
+    - 扩建
+    - 开工建设
+    - 投产
+    - 布局
+    - 建设
+    - 落地
+    - 竣工
   MARKET_SHARE:
-    - market_share_in_period
-    - cr10_in_period
-    - cr5_in_period
-    - share_of_top10_in_period
+    - 市场份额
+    - 占市场份额
+    - 占全国市场份额
+    - 占全球市场份额
+    - 市占率
+    - 前十强市占率
+    - 前五市占率
   COMPETITIVE_RANKING:
-    - ranked_in_top10
-    - ranked_no1_in
-    - listed_in_ranking
+    - 排名第
+    - 位居第
+    - 跻身前
+    - 入选
+    - 连续排名
+    - 名列
   COOPERATION:
-    - cooperated_with
-    - signed_agreement_with
-    - jointly_developed_with
-    - supplies_to
+    - 签署合作协议
+    - 战略合作
+    - 联合开发
+    - 供货
+    - 合作
+    - 签约
   PRICE_CHANGE:
-    - price_increased
-    - price_decreased
-    - price_adjusted
-    - price_in_period
+    - 价格上涨
+    - 价格下跌
+    - 价格调整
+    - 均价
+    - 涨价
+    - 降价
 
 # --- qualifiers 白名单 ---
 qualifier_whitelist:
@@ -102,23 +138,34 @@ qualifier_whitelist:
     - qoq
     - report_scope
     - is_forecast
+    - change_amount
+    - change_from_previous_year
+    - equivalent_usd
+    - equivalent_rmb
+    - equivalent_weight
   SALES_VOLUME:
     - metric_name
     - segment
     - yoy
     - qoq
     - scope
+    - change_amount
+    - change_from_previous_year
+    - equivalent_weight
   CAPACITY:
     - product_type
     - segment
     - is_planned
     - phase
+    - equivalent_weight
   INVESTMENT:
     - project_name
     - investment_type
     - segment
     - purpose
     - stage
+    - equivalent_usd
+    - equivalent_rmb
   EXPANSION:
     - project_name
     - segment
@@ -130,12 +177,15 @@ qualifier_whitelist:
     - segment
     - ranking_scope
     - source_scope
+    - yoy
+    - change_amount
   COMPETITIVE_RANKING:
     - ranking_name
     - ranking_year
     - segment
     - rank
     - ranking_scope
+    - position_range
   COOPERATION:
     - cooperation_type
     - project_name
@@ -148,6 +198,8 @@ qualifier_whitelist:
     - price_type
     - change_pct
     - reason
+    - yoy
+    - change_amount
 
 # --- 审核 ---
 review:

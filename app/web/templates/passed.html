@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>已通过结果 — 资讯颗粒化</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; }
+    .container { max-width: 1300px; margin: 0 auto; padding: 24px 20px; }
+    h1 { font-size: 22px; color: #1a3a5c; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #888; margin-bottom: 20px; }
+
+    /* 筛选栏 */
+    .filter-bar { background: white; border-radius: 8px; padding: 14px 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 20px;
+      display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .filter-bar label { font-size: 13px; color: #666; white-space: nowrap; }
+    .filter-bar select, .filter-bar input {
+      padding: 5px 10px; border: 1px solid #d0d5dd; border-radius: 4px; font-size: 13px; }
+    .filter-bar button { padding: 6px 16px; background: #1a3a5c; color: white;
+      border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+    .filter-bar button:hover { background: #0d2847; }
+    .export-btn { padding: 6px 14px; background: #28a745; color: white;
+      border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
+      text-decoration: none; display: inline-block; }
+    .export-btn:hover { background: #218838; }
+
+    /* 统计条 */
+    .summary-bar { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+    .summary-card { background: white; border-radius: 8px; padding: 14px 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08); flex: 1; min-width: 160px; text-align: center; }
+    .summary-card .val { font-size: 28px; font-weight: 700; color: #1a3a5c; }
+    .summary-card .lbl { font-size: 12px; color: #888; margin-top: 4px; }
+
+    /* 事实卡片网格 */
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+    .fact-card { background: white; border-radius: 8px; padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #28a745;
+      transition: box-shadow .15s; }
+    .fact-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+    .fact-card.human-pass { border-left-color: #0066cc; }
+
+    .fact-card-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .fact-type-badge { display: inline-block; padding: 2px 8px; border-radius: 3px;
+      font-size: 11px; font-weight: bold; background: #dce8f8; color: #1a3a5c; }
+    .pass-badge { display: inline-block; padding: 2px 8px; border-radius: 3px;
+      font-size: 11px; font-weight: bold; }
+    .pass-auto { background: #d4edda; color: #155724; }
+    .pass-human { background: #cce5ff; color: #004085; }
+
+    .fact-subject { font-size: 15px; font-weight: 700; color: #1a3a5c; margin-bottom: 4px; }
+    .fact-predicate { font-size: 12px; color: #888; margin-bottom: 8px; }
+
+    .fact-value-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 8px; }
+    .fact-value { font-size: 22px; font-weight: 700; color: #1a3a5c; }
+    .fact-unit { font-size: 13px; color: #666; }
+    .fact-value-text { font-size: 14px; font-weight: 600; color: #333; }
+
+    .fact-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 12px; color: #666; }
+    .fact-meta-item { display: flex; gap: 3px; align-items: center; }
+    .fact-meta-item .icon { color: #999; }
+
+    .evidence-text { margin-top: 10px; padding: 8px 10px; background: #f8f9fa;
+      border-radius: 4px; font-size: 12px; color: #555; line-height: 1.6;
+      border-left: 2px solid #dee2e6; max-height: 4em; overflow: hidden;
+      cursor: pointer; }
+    .evidence-text.expanded { max-height: none; }
+
+    .qualifier-row { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+    .qualifier-pill { display: inline-block; background: #f0f4ff; border: 1px solid #c8d8f0;
+      border-radius: 3px; padding: 1px 6px; font-size: 11px; color: #2255aa; }
+
+    /* 工具栏右侧统计 */
+    .fact-seq { font-size: 11px; color: #bbb; float: right; }
+
+    /* 分页 */
+    .pagination { margin-top: 24px; display: flex; gap: 8px; justify-content: center; }
+    .pagination a { padding: 7px 14px; background: white; border: 1px solid #d0d5dd;
+      border-radius: 4px; text-decoration: none; color: #333; font-size: 13px; }
+    .pagination a:hover { background: #e9ecef; }
+    .pagination .cur { padding: 7px 14px; background: #1a3a5c; color: white;
+      border-radius: 4px; font-size: 13px; }
+
+    .empty { text-align: center; padding: 60px; color: #aaa; font-size: 16px; background: white;
+      border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+    /* 类型颜色映射 */
+    .type-FINANCIAL_METRIC  { background: #fff3e0; color: #c56000; }
+    .type-SALES_VOLUME      { background: #e8f5e9; color: #2e7d32; }
+    .type-CAPACITY          { background: #e3f2fd; color: #1565c0; }
+    .type-INVESTMENT        { background: #fce4ec; color: #880e4f; }
+    .type-EXPANSION         { background: #f3e5f5; color: #6a1b9a; }
+    .type-MARKET_SHARE      { background: #e0f7fa; color: #00695c; }
+    .type-COMPETITIVE_RANKING { background: #fff8e1; color: #f57f17; }
+    .type-COOPERATION       { background: #e8eaf6; color: #283593; }
+    .type-PRICE_CHANGE      { background: #fbe9e7; color: #bf360c; }
+  </style>
+</head>
+<body>
+{% set active = 'passed' %}
+{% include '_nav.html' %}
+
+<div class="container">
+  <h1>✅ 已通过结果</h1>
+  <div class="subtitle">展示审核状态为"自动通过"或"人工通过"的全部事实原子</div>
+
+  {# 筛选栏 #}
+  <div class="filter-bar">
+    <form method="get" action="/passed" style="display:contents;">
+      <label>事实类型：</label>
+      <select name="fact_type">
+        <option value="">全部类型</option>
+        {% for ft in fact_types %}
+        <option value="{{ ft }}" {% if ft == current_type %}selected{% endif %}>{{ ft }}</option>
+        {% endfor %}
+      </select>
+      <label>来源文档：</label>
+      <select name="doc_id">
+        <option value="">全部文档</option>
+        {% for doc in all_docs %}
+        <option value="{{ doc.id }}" {% if doc.id == current_doc %}selected{% endif %}>{{ doc.title or '(无标题)' }}</option>
+        {% endfor %}
+      </select>
+      <label>通过方式：</label>
+      <select name="pass_type">
+        <option value="" {% if not current_pass_type %}selected{% endif %}>全部通过</option>
+        <option value="AUTO_PASS" {% if current_pass_type == 'AUTO_PASS' %}selected{% endif %}>自动通过</option>
+        <option value="HUMAN_PASS" {% if current_pass_type == 'HUMAN_PASS' %}selected{% endif %}>人工通过</option>
+      </select>
+      <button type="submit">🔍 筛选</button>
+    </form>
+    <a class="export-btn" href="/export?fact_type={{ current_type }}&status={{ current_pass_type or 'AUTO_PASS,HUMAN_PASS' }}">📥 导出 CSV</a>
+  </div>
+
+  {# 统计概览 #}
+  <div class="summary-bar">
+    <div class="summary-card">
+      <div class="val">{{ facts|length }}</div>
+      <div class="lbl">本页显示</div>
+    </div>
+    <div class="summary-card">
+      <div class="val">{{ total_count }}</div>
+      <div class="lbl">筛选结果总数</div>
+    </div>
+    <div class="summary-card">
+      <div class="val" style="color:#28a745;">{{ auto_pass_count }}</div>
+      <div class="lbl">自动通过</div>
+    </div>
+    <div class="summary-card">
+      <div class="val" style="color:#0066cc;">{{ human_pass_count }}</div>
+      <div class="lbl">人工通过</div>
+    </div>
+    {% if type_dist %}
+    <div class="summary-card" style="flex:2;">
+      <div style="font-size:11px;color:#888;margin-bottom:6px;">类型分布</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        {% for t in type_dist %}
+        <span style="font-size:12px;background:#f0f4ff;border-radius:3px;padding:2px 8px;">{{ t.fact_type }}: <b>{{ t.cnt }}</b></span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# 事实卡片 #}
+  {% if facts %}
+  <div class="cards-grid">
+    {% for f in facts %}
+    <div class="fact-card {% if f.review_status == 'HUMAN_PASS' %}human-pass{% endif %}">
+      <div class="fact-card-head">
+        <span class="fact-type-badge type-{{ f.fact_type }}">{{ f.fact_type }}</span>
+        <span>
+          {% if f.review_status == 'AUTO_PASS' %}
+          <span class="pass-badge pass-auto">自动通过</span>
+          {% else %}
+          <span class="pass-badge pass-human">人工通过</span>
+          {% endif %}
+        </span>
+      </div>
+
+      <div class="fact-subject">{{ f.subject_text or '—' }}</div>
+      <div class="fact-predicate">{{ f.predicate or '' }}</div>
+
+      <div class="fact-value-row">
+        {% if f.value_num is not none and f.value_num != '' %}
+          <span class="fact-value">{% if f.value_num == f.value_num|int %}{{ f.value_num|int }}{% else %}{{ f.value_num }}{% endif %}</span>
+          {% if f.unit %}<span class="fact-unit">{{ f.unit }}</span>{% endif %}
+          {% if f.currency %}<span class="fact-unit">{{ f.currency }}</span>{% endif %}
+        {% elif f.value_text %}
+          <span class="fact-value-text">{{ f.value_text }}</span>
+          {% if f.unit %}<span class="fact-unit">{{ f.unit }}</span>{% endif %}
+        {% elif f.object_text %}
+          <span class="fact-value-text">{{ f.object_text }}</span>
+        {% else %}
+          <span style="color:#aaa;font-size:13px;">（无数值）</span>
+        {% endif %}
+      </div>
+
+      <div class="fact-meta">
+        {% if f.time_expr %}<span class="fact-meta-item"><span class="icon">🕐</span>{{ f.time_expr }}</span>{% endif %}
+        {% if f.location_text %}<span class="fact-meta-item"><span class="icon">📍</span>{{ f.location_text }}</span>{% endif %}
+        {% if f.confidence_score %}<span class="fact-meta-item"><span class="icon">📊</span>置信度 {{ '%.2f'|format(f.confidence_score) }}</span>{% endif %}
+        {% if f.document_title %}<span class="fact-meta-item" style="color:#aaa;font-size:11px;">📄 {{ f.document_title[:30] }}{% if f.document_title|length > 30 %}…{% endif %}</span>{% endif %}
+      </div>
+
+      {% if f.qualifiers_display %}
+      <div class="qualifier-row">
+        {% for k, v in f.qualifiers_display.items() %}
+        <span class="qualifier-pill">{{ k }}: {{ v }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if f.evidence_text %}
+      <div class="evidence-text" onclick="this.classList.toggle('expanded')" title="点击展开证据原文">
+        "{{ f.evidence_text }}"
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="pagination">
+    {% if page > 1 %}
+    <a href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&page={{ page - 1 }}">← 上一页</a>
+    {% endif %}
+    <span class="cur">第 {{ page }} 页</span>
+    {% if has_more %}
+    <a href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&page={{ page + 1 }}">下一页 →</a>
+    {% endif %}
+  </div>
+
+  {% else %}
+  <div class="empty">暂无已通过的事实原子</div>
+  {% endif %}
+</div>
+</body>
+</html>

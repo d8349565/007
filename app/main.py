@@ -105,7 +105,7 @@ def cmd_web(args):
     """启动审核 Web 界面"""
     init_db()
     from app.web.review_app import run_app
-    print("🌐 启动审核 Web 界面...")
+    print("启动审核 Web 界面...")
     run_app()
 
 

@@ -90,14 +90,22 @@ def find_evidence(
                 logger.warning("未知 fact_type: %s，跳过", fact_type)
                 continue
 
-            # 写入 evidence_span 表
-            conn.execute(
-                """INSERT INTO evidence_span
+            # 去重：利用 UNIQUE 约束 (document_id, fact_type, evidence_text)
+            # INSERT OR IGNORE 在冲突时静默跳过，避免竞态条件
+            cursor = conn.execute(
+                """INSERT OR IGNORE INTO evidence_span
                 (id, document_id, chunk_id, evidence_text, fact_type, priority, extraction_task_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (evidence_id, document_id, chunk_id, evidence_text,
                  fact_type, priority, task_id),
             )
+
+            if cursor.rowcount == 0:
+                logger.info(
+                    "[%s] 跳过重复 evidence_span (fact_type=%s)",
+                    chunk_id[:8], fact_type,
+                )
+                continue
 
             evidence_list.append({
                 "evidence_id": evidence_id,

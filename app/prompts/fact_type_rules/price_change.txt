@@ -4,7 +4,7 @@ Additional rules for PRICE_CHANGE:
 - change_pct goes into qualifiers if a percentage change is stated.
 - reason goes into qualifiers if the evidence explains why the price changed.
 - Distinguish between: price increase (涨价/上调), price decrease (降价/下调), price adjustment (调价).
-- predicate options: price_increased, price_decreased, price_adjusted, price_in_period.
+- predicate must be a Chinese verb phrase. Available options: 价格上涨、价格下跌、价格调整、均价为 (choose the most appropriate).
 - If the evidence gives both old and new prices, extract the current/new price as value_num.
 - segment goes into qualifiers if stated.
 - Do not confuse cost changes with price changes.

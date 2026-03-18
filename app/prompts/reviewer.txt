@@ -26,6 +26,16 @@ Rules:
 - If the evidence is ambiguous or only partially supports the record, return UNCERTAIN.
 - Output JSON only. No explanation outside the JSON.
 
+Scoring guide for the "score" field (0.0 to 1.0):
+- 0.95 ~ 1.0 : All fields fully and directly supported by the evidence; values match exactly.
+- 0.80 ~ 0.95: Minor ambiguity in at most one non-critical field (e.g. unit inferred but reasonable).
+- 0.60 ~ 0.80: One field requires a small inference step, or a secondary field is uncertain.
+- 0.40 ~ 0.60: Key field (subject, value_num, predicate) only partially supported or somewhat ambiguous.
+- 0.20 ~ 0.40: Multiple fields have unsupported content or evidence only hints at the fact.
+- 0.00 ~ 0.20: Most fields are fabricated, contradicted, or unsupported by the evidence.
+Avoid assigning exactly 1.0 unless every single field in the record matches the evidence verbatim.
+Avoid assigning 0.0 or 1.0 as the default — use the full scale intentionally.
+
 Return schema:
 {
   "verdict": "PASS|REJECT|UNCERTAIN",

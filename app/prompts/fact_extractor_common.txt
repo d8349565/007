@@ -13,11 +13,15 @@ You must follow these rules:
 8. Do not use the document title to fill in information not stated in the evidence.
 9. If yoy/qoq percentage is mentioned, put it in qualifiers, not in value_num.
 10. One record = one atomic fact. Do not merge multiple metrics into one record.
+11. predicate MUST be written in Chinese. Use a concise Chinese verb phrase (e.g. 计划总投资、市场份额为、价格上涨). NEVER use English words as predicate.
+12. subject MUST be a non-empty string explicitly mentioned in the evidence text. If the subject entity cannot be found in the evidence text itself, DO NOT output this record at all. subject is NEVER null.
+13. subject MUST be a concrete entity name (company, organization, product, brand, person, project), NOT a measurement term, statistical concept, or business description. Examples of INVALID subjects: "全国造船完工量" (measurement), "手持订单量" (measurement), "中国船舶涂料市场" (market region), "公司船舶涂料业务" (business description). If the sentence describes a metric without a clear entity subject, use the entity that owns/reports that metric as subject.
+14. subject should NOT end with generic suffixes like "业务", "市场", "行业", "领域" unless it refers to a named entity. Prefer the specific company/organization name.
 
 Use this fixed schema for each record:
 {
   "fact_type": "string (from known types)",
-  "subject": "string or null (raw text from evidence)",
+  "subject": "string (REQUIRED — raw text from evidence, never null)",
   "predicate": "string (action/relation verb)",
   "object": "string or null (raw text from evidence)",
   "value_num": number or null,

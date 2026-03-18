@@ -185,6 +185,142 @@ def get_stats() -> dict:
         conn.close()
 
 
+def get_documents(limit: int = 200, offset: int = 0) -> list[dict]:
+    """获取文档列表，附带各流程阶段计数"""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """SELECT sd.id, sd.title, sd.source_name, sd.source_type,
+                      sd.status, sd.crawl_time, sd.publish_time, sd.url,
+                      COUNT(DISTINCT dc.id)  AS chunk_count,
+                      COUNT(DISTINCT es.id)  AS evidence_count,
+                      COUNT(DISTINCT f.id)   AS fact_count
+               FROM source_document sd
+               LEFT JOIN document_chunk dc  ON dc.document_id = sd.id
+               LEFT JOIN evidence_span es   ON es.document_id = sd.id
+               LEFT JOIN fact_atom f        ON f.document_id  = sd.id
+               GROUP BY sd.id
+               ORDER BY sd.crawl_time DESC
+               LIMIT ? OFFSET ?""",
+            (limit, offset),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_document(doc_id: str) -> dict | None:
+    """获取单个文档基本信息"""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT * FROM source_document WHERE id=?", (doc_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_document_chunks(doc_id: str) -> list[dict]:
+    """获取文档的所有 chunk，附带 evidence 计数"""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """SELECT dc.*, COUNT(es.id) AS evidence_count
+               FROM document_chunk dc
+               LEFT JOIN evidence_span es ON es.chunk_id = dc.id
+               WHERE dc.document_id = ?
+               GROUP BY dc.id
+               ORDER BY dc.chunk_index""",
+            (doc_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_document_evidences(doc_id: str) -> list[dict]:
+    """获取文档的所有 evidence_span，附带所属 chunk_index 和 fact 计数"""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """SELECT es.*, dc.chunk_index,
+                      COUNT(f.id) AS fact_count
+               FROM evidence_span es
+               LEFT JOIN document_chunk dc ON es.chunk_id = dc.id
+               LEFT JOIN fact_atom f       ON f.evidence_span_id = es.id
+               WHERE es.document_id = ?
+               GROUP BY es.id
+               ORDER BY dc.chunk_index, es.rowid""",
+            (doc_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_document_tasks(doc_id: str) -> list[dict]:
+    """获取文档的抽取任务日志"""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """SELECT * FROM extraction_task
+               WHERE document_id = ?
+               ORDER BY started_at""",
+            (doc_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_passed_facts_stats(fact_type: str = "", document_id: str = "", pass_type: str = "") -> dict:
+    """获取已通过事实的统计概览（总数、自动通过数、人工通过数、类型分布）"""
+    conn = get_connection()
+    try:
+        conditions = []
+        params = []
+        if pass_type:
+            conditions.append("f.review_status = ?")
+            params.append(pass_type)
+        else:
+            conditions.append("f.review_status IN ('AUTO_PASS','HUMAN_PASS')")
+        if fact_type:
+            conditions.append("f.fact_type = ?")
+            params.append(fact_type)
+        if document_id:
+            conditions.append("f.document_id = ?")
+            params.append(document_id)
+        where = " AND ".join(conditions)
+
+        total = conn.execute(
+            f"SELECT COUNT(*) AS cnt FROM fact_atom f WHERE {where}", params
+        ).fetchone()["cnt"]
+
+        auto = conn.execute(
+            f"SELECT COUNT(*) AS cnt FROM fact_atom f WHERE {where} AND f.review_status='AUTO_PASS'", params
+        ).fetchone()["cnt"]
+
+        human = conn.execute(
+            f"SELECT COUNT(*) AS cnt FROM fact_atom f WHERE {where} AND f.review_status='HUMAN_PASS'", params
+        ).fetchone()["cnt"]
+
+        type_dist = conn.execute(
+            f"""SELECT f.fact_type, COUNT(*) AS cnt FROM fact_atom f
+                WHERE {where} GROUP BY f.fact_type ORDER BY cnt DESC""",
+            params,
+        ).fetchall()
+
+        return {
+            "total": total,
+            "auto_pass": auto,
+            "human_pass": human,
+            "type_dist": [dict(r) for r in type_dist],
+        }
+    finally:
+        conn.close()
+
+
 def get_doc_stats(document_id: str) -> dict:
     """单文档处理统计"""
     conn = get_connection()

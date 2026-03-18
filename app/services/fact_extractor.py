@@ -153,19 +153,52 @@ def _validate_record(
         logger.warning("缺少 predicate，跳过记录")
         return None
 
+    subject = rec.get("subject")
+    if not subject or not str(subject).strip():
+        logger.warning(
+            "subject 为空，跳过记录 (fact_type=%s, predicate=%s)",
+            fact_type, predicate,
+        )
+        return None
+
+    subject = str(subject).strip()
+
+    # subject 质量校验：拒绝度量词/统计概念作为 subject
+    _SUBJECT_REJECT_SUFFIXES = (
+        "完工量", "订单量", "交付量", "产量", "销售量", "消费量",
+        "出货量", "保有量", "增长量", "需求量",
+    )
+    _SUBJECT_REJECT_KEYWORDS = (
+        "市场规模", "行业规模", "市场容量",
+    )
+    if subject.endswith(_SUBJECT_REJECT_SUFFIXES):
+        logger.warning(
+            "subject '%s' 是度量词而非实体，跳过记录 (fact_type=%s)",
+            subject, fact_type,
+        )
+        return None
+    if subject in _SUBJECT_REJECT_KEYWORDS:
+        logger.warning(
+            "subject '%s' 是统计概念而非实体，跳过记录 (fact_type=%s)",
+            subject, fact_type,
+        )
+        return None
+
     # fact_type 白名单
     valid_types = cfg.get("fact_types", [])
     if valid_types and fact_type not in valid_types:
         logger.warning("未知 fact_type: %s", fact_type)
         return None
 
-    # predicate 白名单后校验（允许自由生成，仅警告）
+    # predicate 白名单模糊校验（词根匹配：白名单词根出现在 predicate 中即视为匹配）
     pred_whitelist = cfg.get("predicate_whitelist", {}).get(fact_type, [])
-    if pred_whitelist and predicate not in pred_whitelist:
-        logger.info(
-            "predicate '%s' 不在白名单中（fact_type=%s），保留但标记",
-            predicate, fact_type,
-        )
+    if pred_whitelist:
+        matched = any(root in predicate for root in pred_whitelist)
+        if not matched:
+            logger.info(
+                "predicate '%s' 未匹配白名单任何词根（fact_type=%s），保留但标记",
+                predicate, fact_type,
+            )
 
     # qualifiers 格式校验
     qualifiers = rec.get("qualifiers", {})
