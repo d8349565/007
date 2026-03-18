@@ -44,8 +44,8 @@ venv/
 *.h5
 *.json
 *.xml
-*.yaml
-*.yml
+
+
 
 # OS
 Thumbs.db

@@ -1,0 +1,181 @@
+# ============================================================
+# 资讯颗粒化收集系统 - 主配置文件
+# ============================================================
+
+# --- 数据库 ---
+database:
+  path: "data/mvp.db"
+
+# --- LLM / DeepSeek ---
+llm:
+  provider: "deepseek"
+  base_url: "https://api.deepseek.com"
+  model: "deepseek-chat"
+  temperature: 0.1
+  max_tokens: 4096
+  timeout: 120          # 秒
+  max_retries: 3
+  retry_delay: 2        # 秒
+
+# --- 文本切分 ---
+splitter:
+  short_text_threshold: 1200   # ≤ 此字数不切分
+  chunk_min: 300               # 最小块（中文字）
+  chunk_ideal: 700             # 理想块大小
+  chunk_max: 1200              # 最大块大小
+  overlap: 80                  # 相邻块 overlap（中文字）
+
+# --- 文本清洗 ---
+cleaner:
+  remove_ads: true
+  remove_navigation: true
+  remove_disclaimer: true
+  strip_html_tags: true
+  normalize_whitespace: true
+
+# --- fact_type 白名单（第一批 9 类） ---
+fact_types:
+  - FINANCIAL_METRIC
+  - SALES_VOLUME
+  - CAPACITY
+  - INVESTMENT
+  - EXPANSION
+  - MARKET_SHARE
+  - COMPETITIVE_RANKING
+  - COOPERATION
+  - PRICE_CHANGE
+
+# --- predicate 白名单 ---
+predicate_whitelist:
+  FINANCIAL_METRIC:
+    - revenue_in_period
+    - profit_in_period
+    - net_profit_in_period
+    - gross_margin_in_period
+    - cost_in_period
+  SALES_VOLUME:
+    - output_in_period
+    - sales_in_period
+    - consumption_in_period
+    - shipment_in_period
+  CAPACITY:
+    - capacity_in_period
+    - designed_capacity
+    - planned_capacity
+    - capacity_utilization_in_period
+  INVESTMENT:
+    - invested_in
+    - investment_in_period
+    - capital_increased_for
+    - strategic_investment_in
+  EXPANSION:
+    - expanded_in
+    - built_new_plant
+    - launched_project
+    - started_construction_of
+  MARKET_SHARE:
+    - market_share_in_period
+    - cr10_in_period
+    - cr5_in_period
+    - share_of_top10_in_period
+  COMPETITIVE_RANKING:
+    - ranked_in_top10
+    - ranked_no1_in
+    - listed_in_ranking
+  COOPERATION:
+    - cooperated_with
+    - signed_agreement_with
+    - jointly_developed_with
+    - supplies_to
+  PRICE_CHANGE:
+    - price_increased
+    - price_decreased
+    - price_adjusted
+    - price_in_period
+
+# --- qualifiers 白名单 ---
+qualifier_whitelist:
+  FINANCIAL_METRIC:
+    - metric_name
+    - segment
+    - yoy
+    - qoq
+    - report_scope
+    - is_forecast
+  SALES_VOLUME:
+    - metric_name
+    - segment
+    - yoy
+    - qoq
+    - scope
+  CAPACITY:
+    - product_type
+    - segment
+    - is_planned
+    - phase
+  INVESTMENT:
+    - project_name
+    - investment_type
+    - segment
+    - purpose
+    - stage
+  EXPANSION:
+    - project_name
+    - segment
+    - stage
+    - capacity_related
+    - investment_related
+  MARKET_SHARE:
+    - market_scope
+    - segment
+    - ranking_scope
+    - source_scope
+  COMPETITIVE_RANKING:
+    - ranking_name
+    - ranking_year
+    - segment
+    - rank
+    - ranking_scope
+  COOPERATION:
+    - cooperation_type
+    - project_name
+    - segment
+    - duration
+    - scope
+  PRICE_CHANGE:
+    - product_name
+    - segment
+    - price_type
+    - change_pct
+    - reason
+
+# --- 审核 ---
+review:
+  auto_pass_confidence: 0.90
+  force_human_review_types:
+    - MARKET_SHARE
+    - COMPETITIVE_RANKING
+  force_human_review_predicates:
+    - yoy
+    - qoq
+
+# --- 日志 ---
+logging:
+  level: "INFO"
+  log_dir: "logs"
+  max_bytes: 10485760      # 10MB
+  backup_count: 5
+
+# --- Web 审核界面 ---
+web:
+  host: "127.0.0.1"
+  port: 5000
+  debug: false
+
+# --- 导入 ---
+importer:
+  supported_extensions:
+    - ".txt"
+    - ".md"
+  url_timeout: 30
+  batch_progress: true
