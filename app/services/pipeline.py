@@ -71,15 +71,8 @@ def process_document(document_id: str) -> dict:
 
     # 3. 文本切分
     cfg = get_config()
-    splitter_cfg = cfg.get("splitter", {})
-    chunks = split_text(
-        cleaned,
-        max_chunk_chars=splitter_cfg.get("max_chunk_chars", 1200),
-        min_chunk_chars=splitter_cfg.get("min_chunk_chars", 200),
-        ideal_min=splitter_cfg.get("ideal_min", 500),
-        ideal_max=splitter_cfg.get("ideal_max", 900),
-        overlap_chars=splitter_cfg.get("overlap_chars", 80),
-    )
+    chunk_dicts = split_text(cleaned, doc_id=document_id)
+    chunks = [c["chunk_text"] for c in chunk_dicts]
     stats["chunks"] = len(chunks)
     logger.info("切分为 %d 个 chunk", len(chunks))
 

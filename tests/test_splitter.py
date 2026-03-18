@@ -11,9 +11,9 @@ from app.services.text_splitter import split_text, count_effective_chars
 def test_short_text_passthrough():
     """短文本不应被切分"""
     text = "这是一段短文本，总共不超过一百个字符。"
-    chunks = split_text(text, max_chunk_chars=1200)
+    chunks = split_text(text)
     assert len(chunks) == 1
-    assert chunks[0] == text
+    assert chunks[0]["chunk_text"] == text
 
 
 def test_count_effective_chars_chinese():
@@ -41,11 +41,11 @@ def test_split_long_text():
         paragraphs.append(f"这是第{i+1}个段落。" * 10)  # 每段约 80-100 字
     text = "\n\n".join(paragraphs)
 
-    chunks = split_text(text, max_chunk_chars=500, ideal_min=200, ideal_max=400)
+    chunks = split_text(text)
     assert len(chunks) > 1
     # 每个 chunk 都不应为空
     for c in chunks:
-        assert len(c.strip()) > 0
+        assert len(c["chunk_text"].strip()) > 0
 
 
 def test_empty_input():
@@ -58,7 +58,7 @@ def test_empty_input():
 
 def test_single_paragraph():
     text = "只有一个段落的文本，内容丰富但整体不长。" * 5
-    chunks = split_text(text, max_chunk_chars=1200)
+    chunks = split_text(text)
     assert len(chunks) >= 1
 
 

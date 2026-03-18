@@ -83,7 +83,7 @@ def test_clean_and_split_pipeline():
 
     chunks = split_text(cleaned)
     assert len(chunks) >= 1
-    assert all(len(c.strip()) > 0 for c in chunks)
+    assert all(len(c["chunk_text"].strip()) > 0 for c in chunks)
 
 
 if __name__ == "__main__":

@@ -55,6 +55,10 @@ def split_text(
     if cfg is None:
         cfg = get_config().get("splitter", {})
 
+    # 空输入直接返回空列表
+    if not cleaned_text or not cleaned_text.strip():
+        return []
+
     threshold = cfg.get("short_text_threshold", 1200)
     chunk_ideal = cfg.get("chunk_ideal", 700)
     chunk_max = cfg.get("chunk_max", 1200)
