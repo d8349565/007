@@ -166,9 +166,13 @@ def create_app() -> Flask:
         facts = query_facts(
             fact_type=fact_type,
             review_status=status,
-            limit=per_page,
+            limit=per_page + 1,
             offset=(page - 1) * per_page,
         )
+
+        has_more = len(facts) > per_page
+        if has_more:
+            facts = facts[:per_page]
 
         # 解析 qualifier_json 为 dict 用于展示
         for f in facts:
@@ -194,6 +198,7 @@ def create_app() -> Flask:
             current_type=fact_type,
             current_status=status,
             page=page,
+            has_more=has_more,
         )
 
     @app.route("/review/<fact_id>", methods=["GET"])

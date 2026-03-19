@@ -16,31 +16,62 @@
         .filters button { background: #0066cc; color: white; border: none; cursor: pointer; }
         .filters button:hover { background: #0052a3; }
         table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        th { background: #f0f0f0; text-align: left; padding: 10px 12px; font-size: 13px; white-space: nowrap; }
-        td { padding: 8px 12px; font-size: 13px; border-top: 1px solid #eee; vertical-align: top; }
+        th { background: #f5f5f5; text-align: left; padding: 10px 12px; font-size: 12px; color: #666; font-weight: 600; }
+        td { padding: 10px 12px; font-size: 13px; border-top: 1px solid #eee; vertical-align: top; }
         tr:hover { background: #fafafa; }
         .badge {
-            display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: bold;
+            display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; white-space: nowrap;
         }
         .badge-pass { background: #d4edda; color: #155724; }
         .badge-reject { background: #f8d7da; color: #721c24; }
         .badge-uncertain { background: #fff3cd; color: #856404; }
         .badge-pending { background: #e2e3e5; color: #383d41; }
-        .actions { display: flex; gap: 6px; }
-        .actions form { display: inline; }
-        .btn-pass { background: #28a745; color: white; border: none; padding: 4px 10px; border-radius: 3px; cursor: pointer; font-size: 12px; }
-        .btn-reject { background: #dc3545; color: white; border: none; padding: 4px 10px; border-radius: 3px; cursor: pointer; font-size: 12px; }
-        .btn-pass:hover { background: #218838; }
-        .btn-reject:hover { background: #c82333; }
+        .badge-FINANCIAL_METRIC { background: #fff3e0; color: #c56000; }
+        .badge-SALES_VOLUME { background: #e8f5e9; color: #2e7d32; }
+        .badge-CAPACITY { background: #e3f2fd; color: #1565c0; }
+        .badge-INVESTMENT { background: #fce4ec; color: #880e4f; }
+        .badge-EXPANSION { background: #f3e5f5; color: #6a1b9a; }
+        .badge-MARKET_SHARE { background: #e0f7fa; color: #00695c; }
+        .badge-COMPETITIVE_RANKING { background: #fff8e1; color: #f57f17; }
+        .badge-COOPERATION { background: #e8eaf6; color: #283593; }
+        .badge-PRICE_CHANGE { background: #fbe9e7; color: #bf360c; }
+        .cell-subject { font-weight: 600; color: #1a3a5c; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cell-predicate { color: #666; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cell-value { font-weight: 600; white-space: nowrap; }
+        .cell-value-unit { color: #888; font-size: 12px; margin-left: 2px; }
+        .btn-detail {
+            background: none; border: 1px solid #ddd; border-radius: 4px; padding: 4px 8px;
+            cursor: pointer; font-size: 14px; color: #666; transition: all 0.2s;
+        }
+        .btn-detail:hover { background: #e8f0fe; border-color: #aaa; color: #1a3a5c; }
+        .detail-popup {
+            display: none; position: absolute; background: white; border: 1px solid #ddd;
+            border-radius: 8px; padding: 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            z-index: 100; min-width: 280px; max-width: 400px; margin-top: 4px;
+        }
+        .detail-popup.show { display: block; }
+        .detail-row { margin-bottom: 8px; font-size: 12px; line-height: 1.5; }
+        .detail-row:last-child { margin-bottom: 0; }
+        .detail-label { color: #888; display: inline-block; width: 55px; }
+        .detail-value { color: #333; word-break: break-all; }
+        .detail-evidence { background: #f8f9fa; padding: 8px; border-radius: 4px; border-left: 3px solid #dee2e6; color: #555; font-size: 11px; line-height: 1.6; max-height: 80px; overflow-y: auto; white-space: pre-wrap; }
+        .select-action {
+            padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;
+            background: white; cursor: pointer; color: #666;
+        }
+        .select-action:hover { border-color: #aaa; }
+        .select-action option[value="HUMAN_PASS"] { color: #28a745; }
+        .select-action option[value="HUMAN_REJECTED"] { color: #dc3545; }
         .pagination { margin-top: 16px; display: flex; gap: 8px; }
         .pagination a { padding: 6px 12px; background: white; border: 1px solid #ccc; border-radius: 4px; text-decoration: none; color: #333; }
         .pagination a:hover { background: #e9ecef; }
-        .evidence-cell { max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
-        .qualifiers-cell { max-width: 200px; font-size: 11px; color: #666; }
         .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
         .export-link { font-size: 13px; color: #0066cc; text-decoration: none; }
         .export-link:hover { text-decoration: underline; }
         .empty-msg { text-align: center; padding: 40px; color: #999; font-size: 16px; }
+        .table-wrap { overflow-x: auto; }
+        .table-wrap table { min-width: 700px; }
+        td.relative { position: relative; }
     </style>
 </head>
 <body>
@@ -81,73 +112,120 @@
     </div>
 
     {% if facts %}
+    <div class="table-wrap">
     <table>
         <thead>
             <tr>
-                <th>#</th>
-                <th>类型</th>
+                <th style="width:40px;">#</th>
+                <th style="width:90px;">类型</th>
                 <th>主体</th>
                 <th>谓词</th>
-                <th>客体</th>
-                <th>数值</th>
-                <th>单位</th>
-                <th>时间</th>
-                <th>置信度</th>
-                <th>状态</th>
-                <th>证据</th>
-                <th>操作</th>
+                <th style="width:120px;">数值</th>
+                <th style="width:80px;">状态</th>
+                <th style="width:50px;">详情</th>
+                <th style="width:80px;">操作</th>
             </tr>
         </thead>
         <tbody>
             {% for f in facts %}
             <tr>
-                <td>{{ (page - 1) * 20 + loop.index }}</td>
-                <td><span class="badge">{{ FACT_TYPE_NAMES.get(f.fact_type, f.fact_type) }}</span></td>
-                <td>{{ f.subject_text or '-' }}</td>
-                <td>{{ f.predicate or '-' }}</td>
-                <td>{{ f.object_text or '-' }}</td>
-                <td>{{ f.value_text or f.value_num or '-' }}</td>
-                <td>{{ f.unit or '-' }}</td>
-                <td>{{ f.time_expr or '-' }}</td>
-                <td>{{ '%.2f'|format(f.confidence_score) if f.confidence_score else '-' }}</td>
+                <td style="color:#bbb; font-size:12px;">{{ (page - 1) * 20 + loop.index }}</td>
+                <td><span class="badge badge-{{ f.fact_type }}">{{ FACT_TYPE_NAMES.get(f.fact_type, f.fact_type) }}</span></td>
+                <td class="cell-subject" title="{{ f.subject_text or '' }}">{{ f.subject_text or '-' }}</td>
+                <td class="cell-predicate" title="{{ f.predicate or '' }}">{{ f.predicate or '-' }}</td>
+                <td class="cell-value">
+                    {% if f.value_num is not none and f.value_num != '' %}
+                        {{ f.value_num }}{% if f.unit %}<span class="cell-value-unit">{{ f.unit }}</span>{% endif %}
+                    {% elif f.value_text %}
+                        {{ f.value_text[:20] }}{% if f.value_text|length > 20 %}…{% endif %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
                 <td>
                     {% if f.review_status == 'AUTO_PASS' or f.review_status == 'HUMAN_PASS' %}
-                    <span class="badge badge-pass">{% if f.review_status == 'AUTO_PASS' %}自动通过{% else %}人工通过{% endif %}</span>
+                    <span class="badge badge-pass">{% if f.review_status == 'AUTO_PASS' %}自动{% else %}人工{% endif %}</span>
                     {% elif f.review_status == 'REJECTED' or f.review_status == 'HUMAN_REJECTED' %}
-                    <span class="badge badge-reject">{% if f.review_status == 'REJECTED' %}已拒绝{% else %}人工拒绝{% endif %}</span>
+                    <span class="badge badge-reject">{% if f.review_status == 'REJECTED' %}已拒{% else %}人工拒{% endif %}</span>
                     {% elif f.review_status == 'HUMAN_REVIEW_REQUIRED' %}
-                    <span class="badge badge-uncertain">待人工审核</span>
+                    <span class="badge badge-uncertain">待审</span>
                     {% else %}
                     <span class="badge badge-pending">待处理</span>
                     {% endif %}
                 </td>
-                <td class="evidence-cell" title="{{ f.evidence_text or '' }}">
-                    {{ (f.evidence_text or '')[:80] }}{% if (f.evidence_text or '')|length > 80 %}...{% endif %}
+                <td class="relative">
+                    <button class="btn-detail" onclick="toggleDetail(this, event)">📎</button>
+                    <div class="detail-popup">
+                        {% if f.object_text %}
+                        <div class="detail-row"><span class="detail-label">客体</span><span class="detail-value">{{ f.object_text }}</span></div>
+                        {% endif %}
+                        {% if f.currency %}
+                        <div class="detail-row"><span class="detail-label">货币</span><span class="detail-value">{{ f.currency }}</span></div>
+                        {% endif %}
+                        {% if f.time_expr %}
+                        <div class="detail-row"><span class="detail-label">时间</span><span class="detail-value">{{ f.time_expr }}</span></div>
+                        {% endif %}
+                        {% if f.location_text %}
+                        <div class="detail-row"><span class="detail-label">地点</span><span class="detail-value">{{ f.location_text }}</span></div>
+                        {% endif %}
+                        {% if f.confidence_score %}
+                        <div class="detail-row"><span class="detail-label">置信度</span><span class="detail-value">{{ '%.2f'|format(f.confidence_score) }}</span></div>
+                        {% endif %}
+                        {% if f.qualifier_json %}
+                        <div class="detail-row"><span class="detail-label">限定词</span><span class="detail-value" style="font-family:monospace;font-size:11px;">{{ f.qualifier_json[:100] }}{% if f.qualifier_json|length > 100 %}…{% endif %}</span></div>
+                        {% endif %}
+                        {% if f.evidence_text %}
+                        <div class="detail-row" style="margin-top:8px;">
+                            <div class="detail-label">证据</div>
+                            <div class="detail-evidence">{{ f.evidence_text }}</div>
+                        </div>
+                        {% endif %}
+                    </div>
                 </td>
-                <td class="actions">
-                    <form method="post" action="/review/{{ f.id }}/action">
-                        <input type="hidden" name="action" value="HUMAN_PASS">
-                        <button type="submit" class="btn-pass">✓ 通过</button>
-                    </form>
-                    <form method="post" action="/review/{{ f.id }}/action">
-                        <input type="hidden" name="action" value="HUMAN_REJECTED">
-                        <button type="submit" class="btn-reject">✗ 拒绝</button>
+                <td>
+                    <select class="select-action" onchange="if(this.value){var form=this.previousElementSibling;form.action='/review/'+'{{ f.id }}'+'/action';form.querySelector('input').value=this.value;form.submit();}">
+                        <option value="">—</option>
+                        <option value="HUMAN_PASS">✓ 通过</option>
+                        <option value="HUMAN_REJECTED">✗ 拒绝</option>
+                    </select>
+                    <form method="post" style="display:none;">
+                        <input type="hidden" name="action" value="">
                     </form>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    </div>
 
     <div class="pagination">
         {% if page > 1 %}
         <a href="/review?fact_type={{ current_type }}&status={{ current_status }}&page={{ page - 1 }}">← 上一页</a>
         {% endif %}
+        <span style="padding:6px 12px;background:#f5f5f5;border-radius:4px;font-size:13px;">第 {{ page }} 页</span>
+        {% if has_more %}
         <a href="/review?fact_type={{ current_type }}&status={{ current_status }}&page={{ page + 1 }}">下一页 →</a>
+        {% endif %}
     </div>
     {% else %}
     <div class="empty-msg">暂无匹配的事实记录</div>
     {% endif %}
 </div>
+
+<script>
+function toggleDetail(btn, e) {
+    e.stopPropagation();
+    document.querySelectorAll('.detail-popup.show').forEach(p => {
+        if (p !== btn.nextElementSibling) p.classList.remove('show');
+    });
+    btn.nextElementSibling.classList.toggle('show');
+}
+document.addEventListener('click', () => {
+    document.querySelectorAll('.detail-popup.show').forEach(p => p.classList.remove('show'));
+});
+document.querySelectorAll('.detail-popup').forEach(p => {
+    p.addEventListener('click', e => e.stopPropagation());
+});
+</script>
 </body>
 </html>
