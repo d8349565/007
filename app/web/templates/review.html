@@ -45,9 +45,9 @@
         }
         .btn-detail:hover { background: #e8f0fe; border-color: #aaa; color: #1a3a5c; }
         .detail-popup {
-            display: none; position: absolute; background: white; border: 1px solid #ddd;
+            display: none; position: fixed; background: white; border: 1px solid #ddd;
             border-radius: 8px; padding: 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-            z-index: 100; min-width: 280px; max-width: 400px; margin-top: 4px;
+            z-index: 1000; min-width: 280px; max-width: 320px;
         }
         .detail-popup.show { display: block; }
         .detail-row { margin-bottom: 8px; font-size: 12px; line-height: 1.5; }
@@ -117,11 +117,12 @@
         <thead>
             <tr>
                 <th style="width:40px;">#</th>
-                <th style="width:90px;">类型</th>
+                <th style="width:85px;">类型</th>
                 <th>主体</th>
                 <th>谓词</th>
-                <th style="width:120px;">数值</th>
-                <th style="width:80px;">状态</th>
+                <th style="width:100px;">数值</th>
+                <th style="width:70px;">时间</th>
+                <th style="width:75px;">状态</th>
                 <th style="width:50px;">详情</th>
                 <th style="width:80px;">操作</th>
             </tr>
@@ -142,6 +143,7 @@
                         -
                     {% endif %}
                 </td>
+                <td style="font-size:12px; color:#888; white-space:nowrap;">{{ f.time_expr or '-' }}</td>
                 <td>
                     {% if f.review_status == 'AUTO_PASS' or f.review_status == 'HUMAN_PASS' %}
                     <span class="badge badge-pass">{% if f.review_status == 'AUTO_PASS' %}自动{% else %}人工{% endif %}</span>
@@ -218,7 +220,19 @@ function toggleDetail(btn, e) {
     document.querySelectorAll('.detail-popup.show').forEach(p => {
         if (p !== btn.nextElementSibling) p.classList.remove('show');
     });
-    btn.nextElementSibling.classList.toggle('show');
+    var popup = btn.nextElementSibling;
+    popup.classList.toggle('show');
+    if (popup.classList.contains('show')) {
+        var rect = btn.getBoundingClientRect();
+        var popupRect = popup.getBoundingClientRect();
+        var top = rect.bottom + 8;
+        var left = Math.max(10, Math.min(rect.left, window.innerWidth - popupRect.width - 10));
+        popup.style.top = top + 'px';
+        popup.style.left = left + 'px';
+        if (top + popupRect.height > window.innerHeight - 10) {
+            popup.style.top = (rect.top - popupRect.height - 8) + 'px';
+        }
+    }
 }
 document.addEventListener('click', () => {
     document.querySelectorAll('.detail-popup.show').forEach(p => p.classList.remove('show'));
