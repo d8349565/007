@@ -154,3 +154,25 @@ CREATE INDEX IF NOT EXISTS idx_extraction_task_document
     ON extraction_task(document_id);
 CREATE INDEX IF NOT EXISTS idx_extraction_task_status
     ON extraction_task(status);
+
+-- 实体合并任务表（规则候选 + LLM 分析 + 人工审核）
+CREATE TABLE IF NOT EXISTS entity_merge_task (
+    id             TEXT PRIMARY KEY,
+    primary_id     TEXT NOT NULL REFERENCES entity(id),
+    secondary_id   TEXT NOT NULL REFERENCES entity(id),
+    rule_score     REAL NOT NULL DEFAULT 0.0,  -- 规则相似度 (0~1)
+    rule_reason    TEXT,                        -- 规则初步理由
+    llm_verdict    TEXT,   -- 'merge' | 'keep' | 'uncertain' | NULL(未分析)
+    llm_confidence REAL,   -- LLM 置信度 0~1
+    llm_reason     TEXT,   -- LLM 分析理由
+    llm_model      TEXT,   -- 调用的模型名
+    status         TEXT NOT NULL DEFAULT 'pending',
+    -- pending(待审核) | approved(已批准待执行) | rejected(已拒绝)
+    -- executed(已执行合并) | skipped(无需 LLM，规则确定)
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    reviewed_at    TEXT,
+    UNIQUE(primary_id, secondary_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_entity_merge_task_status
+    ON entity_merge_task(status);

@@ -42,7 +42,12 @@ No other keys, no explanation, no markdown wrapper. Output ONLY the JSON array.
 
 1. Extract ONLY information explicitly stated in the article. Do not infer or fabricate.
 2. Use full article context for coreference resolution: if a paragraph says "该公司..." or "其全资子公司...", resolve the referent using article context. The subject must be the actual entity name, not a pronoun.
-3. Keep subject, object, and location as raw text from the article. Do NOT standardize entity names.
+3. Entity name normalization — use the most-cited SHORT FORM:
+   a. Scan the full article to identify the most frequently used short name for each entity.
+   b. Use that short form CONSISTENTLY across all records (e.g. if the article predominantly says "中远佐敦" rather than "中远佐敦船舶涂料（青岛）有限公司", use "中远佐敦" for every record).
+   c. Remove parenthetical location/qualifier suffixes from company names when a shorter form is also present in the article (e.g. "阿克苏诺贝尔旗下国际油漆" when article also uses "阿克苏诺贝尔" → use the shorter form).
+   d. Do NOT invent abbreviations that are not used anywhere in the article.
+   e. location [9] must still reflect the actual geographic scope stated in the article.
 4. If the article contains multiple independent facts, output multiple records.
 5. qualifiers [10] must always be a JSON object (not array, not string). Use {} if empty.
 6. If a field is not explicitly supported by the article, use null.

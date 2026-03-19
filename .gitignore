@@ -89,3 +89,4 @@ htmlcov/
 node_modules/
 app/models/schema.sql
 docs/superpowers/plans/image/2026-03-19-project-improvements/1773894284598.png
+.gstack/
