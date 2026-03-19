@@ -84,7 +84,7 @@
         <tbody>
           {% for row in stats.fact_type_distribution %}
           <tr>
-            <td>{{ row.fact_type }}</td>
+            <td>{{ FACT_TYPE_NAMES.get(row.fact_type, row.fact_type) }}</td>
             <td>{{ row.cnt }}</td>
             <td>
               <div class="bar-wrap">

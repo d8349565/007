@@ -160,7 +160,7 @@
           {% for e in evidences %}
           <tr>
             <td style="color:#aaa;">{{ (e.chunk_index or 0) + 1 }}</td>
-            <td><span class="badge badge-type">{{ e.fact_type }}</span></td>
+            <td><span class="badge badge-type">{{ FACT_TYPE_NAMES.get(e.fact_type, e.fact_type) }}</span></td>
             <td>{{ e.fact_count }}</td>
             <td>
               <div class="text-full" onclick="this.classList.toggle('expanded')" title="点击展开/折叠">{{ e.evidence_text }}</div>
@@ -195,7 +195,7 @@
           {% for f in facts %}
           <tr>
             <td style="color:#aaa;font-size:11px;">{{ loop.index }}</td>
-            <td><span class="badge badge-type">{{ f.fact_type }}</span></td>
+            <td><span class="badge badge-type">{{ FACT_TYPE_NAMES.get(f.fact_type, f.fact_type) }}</span></td>
             <td>{{ f.subject_text or '—' }}</td>
             <td style="color:#555;">{{ f.predicate or '—' }}</td>
             <td>

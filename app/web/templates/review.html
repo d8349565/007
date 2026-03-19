@@ -58,7 +58,7 @@
             <select name="fact_type">
                 <option value="">全部</option>
                 {% for ft in fact_types %}
-                <option value="{{ ft }}" {% if ft == current_type %}selected{% endif %}>{{ ft }}</option>
+                <option value="{{ ft }}" {% if ft == current_type %}selected{% endif %}>{{ FACT_TYPE_NAMES.get(ft, ft) }}</option>
                 {% endfor %}
             </select>
             <label>状态：</label>
@@ -102,7 +102,7 @@
             {% for f in facts %}
             <tr>
                 <td>{{ (page - 1) * 20 + loop.index }}</td>
-                <td><span class="badge">{{ f.fact_type }}</span></td>
+                <td><span class="badge">{{ FACT_TYPE_NAMES.get(f.fact_type, f.fact_type) }}</span></td>
                 <td>{{ f.subject_text or '-' }}</td>
                 <td>{{ f.predicate or '-' }}</td>
                 <td>{{ f.object_text or '-' }}</td>

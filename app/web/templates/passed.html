@@ -112,7 +112,7 @@
       <select name="fact_type">
         <option value="">全部类型</option>
         {% for ft in fact_types %}
-        <option value="{{ ft }}" {% if ft == current_type %}selected{% endif %}>{{ ft }}</option>
+        <option value="{{ ft }}" {% if ft == current_type %}selected{% endif %}>{{ FACT_TYPE_NAMES.get(ft, ft) }}</option>
         {% endfor %}
       </select>
       <label>来源文档：</label>
@@ -156,7 +156,7 @@
       <div style="font-size:11px;color:#888;margin-bottom:6px;">类型分布</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;">
         {% for t in type_dist %}
-        <span style="font-size:12px;background:#f0f4ff;border-radius:3px;padding:2px 8px;">{{ t.fact_type }}: <b>{{ t.cnt }}</b></span>
+        <span style="font-size:12px;background:#f0f4ff;border-radius:3px;padding:2px 8px;">{{ FACT_TYPE_NAMES.get(t.fact_type, t.fact_type) }}: <b>{{ t.cnt }}</b></span>
         {% endfor %}
       </div>
     </div>
@@ -169,7 +169,7 @@
     {% for f in facts %}
     <div class="fact-card {% if f.review_status == 'HUMAN_PASS' %}human-pass{% endif %}">
       <div class="fact-card-head">
-        <span class="fact-type-badge type-{{ f.fact_type }}">{{ f.fact_type }}</span>
+        <span class="fact-type-badge type-{{ f.fact_type }}">{{ FACT_TYPE_NAMES.get(f.fact_type, f.fact_type) }}</span>
         <span>
           {% if f.review_status == 'AUTO_PASS' %}
           <span class="pass-badge pass-auto">自动通过</span>

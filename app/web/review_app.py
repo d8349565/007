@@ -17,6 +17,19 @@ from app.services.query import (
 
 logger = get_logger(__name__)
 
+# 事实类型中文名映射
+FACT_TYPE_NAMES = {
+    "FINANCIAL_METRIC": "财务指标",
+    "SALES_VOLUME": "销售量",
+    "MARKET_SHARE": "市场份额",
+    "CAPACITY": "产能",
+    "COMPETITIVE_RANKING": "竞争排名",
+    "INVESTMENT": "投资",
+    "PRICE_CHANGE": "价格变动",
+    "EXPANSION": "扩建",
+    "COOPERATION": "合作",
+}
+
 
 def create_app() -> Flask:
     cfg = get_config()
@@ -28,6 +41,11 @@ def create_app() -> Flask:
         static_folder="static",
     )
     app.secret_key = web_cfg.get("secret_key", "dev-secret-change-me")
+
+    # 全局模板上下文：注入事实类型中文名映射
+    @app.context_processor
+    def inject_fact_type_names():
+        return dict(FACT_TYPE_NAMES=FACT_TYPE_NAMES)
 
     @app.route("/")
     def index():
