@@ -17,9 +17,9 @@ a:hover { text-decoration: underline; }
 
 /* --- Layout --- */
 .main-content { padding: 24px 0; }
-.container { padding: 0 40px; }
-.container-fluid { padding: 0 40px; }
-.container-narrow { max-width: 900px; margin: 0 auto; padding: 0 40px; }
+.container { padding: 0 80px; }
+.container-fluid { padding: 0 80px; }
+.container-narrow { max-width: 900px; margin: 0 auto; padding: 0 80px; }
 
 /* Page header */
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }

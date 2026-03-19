@@ -13,6 +13,7 @@ from app.services.query import (
     get_documents, get_document, get_document_chunks,
     get_document_evidences, get_document_tasks, get_doc_stats,
     get_passed_facts_stats, cascade_delete_document, update_document_meta,
+    get_graph_data, get_entity_list, get_entity_timeline, get_entity_overview,
 )
 
 logger = get_logger(__name__)
@@ -43,14 +44,21 @@ def create_app() -> Flask:
     app.secret_key = web_cfg.get("secret_key", "dev-secret-change-me")
 
     # 全局模板上下文：注入事实类型中文名映射
+    ENTITY_TYPE_ZH = {
+        'COMPANY': '企业', 'GROUP': '群体/排名', 'PROJECT': '项目',
+        'REGION': '地区', 'PRODUCT': '产品', 'PERSON': '人物',
+        'ORG': '机构', 'OTHER': '其他', 'UNKNOWN': '未知', 'COUNTRY': '国家/地区',
+    }
+
     @app.context_processor
-    def inject_fact_type_names():
-        return dict(FACT_TYPE_NAMES=FACT_TYPE_NAMES)
+    def inject_globals():
+        return dict(FACT_TYPE_NAMES=FACT_TYPE_NAMES, ENTITY_TYPE_ZH=ENTITY_TYPE_ZH)
 
     @app.route("/")
     def index():
         stats = get_stats()
-        return render_template("index.html", stats=stats)
+        entity_overview = get_entity_overview(top_n=10)
+        return render_template("index.html", stats=stats, entity_overview=entity_overview)
 
     @app.route("/documents")
     def documents_list():
@@ -497,6 +505,187 @@ def create_app() -> Flask:
 
         _start_background_process([doc_id])
         return jsonify({"success": True, "processing": True})
+
+    # ─────────────────────── 实体合并 API ───────────────────────
+
+    @app.route("/api/entity/merge-suggestions")
+    def api_entity_merge_suggestions():
+        """返回 AI 推荐的实体合并建议（基于文本相似度启发式，向后兼容）"""
+        from app.services.entity_merger import get_merge_suggestions
+        suggestions = get_merge_suggestions()
+        return jsonify({"suggestions": suggestions})
+
+    @app.route("/api/entity/merge", methods=["POST"])
+    def api_entity_merge():
+        """执行实体合并：secondary → primary（secondary 变为 primary 的 alias）"""
+        data = request.get_json(silent=True) or {}
+        primary_id = data.get("primary_id", "").strip()
+        secondary_id = data.get("secondary_id", "").strip()
+        if not primary_id or not secondary_id:
+            return jsonify({"error": "primary_id 和 secondary_id 均为必填"}), 400
+        if primary_id == secondary_id:
+            return jsonify({"error": "不能合并同一实体"}), 400
+        from app.services.entity_merger import merge_entities
+        try:
+            result = merge_entities(primary_id, secondary_id)
+            return jsonify({"success": True, "result": result})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error("实体合并失败 %s→%s: %s", secondary_id[:8], primary_id[:8], e)
+            return jsonify({"error": "合并失败，请查看日志"}), 500
+
+    @app.route("/api/entity/detail")
+    def api_entity_detail_batch():
+        """批量获取实体详情（供合并建议面板使用）"""
+        ids = request.args.get("ids", "")
+        if not ids:
+            return jsonify([])
+        id_list = [i.strip() for i in ids.split(",") if i.strip()]
+        conn = get_connection()
+        try:
+            placeholders = ",".join(["?"] * len(id_list))
+            rows = conn.execute(
+                f"""SELECT e.id, e.canonical_name, e.entity_type,
+                           COUNT(f.id) AS fact_count
+                    FROM entity e
+                    LEFT JOIN fact_atom f ON f.subject_entity_id = e.id
+                      AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                    WHERE e.id IN ({placeholders})
+                    GROUP BY e.id""",
+                id_list,
+            ).fetchall()
+            return jsonify([dict(r) for r in rows])
+        finally:
+            conn.close()
+
+    # ─────────────── 规则+LLM 合并任务 API ───────────────
+
+    @app.route("/api/entity/merge-tasks")
+    def api_merge_task_list():
+        """返回合并任务列表，支持 ?status=pending|all|rejected|executed"""
+        from app.services.entity_merger import get_pending_merge_tasks, get_merge_task_stats
+        status = request.args.get("status", "pending")
+        tasks = get_pending_merge_tasks(status=status)
+        stats = get_merge_task_stats()
+        return jsonify({"tasks": tasks, "stats": stats})
+
+    @app.route("/api/entity/merge-tasks/generate", methods=["POST"])
+    def api_merge_task_generate():
+        """触发规则+LLM 分析，生成合并任务；max_llm 参数控制本次 LLM 调用上限"""
+        from app.services.entity_merger import generate_merge_tasks
+        data = request.get_json(silent=True) or {}
+        max_llm = min(int(data.get("max_llm", 20)), 50)   # 安全上限 50
+        try:
+            result = generate_merge_tasks(max_llm_calls=max_llm)
+            return jsonify({"success": True, **result})
+        except Exception as e:
+            logger.error("生成合并任务失败: %s", e)
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/entity/merge-task/<task_id>/approve", methods=["POST"])
+    def api_merge_task_approve(task_id: str):
+        """批准合并任务，执行合并"""
+        from app.services.entity_merger import approve_task
+        try:
+            result = approve_task(task_id)
+            return jsonify({"success": True, "result": result})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error("执行合并任务失败 %s: %s", task_id[:8], e)
+            return jsonify({"error": "合并失败，请查看日志"}), 500
+
+    @app.route("/api/entity/merge-task/<task_id>/reject", methods=["POST"])
+    def api_merge_task_reject(task_id: str):
+        """拒绝合并任务"""
+        from app.services.entity_merger import reject_task
+        try:
+            reject_task(task_id)
+            return jsonify({"success": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/entity/merge-task/<task_id>/swap-approve", methods=["POST"])
+    def api_merge_task_swap_approve(task_id: str):
+        """交换主从后执行合并"""
+        from app.services.entity_merger import swap_and_approve_task
+        try:
+            result = swap_and_approve_task(task_id)
+            return jsonify({"success": True, "result": result})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error("交换合并任务失败 %s: %s", task_id[:8], e)
+            return jsonify({"error": "合并失败，请查看日志"}), 500
+
+    # ─────────────────────── 知识图谱 & 时间轴 ───────────────────────
+
+    @app.route("/graph")
+    def graph_page():
+        """知识图谱可视化页面"""
+        valid_types = cfg.get("fact_types", [])
+        return render_template("graph.html", fact_types=valid_types)
+
+    @app.route("/api/graph")
+    def api_graph():
+        """图谱数据 API"""
+        fact_type = request.args.get("fact_type", "")
+        doc_id = request.args.get("doc_id", "")
+        data = get_graph_data(fact_type=fact_type, doc_id=doc_id)
+        return jsonify(data)
+
+    @app.route("/api/entities")
+    def api_entities():
+        """实体列表搜索 API"""
+        search = request.args.get("search", "")
+        entity_type = request.args.get("entity_type", "")
+        entities = get_entity_list(search=search, entity_type=entity_type)
+        return jsonify({"entities": entities})
+
+    @app.route("/entity/<entity_id>")
+    def entity_timeline_page(entity_id):
+        """实体时间轴页面"""
+        fact_type = request.args.get("fact_type", "")
+        data = get_entity_timeline(entity_id=entity_id, fact_type=fact_type)
+        if not data["facts"] and not data["entity_info"].get("name"):
+            return "Entity not found", 404
+        valid_types = cfg.get("fact_types", [])
+        return render_template(
+            "entity_timeline.html",
+            entity=data["entity_info"],
+            facts=data["facts"],
+            available_types=data["available_types"],
+            total_count=data["total_count"],
+            current_type=fact_type,
+            fact_types=valid_types,
+        )
+
+    @app.route("/api/entity/<entity_id>/timeline")
+    def api_entity_timeline(entity_id):
+        """实体时间轴数据 API"""
+        fact_type = request.args.get("fact_type", "")
+        data = get_entity_timeline(entity_id=entity_id, fact_type=fact_type)
+        return jsonify(data)
+
+    @app.route("/entity/search")
+    def entity_search_page():
+        """按名称搜索实体的时间轴页面"""
+        subject = request.args.get("subject", "")
+        fact_type = request.args.get("fact_type", "")
+        if not subject:
+            return redirect(url_for("graph_page"))
+        data = get_entity_timeline(subject_text=subject, fact_type=fact_type)
+        valid_types = cfg.get("fact_types", [])
+        return render_template(
+            "entity_timeline.html",
+            entity=data["entity_info"],
+            facts=data["facts"],
+            available_types=data["available_types"],
+            total_count=data["total_count"],
+            current_type=fact_type,
+            fact_types=valid_types,
+        )
 
     def _start_background_process(doc_ids: list[str]):
         """在后台线程中处理文档（避免阻塞 HTTP 请求）"""

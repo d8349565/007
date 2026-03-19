@@ -1,11 +1,31 @@
-"""实体标准化 —— 精确匹配 + 别名匹配 + 自动发现 + 未命中保留原文"""
+"""实体标准化 —— 精确匹配 + 别名匹配 + 括号规范化匹配 + 自动发现 + 未命中保留原文"""
 
+import re
 import uuid
 
 from app.logger import get_logger
 from app.models.db import get_connection
 
 logger = get_logger(__name__)
+
+# 括号规范化：去掉中英文括号内容及常见法人后缀
+_PAREN_RE = re.compile(r'[（(][^）)]*[）)]')
+_LEGAL_SUFFIXES = ('有限公司', '有限责任公司', '股份有限公司', '股份公司')
+
+
+def _normalize_name(text: str) -> str:
+    """
+    将实体名称规范化，用于模糊匹配：
+    1. 去掉括号内容："中远佐敦船舶涂料（青岛）有限公司" → "中远佐敦船舶涂料有限公司"
+    2. 再去掉常见法人后缀：→ "中远佐敦船舶涂料"
+    返回规范化后的字符串；若与原文相同则返回空字符串（无需再查一次）。
+    """
+    s = _PAREN_RE.sub('', text).strip()
+    for suffix in _LEGAL_SUFFIXES:
+        if s.endswith(suffix):
+            s = s[:-len(suffix)].strip()
+            break
+    return s if s != text else ''
 
 
 def link_entity(raw_text: str, entity_type: str = "") -> dict:
@@ -54,7 +74,24 @@ def link_entity(raw_text: str, entity_type: str = "") -> dict:
             logger.info("别名匹配: '%s' → '%s'", text, row["canonical_name"])
             return {"entity_id": row["id"], "canonical_name": row["canonical_name"], "matched": True}
 
-        # 3. 未命中 → 保留原文
+        # 3. 括号规范化匹配（去括号+法人后缀后重新查）
+        normalized = _normalize_name(text)
+        if normalized:
+            row = conn.execute(
+                "SELECT id, canonical_name FROM entity WHERE canonical_name = ?", (normalized,)
+            ).fetchone()
+            if not row:
+                row = conn.execute(
+                    """SELECT e.id, e.canonical_name FROM entity_alias ea
+                       JOIN entity e ON ea.entity_id = e.id
+                       WHERE ea.alias_name = ?""",
+                    (normalized,),
+                ).fetchone()
+            if row:
+                logger.info("括号规范化匹配: '%s' → '%s'", text, row["canonical_name"])
+                return {"entity_id": row["id"], "canonical_name": row["canonical_name"], "matched": True}
+
+        # 4. 未命中 → 保留原文
         return {"entity_id": None, "canonical_name": text, "matched": False}
 
     finally:
@@ -92,6 +129,11 @@ def add_alias(entity_id: str, alias: str) -> None:
 
 
 # --- 实体类型推断后缀规则 ---
+# 项目/工程类结尾词（优先级最高：避免"XX涂料新工厂项目"被误判为 COMPANY）
+_PROJECT_ENDINGS = ("项目", "工程", "专项", "计划")
+# 纯工厂/基地名（独立设施，不是公司法人）
+_FACILITY_KEYWORDS = ("新工厂", "生产基地", "研发基地", "产业基地", "产业园区")
+
 _COMPANY_SUFFIXES = (
     "公司", "集团", "股份", "有限", "企业", "涂料", "化工", "科技",
     "工业", "实业", "控股", "国际", "材料", "制造",
@@ -101,23 +143,41 @@ _COMPANY_SUFFIXES = (
 def _infer_entity_type(text: str, fact_type: str = "") -> str:
     """
     根据文本特征和 fact_type 上下文推断实体类型。
-    返回: COMPANY / PRODUCT / GROUP / UNKNOWN
+    返回: PROJECT / COMPANY / GROUP / PRODUCT / UNKNOWN
+
+    优先级（从高到低）：
+      1. 以"项目/工程/专项/计划"结尾 → PROJECT
+      2. 包含独立设施关键词且无公司法人后缀 → PROJECT
+      3. GROUP 集合主体
+      4. 含公司法人后缀 → COMPANY
+      5. COOPERATION fact_type → PROJECT
+      6. 其他 → UNKNOWN
     """
     if not text:
         return "UNKNOWN"
 
-    # 集合主体检测（优先于公司后缀，因为"企业"同时出现在两者中）
+    # 1. 以项目/工程类词结尾 → 直接 PROJECT（最高优先级）
+    for ending in _PROJECT_ENDINGS:
+        if text.endswith(ending):
+            return "PROJECT"
+
+    # 2. 包含独立设施词且不含公司法人后缀 → PROJECT
+    if any(kw in text for kw in _FACILITY_KEYWORDS):
+        if not any(s in text for s in ("公司", "集团", "股份", "有限")):
+            return "PROJECT"
+
+    # 3. 集合主体检测（优先于公司后缀，因为"企业"同时出现在两者中）
     if any(kw in text for kw in ("前十强", "前五强", "前三强", "上榜")):
         return "GROUP"
     if "品牌" in text and any(kw in text for kw in ("外资", "国产", "本土")):
         return "GROUP"
 
-    # 主体包含公司类后缀 → COMPANY
+    # 4. 主体包含公司类后缀 → COMPANY
     for suffix in _COMPANY_SUFFIXES:
         if suffix in text:
             return "COMPANY"
 
-    # COOPERATION 类型的 object 通常是项目/产品
+    # 5. COOPERATION 类型的 object 通常是项目/产品
     if fact_type == "COOPERATION":
         return "PROJECT"
 

@@ -630,3 +630,303 @@ def get_stats() -> dict:
         }
     finally:
         conn.close()
+
+
+# ──────────────────────────── 图谱与时间轴 ────────────────────────────
+
+def get_graph_data(fact_type: str = "", doc_id: str = "") -> dict:
+    """
+    构建知识图谱数据。
+
+    节点：所有在已通过事实中出现为 subject_entity_id 的实体（即有事实的实体）。
+    边：已通过事实中 subject_entity_id 和 object_entity_id 均非空的关系型事实。
+    也将边的 object 节点纳入节点集（即使其本身没有作为 subject 的事实）。
+
+    返回 {nodes, edges, stats}。
+    """
+    conn = get_connection()
+    try:
+        # 基础过滤条件（按 fact_type / doc_id 筛选，可选）
+        base_cond = ["f.review_status IN ('AUTO_PASS','HUMAN_PASS')"]
+        base_params: list = []
+        if fact_type:
+            base_cond.append("f.fact_type = ?")
+            base_params.append(fact_type)
+        if doc_id:
+            base_cond.append("f.document_id = ?")
+            base_params.append(doc_id)
+        where_base = " AND ".join(base_cond)
+
+        # ── Step 1: 收集所有 subject 实体 ID（作为节点） ──
+        subj_rows = conn.execute(
+            f"SELECT DISTINCT f.subject_entity_id FROM fact_atom f "
+            f"WHERE {where_base} AND f.subject_entity_id IS NOT NULL",
+            base_params,
+        ).fetchall()
+        all_entity_ids: set = {r["subject_entity_id"] for r in subj_rows}
+
+        # ── Step 2: 查询关系型边（双端均有实体 ID） ──
+        edge_cond = base_cond + [
+            "f.subject_entity_id IS NOT NULL",
+            "f.object_entity_id IS NOT NULL",
+        ]
+        where_edge = " AND ".join(edge_cond)
+        edge_rows = conn.execute(
+            f"""SELECT f.id, f.fact_type, f.subject_text, f.predicate,
+                       f.object_text, f.value_num, f.value_text, f.unit,
+                       f.currency, f.time_expr, f.location_text,
+                       f.confidence_score, f.subject_entity_id, f.object_entity_id,
+                       es.evidence_text, sd.title AS document_title
+                FROM fact_atom f
+                LEFT JOIN evidence_span es ON f.evidence_span_id = es.id
+                LEFT JOIN source_document sd ON f.document_id = sd.id
+                WHERE {where_edge}
+                ORDER BY f.created_at DESC
+                LIMIT 2000""",
+            base_params,
+        ).fetchall()
+
+        # 将边的对象节点也纳入节点集
+        for r in edge_rows:
+            all_entity_ids.add(r["object_entity_id"])
+
+        # ── Step 3: 批量获取实体信息 ──
+        node_map: dict = {}
+        if all_entity_ids:
+            ph = ",".join(["?"] * len(all_entity_ids))
+            entities = conn.execute(
+                f"SELECT id, canonical_name, entity_type FROM entity WHERE id IN ({ph})",
+                list(all_entity_ids),
+            ).fetchall()
+            for e in entities:
+                node_map[e["id"]] = {
+                    "id": e["id"],
+                    "name": e["canonical_name"],
+                    "entity_type": e["entity_type"] or "OTHER",
+                    "fact_count": 0,
+                }
+
+            # 统计每个节点作为 subject 的事实数
+            cnt_rows = conn.execute(
+                f"""SELECT f.subject_entity_id, COUNT(*) AS cnt FROM fact_atom f
+                    WHERE {where_base} AND f.subject_entity_id IN ({ph})
+                    GROUP BY f.subject_entity_id""",
+                base_params + list(all_entity_ids),
+            ).fetchall()
+            for r in cnt_rows:
+                if r["subject_entity_id"] in node_map:
+                    node_map[r["subject_entity_id"]]["fact_count"] = r["cnt"]
+
+        # ── Step 4: 构建边列表 ──
+        edges = []
+        for r in edge_rows:
+            sid, oid = r["subject_entity_id"], r["object_entity_id"]
+            if sid not in node_map or oid not in node_map:
+                continue
+            edges.append({
+                "id": r["id"],
+                "source": sid,
+                "target": oid,
+                "fact_type": r["fact_type"],
+                "subject_text": r["subject_text"],
+                "predicate": r["predicate"],
+                "object_text": r["object_text"],
+                "value_num": r["value_num"],
+                "value_text": r["value_text"],
+                "unit": r["unit"],
+                "currency": r["currency"],
+                "time_expr": r["time_expr"],
+                "location_text": r["location_text"],
+                "confidence_score": r["confidence_score"],
+                "evidence_text": r["evidence_text"],
+                "document_title": r["document_title"],
+            })
+
+        # ── Step 5: 统计信息 ──
+        total_passed = conn.execute(
+            f"SELECT COUNT(*) AS cnt FROM fact_atom f WHERE {where_base}",
+            base_params,
+        ).fetchone()["cnt"]
+        relational_count = len(edges)
+        metric_count = conn.execute(
+            f"SELECT COUNT(*) AS cnt FROM fact_atom f WHERE {where_base} "
+            "AND f.subject_entity_id IS NOT NULL AND f.object_entity_id IS NULL",
+            base_params,
+        ).fetchone()["cnt"]
+
+        return {
+            "nodes": list(node_map.values()),
+            "edges": edges,
+            "stats": {
+                "total_passed_facts": total_passed,
+                "entity_count": len(node_map),
+                "relational_facts": relational_count,
+                "metric_facts": metric_count,
+                # 向后兼容旧字段名
+                "linked_facts": relational_count,
+                "unlinked_facts": total_passed - relational_count - metric_count,
+            },
+        }
+    finally:
+        conn.close()
+
+
+def get_entity_list(search: str = "", entity_type: str = "", limit: int = 200) -> list[dict]:
+    """
+    获取有关联 fact_atom 的实体列表。
+
+    返回 [{id, name, entity_type, fact_count}]，按 fact_count 降序。
+    """
+    conn = get_connection()
+    try:
+        conditions = []
+        params = []
+        if search:
+            conditions.append("e.canonical_name LIKE ?")
+            params.append(f"%{search}%")
+        if entity_type:
+            conditions.append("e.entity_type = ?")
+            params.append(entity_type)
+
+        extra_where = (" AND " + " AND ".join(conditions)) if conditions else ""
+
+        rows = conn.execute(
+            f"""SELECT e.id, e.canonical_name AS name, e.entity_type,
+                       COUNT(DISTINCT f.id) AS fact_count
+                FROM entity e
+                JOIN fact_atom f ON (f.subject_entity_id = e.id OR f.object_entity_id = e.id)
+                WHERE f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                {extra_where}
+                GROUP BY e.id
+                ORDER BY fact_count DESC
+                LIMIT ?""",
+            params + [limit],
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_entity_timeline(
+    entity_id: str = "",
+    subject_text: str = "",
+    fact_type: str = "",
+) -> dict:
+    """
+    获取某实体的时间轴数据。
+
+    支持按 entity_id（精确）或 subject_text（模糊）查询。
+    返回 {entity_info, facts, available_types}。
+    """
+    conn = get_connection()
+    try:
+        # 确定实体信息
+        entity_info = {"name": subject_text or "未知", "entity_type": "", "id": entity_id}
+        if entity_id:
+            ent = conn.execute(
+                "SELECT id, canonical_name, entity_type FROM entity WHERE id=?",
+                (entity_id,),
+            ).fetchone()
+            if ent:
+                entity_info = {
+                    "id": ent["id"],
+                    "name": ent["canonical_name"],
+                    "entity_type": ent["entity_type"] or "",
+                }
+
+        # 构建查询条件
+        conditions = ["f.review_status IN ('AUTO_PASS','HUMAN_PASS')"]
+        params = []
+        if entity_id:
+            conditions.append("(f.subject_entity_id = ? OR f.object_entity_id = ?)")
+            params.extend([entity_id, entity_id])
+        elif subject_text:
+            conditions.append("f.subject_text LIKE ?")
+            params.append(f"%{subject_text}%")
+        else:
+            return {"entity_info": entity_info, "facts": [], "available_types": []}
+
+        if fact_type:
+            conditions.append("f.fact_type = ?")
+            params.append(fact_type)
+
+        where = " AND ".join(conditions)
+
+        rows = conn.execute(
+            f"""SELECT f.id, f.fact_type, f.subject_text, f.predicate,
+                       f.object_text, f.value_num, f.value_text, f.unit,
+                       f.currency, f.time_expr, f.location_text,
+                       f.confidence_score, f.review_status, f.qualifier_json,
+                       es.evidence_text, sd.title AS document_title, sd.id AS document_id
+                FROM fact_atom f
+                LEFT JOIN evidence_span es ON f.evidence_span_id = es.id
+                LEFT JOIN source_document sd ON f.document_id = sd.id
+                WHERE {where}
+                ORDER BY
+                    CASE WHEN f.time_expr IS NULL OR f.time_expr = '' THEN 1 ELSE 0 END,
+                    f.time_expr DESC
+                LIMIT 500""",
+            params,
+        ).fetchall()
+
+        facts = [dict(r) for r in rows]
+
+        # 可用的 fact_type 列表
+        type_rows = conn.execute(
+            f"""SELECT DISTINCT f.fact_type
+                FROM fact_atom f
+                WHERE {where.replace("AND f.fact_type = ?", "")}
+                ORDER BY f.fact_type""",
+            [p for i, p in enumerate(params) if not (fact_type and i == len(params) - 1)],
+        ).fetchall()
+        available_types = [r["fact_type"] for r in type_rows]
+
+        return {
+            "entity_info": entity_info,
+            "facts": facts,
+            "available_types": available_types,
+            "total_count": len(facts),
+        }
+    finally:
+        conn.close()
+
+
+def get_entity_overview(top_n: int = 10) -> dict:
+    """
+    为首页提供实体图谱摘要数据。
+    返回 {entity_count, linked_fact_count, top_entities, type_dist}
+    """
+    conn = get_connection()
+    try:
+        entity_count = conn.execute("SELECT COUNT(*) FROM entity").fetchone()[0]
+        linked_facts = conn.execute(
+            "SELECT COUNT(*) FROM fact_atom "
+            "WHERE review_status IN ('AUTO_PASS','HUMAN_PASS') AND subject_entity_id IS NOT NULL"
+        ).fetchone()[0]
+        total_passed = conn.execute(
+            "SELECT COUNT(*) FROM fact_atom WHERE review_status IN ('AUTO_PASS','HUMAN_PASS')"
+        ).fetchone()[0]
+        # Top entities by fact count (subject side)
+        top = conn.execute(
+            """SELECT e.id, e.canonical_name, e.entity_type, COUNT(f.id) AS fact_count
+               FROM entity e
+               JOIN fact_atom f ON f.subject_entity_id = e.id
+               WHERE f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+               GROUP BY e.id
+               ORDER BY fact_count DESC
+               LIMIT ?""",
+            (top_n,),
+        ).fetchall()
+        # Entity type distribution
+        type_dist = conn.execute(
+            "SELECT entity_type, COUNT(*) AS cnt FROM entity GROUP BY entity_type ORDER BY cnt DESC"
+        ).fetchall()
+        return {
+            "entity_count": entity_count,
+            "linked_fact_count": linked_facts,
+            "total_passed": total_passed,
+            "top_entities": [dict(r) for r in top],
+            "type_dist": [dict(r) for r in type_dist],
+        }
+    finally:
+        conn.close()
