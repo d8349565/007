@@ -17,6 +17,13 @@ llm:
   max_retries: 3
   retry_delay: 2        # 秒
 
+# --- 模型价格（元/百万tokens）---
+model_pricing:
+  deepseek-chat:
+    input_cached: 0.2    # 缓存命中
+    input_uncached: 2.0  # 缓存未命中
+    output: 3.0          # 输出
+
 # --- 文本切分 ---
 splitter:
   short_text_threshold: 1200   # ≤ 此字数不切分

@@ -112,6 +112,7 @@
           <th>采集时间</th>
           <th>状态</th>
           <th style="text-align:center">数据统计</th>
+          <th style="text-align:right">费用</th>
           <th>操作</th>
         </tr>
       </thead>
@@ -142,6 +143,9 @@
             <span title="文本块">📦{{ doc.chunk_count }}</span>
             <span title="证据">🔍{{ doc.evidence_count }}</span>
             <span title="事实">💡{{ doc.fact_count }}</span>
+          </td>
+          <td style="text-align:right;font-weight:600;color:#1a3a5c;font-size:12px;">
+            {% if doc.cost > 0 %}¥ {{ '%.4f'|format(doc.cost) }}{% else %}—{% endif %}
           </td>
           <td>
             <div class="actions">

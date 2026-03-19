@@ -6,6 +6,7 @@ from datetime import datetime
 
 from app.logger import get_logger
 from app.models.db import get_connection
+from app.config import get_config
 
 logger = get_logger(__name__)
 
@@ -123,72 +124,11 @@ def export_csv(facts: list[dict], filepath: str = "") -> str:
 
 # ──────────────────────────── 统计 ────────────────────────────
 
-def get_stats() -> dict:
-    """获取全局统计概览"""
-    conn = get_connection()
-    try:
-        # 文档总量
-        doc_count = conn.execute(
-            "SELECT COUNT(*) AS cnt FROM source_document"
-        ).fetchone()["cnt"]
-
-        # fact_atom 总量
-        fact_count = conn.execute(
-            "SELECT COUNT(*) AS cnt FROM fact_atom"
-        ).fetchone()["cnt"]
-
-        # 文档维度抽取数量
-        doc_fact_counts = conn.execute(
-            """SELECT sd.id, sd.title,
-                      COUNT(f.id) AS fact_count
-               FROM source_document sd
-               LEFT JOIN fact_atom f ON sd.id = f.document_id
-               GROUP BY sd.id
-               ORDER BY fact_count DESC"""
-        ).fetchall()
-
-        # fact_type 分布
-        type_dist = conn.execute(
-            """SELECT fact_type, COUNT(*) AS cnt
-               FROM fact_atom
-               GROUP BY fact_type
-               ORDER BY cnt DESC"""
-        ).fetchall()
-
-        # 审核状态分布
-        review_dist = conn.execute(
-            """SELECT review_status, COUNT(*) AS cnt
-               FROM fact_atom
-               GROUP BY review_status
-               ORDER BY cnt DESC"""
-        ).fetchall()
-
-        # Token 使用统计
-        token_stats = conn.execute(
-            """SELECT task_type,
-                      COUNT(*) AS calls,
-                      SUM(input_tokens) AS total_input,
-                      SUM(output_tokens) AS total_output
-               FROM extraction_task
-               GROUP BY task_type"""
-        ).fetchall()
-
-        return {
-            "document_count": doc_count,
-            "fact_count": fact_count,
-            "doc_fact_counts": [dict(r) for r in doc_fact_counts],
-            "fact_type_distribution": [dict(r) for r in type_dist],
-            "review_status_distribution": [dict(r) for r in review_dist],
-            "token_usage": [dict(r) for r in token_stats],
-        }
-    finally:
-        conn.close()
-
-
 def get_documents(limit: int = 200, offset: int = 0) -> list[dict]:
-    """获取文档列表，附带各流程阶段计数"""
+    """获取文档列表，附带各流程阶段计数及费用"""
     conn = get_connection()
     try:
+        # 先查文档基础信息和计数
         rows = conn.execute(
             """SELECT sd.id, sd.title, sd.source_name, sd.source_type,
                       sd.status, sd.crawl_time, sd.publish_time, sd.url,
@@ -204,7 +144,29 @@ def get_documents(limit: int = 200, offset: int = 0) -> list[dict]:
                LIMIT ? OFFSET ?""",
             (limit, offset),
         ).fetchall()
-        return [dict(r) for r in rows]
+
+        # 单独查每个文档的 token 费用（避免 JOIN 倍增）
+        doc_ids = [r["id"] for r in rows]
+        result = []
+        for r in rows:
+            d = dict(r)
+            if doc_ids:
+                toks = conn.execute(
+                    """SELECT
+                          COALESCE(SUM(input_tokens), 0) AS total_in,
+                          COALESCE(SUM(output_tokens), 0) AS total_out
+                       FROM extraction_task WHERE document_id=?""",
+                    (d["id"],),
+                ).fetchone()
+                d["total_input_tokens"] = toks["total_in"]
+                d["total_output_tokens"] = toks["total_out"]
+                d["cost"] = calculate_cost(toks["total_in"] or 0, toks["total_out"] or 0)
+            else:
+                d["total_input_tokens"] = 0
+                d["total_output_tokens"] = 0
+                d["cost"] = 0.0
+            result.append(d)
+        return result
     finally:
         conn.close()
 
@@ -441,5 +403,154 @@ def update_document_meta(document_id: str, title: str, author: str | None,
         ).rowcount
         conn.commit()
         return rowcount > 0
+    finally:
+        conn.close()
+
+
+# ──────────────────────────── 费用计算 ────────────────────────────
+
+def _get_model_pricing() -> dict:
+    """从配置获取模型价格"""
+    try:
+        cfg = get_config()
+        return cfg.get("model_pricing", {}).get("deepseek-chat", {
+            "input_cached": 0.2,
+            "input_uncached": 2.0,
+            "output": 3.0,
+        })
+    except Exception:
+        # 保守估算（缓存未命中）
+        return {"input_cached": 0.2, "input_uncached": 2.0, "output": 3.0}
+
+
+def calculate_cost(input_tokens: int, output_tokens: int,
+                   cache_hit_ratio: float = 0.0) -> float:
+    """
+    计算单次 API 调用的费用。
+
+    Args:
+        input_tokens: 输入 token 数
+        output_tokens: 输出 token 数
+        cache_hit_ratio: 缓存命中率（0.0-1.0），默认 0（全部按未命中计算）
+
+    Returns:
+        费用（元）
+    """
+    p = _get_model_pricing()
+    cached_input = int(input_tokens * cache_hit_ratio)
+    uncached_input = input_tokens - cached_input
+
+    input_cost = (cached_input / 1_000_000) * p["input_cached"]
+    input_cost += (uncached_input / 1_000_000) * p["input_uncached"]
+    output_cost = (output_tokens / 1_000_000) * p["output"]
+    return round(input_cost + output_cost, 4)
+
+
+def get_document_cost(document_id: str) -> dict:
+    """获取单文档处理费用明细"""
+    conn = get_connection()
+    try:
+        tasks = conn.execute(
+            """SELECT task_type, model_name,
+                      SUM(input_tokens) AS total_in,
+                      SUM(output_tokens) AS total_out,
+                      COUNT(*) AS calls
+               FROM extraction_task
+               WHERE document_id = ?
+               GROUP BY task_type, model_name""",
+            (document_id,),
+        ).fetchall()
+
+        total_cost = 0.0
+        details = []
+        for t in tasks:
+            cost = calculate_cost(t["total_in"] or 0, t["total_out"] or 0)
+            total_cost += cost
+            details.append({
+                "task_type": t["task_type"],
+                "model_name": t["model_name"] or "deepseek-chat",
+                "calls": t["calls"],
+                "input_tokens": t["total_in"] or 0,
+                "output_tokens": t["total_out"] or 0,
+                "cost": cost,
+            })
+        return {"document_id": document_id, "total_cost": round(total_cost, 4), "details": details}
+    finally:
+        conn.close()
+
+
+def get_stats() -> dict:
+    """获取全局统计概览（含费用）"""
+    conn = get_connection()
+    try:
+        # 文档总量
+        doc_count = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM source_document"
+        ).fetchone()["cnt"]
+
+        # fact_atom 总量
+        fact_count = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM fact_atom"
+        ).fetchone()["cnt"]
+
+        # 文档维度抽取数量
+        doc_fact_counts = conn.execute(
+            """SELECT sd.id, sd.title,
+                      COUNT(f.id) AS fact_count
+               FROM source_document sd
+               LEFT JOIN fact_atom f ON sd.id = f.document_id
+               GROUP BY sd.id
+               ORDER BY fact_count DESC"""
+        ).fetchall()
+
+        # fact_type 分布
+        type_dist = conn.execute(
+            """SELECT fact_type, COUNT(*) AS cnt
+               FROM fact_atom
+               GROUP BY fact_type
+               ORDER BY cnt DESC"""
+        ).fetchall()
+
+        # 审核状态分布
+        review_dist = conn.execute(
+            """SELECT review_status, COUNT(*) AS cnt
+               FROM fact_atom
+               GROUP BY review_status
+               ORDER BY cnt DESC"""
+        ).fetchall()
+
+        # Token 使用统计（含费用）
+        token_stats = conn.execute(
+            """SELECT task_type,
+                      COUNT(*) AS calls,
+                      SUM(input_tokens) AS total_input,
+                      SUM(output_tokens) AS total_output
+               FROM extraction_task
+               GROUP BY task_type"""
+        ).fetchall()
+
+        p = _get_model_pricing()
+        total_cost = 0.0
+        token_usage = []
+        for s in token_stats:
+            cost = calculate_cost(s["total_input"] or 0, s["total_output"] or 0)
+            total_cost += cost
+            token_usage.append({
+                **dict(s),
+                "cost": cost,
+                "input_price": p["input_uncached"],
+                "output_price": p["output"],
+            })
+
+        return {
+            "document_count": doc_count,
+            "fact_count": fact_count,
+            "doc_fact_counts": [dict(r) for r in doc_fact_counts],
+            "fact_type_distribution": [dict(r) for r in type_dist],
+            "review_status_distribution": [dict(r) for r in review_dist],
+            "token_usage": token_usage,
+            "total_cost": round(total_cost, 4),
+            "cost_per_document": round(total_cost / doc_count, 4) if doc_count > 0 else 0,
+        }
     finally:
         conn.close()

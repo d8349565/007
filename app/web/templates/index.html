@@ -74,6 +74,33 @@
     </div>
   </div>
 
+  {# 费用汇总卡片 #}
+  {% if stats.total_cost is defined %}
+  <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:28px;">
+    <div class="card" style="background:#1a3a5c; color:white;">
+      <div style="font-size:13px;opacity:0.8;margin-bottom:6px;">💰 累计总费用</div>
+      <div style="font-size:32px;font-weight:700;">¥ {{ '%.4f'|format(stats.total_cost) }}</div>
+      <div style="font-size:12px;opacity:0.7;margin-top:6px;">DeepSeek-V3.2 标准计价</div>
+    </div>
+    <div class="card">
+      <div style="font-size:13px;color:#666;margin-bottom:6px;">📄 篇均费用</div>
+      <div style="font-size:32px;font-weight:700;color:#1a3a5c;">¥ {{ '%.4f'|format(stats.cost_per_document) }}</div>
+      <div style="font-size:12px;color:#999;margin-top:6px;">{{ stats.document_count }} 篇文档</div>
+    </div>
+    <div class="card">
+      <div style="font-size:13px;color:#666;margin-bottom:6px;">💡 事实均费用</div>
+      <div style="font-size:32px;font-weight:700;color:#1a3a5c;">
+        {% if stats.fact_count %}
+          ¥ {{ '%.4f'|format(stats.total_cost / stats.fact_count) }}
+        {% else %}
+          ¥ 0
+        {% endif %}
+      </div>
+      <div style="font-size:12px;color:#999;margin-top:6px;">{{ stats.fact_count }} 条事实</div>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="grid2">
     {# 事实类型分布 #}
     <div class="card">
@@ -172,19 +199,22 @@
   <div class="card">
     <h2>Token 使用统计（各 Agent）</h2>
     <table class="token-table">
-      <thead><tr><th>处理阶段</th><th>调用次数</th><th>输入 Token</th><th>输出 Token</th><th>合计 Token</th></tr></thead>
+      <thead><tr><th>处理阶段</th><th>调用次数</th><th>输入 Token</th><th>输出 Token</th><th>合计 Token</th><th>费用（元）</th></tr></thead>
       <tbody>
         {% set total_in = namespace(v=0) %}
         {% set total_out = namespace(v=0) %}
+        {% set total_cost = namespace(v=0) %}
         {% for row in stats.token_usage %}
         {% set total_in.v = total_in.v + (row.total_input or 0) %}
         {% set total_out.v = total_out.v + (row.total_output or 0) %}
+        {% set total_cost.v = total_cost.v + (row.cost or 0) %}
         <tr>
           <td>{{ row.task_type }}</td>
           <td>{{ row.calls }}</td>
           <td>{{ '{:,}'.format(row.total_input or 0) }}</td>
           <td>{{ '{:,}'.format(row.total_output or 0) }}</td>
           <td>{{ '{:,}'.format((row.total_input or 0) + (row.total_output or 0)) }}</td>
+          <td>¥ {{ '%.4f'|format(row.cost or 0) }}</td>
         </tr>
         {% endfor %}
         <tr style="font-weight:bold;border-top:2px solid #eee;">
@@ -192,9 +222,13 @@
           <td>{{ '{:,}'.format(total_in.v) }}</td>
           <td>{{ '{:,}'.format(total_out.v) }}</td>
           <td>{{ '{:,}'.format(total_in.v + total_out.v) }}</td>
+          <td>¥ {{ '%.4f'|format(total_cost.v) }}</td>
         </tr>
       </tbody>
     </table>
+    <p style="font-size:11px;color:#999;margin-top:10px;">
+      * 费用 = 输入token × 2元/百万 + 输出token × 3元/百万（DeepSeek-V3.2 标准价）
+    </p>
   </div>
   {% endif %}
 </div>
