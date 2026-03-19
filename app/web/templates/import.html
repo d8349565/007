@@ -86,22 +86,10 @@
     <div id="tab-url" class="tab-pane">
       <form id="form-url" onsubmit="return submitUrl(event)">
         <div class="form-group">
-          <label class="form-label">文章网址 *</label>
-          <input type="url" class="form-input" name="url" required placeholder="https://example.com/article">
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">标题</label>
-            <input type="text" class="form-input" name="title" placeholder="可选，默认从网页提取">
-          </div>
-          <div class="form-group">
-            <label class="form-label">作者</label>
-            <input type="text" class="form-input" name="author" placeholder="可选">
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">发布时间</label>
-          <input type="date" class="form-input" name="publish_time">
+          <label class="form-label">文章网址（每行一个）*</label>
+          <textarea class="form-textarea" name="urls" id="url-textarea" required
+            placeholder="https://example.com/article1&#10;https://example.com/article2&#10;支持同时填入多个网址"></textarea>
+          <div class="form-hint">每行一个 URL，支持批量导入多篇文章</div>
         </div>
         <div class="form-checkbox">
           <input type="checkbox" id="url-auto" name="auto_process" value="1" checked>
@@ -205,23 +193,34 @@ function submitFile(e) {
 
 function submitUrl(e) {
   e.preventDefault();
-  const form = document.getElementById('form-url');
+  const textarea = document.getElementById('url-textarea');
+  const autoProcess = document.getElementById('url-auto').checked;
+  const urls = textarea.value.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+  if (urls.length === 0) { showResult('result-url', 'error', '请输入至少一个网址'); return false; }
   const btn = document.getElementById('btn-url');
-  btn.disabled = true; btn.textContent = '抓取中...';
-  const fd = new FormData(form);
-  fetch('/import/url', { method: 'POST', body: fd })
-    .then(r => r.json())
-    .then(data => {
-      if (data.error) { showResult('result-url', 'error', data.error); }
-      else {
-        let msg = '导入成功！';
-        if (data.processing) msg += ' 正在后台处理中...';
-        showResult('result-url', 'success', msg);
-        form.reset();
-      }
-    })
-    .catch(err => showResult('result-url', 'error', '请求失败: ' + err))
-    .finally(() => { btn.disabled = false; btn.textContent = '抓取并导入'; });
+  btn.disabled = true;
+  let done = 0, failed = 0;
+  const total = urls.length;
+  function next(i) {
+    if (i >= urls.length) {
+      btn.disabled = false;
+      btn.textContent = '抓取并导入';
+      const msg = `成功导入 ${done} 篇` + (failed > 0 ? `，${failed} 个失败` : '') + (autoProcess ? '，正在后台处理中...' : '');
+      showResult('result-url', done > 0 ? 'success' : 'error', msg);
+      if (done > 0) textarea.value = '';
+      return;
+    }
+    btn.textContent = `抓取中 ${i+1}/${total}...`;
+    const fd = new FormData();
+    fd.append('url', urls[i]);
+    if (autoProcess) fd.append('auto_process', '1');
+    fetch('/import/url', { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(data => { if (data.error) failed++; else done++; })
+      .catch(() => { failed++; })
+      .finally(() => { next(i + 1); });
+  }
+  next(0);
   return false;
 }
 </script>

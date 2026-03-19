@@ -79,8 +79,7 @@
             <th style="min-width:110px;" class="col-value">核心数值</th>
             <th style="min-width:80px;">时间</th>
             <th style="min-width:80px;">地点</th>
-            <th style="min-width:100px;">限定词</th>
-            <th style="width:34px;" title="证据原文（悬浮查看）">证</th>
+            <th style="min-width:180px;">证据文本</th>
             <th style="width:44px;">信度</th>
             <th style="width:72px;">通过</th>
             <th style="min-width:120px;">来源文档</th>
@@ -88,7 +87,6 @@
         </thead>
         <tbody>
           {% for f in facts %}
-          {% set q_items = f.qualifiers_display.items()|list if f.qualifiers_display else [] %}
           <tr>
             <td class="cell-muted text-xs">{{ (page - 1) * 30 + loop.index }}</td>
             <td>
@@ -139,20 +137,11 @@
               {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
             <td>
-              {% if q_items %}
-              <div data-tip="{{ f.qualifier_json|e }}">
-                {% for k, v in q_items[:2] %}
-                <span class="qualifier-pill" style="font-size:10px;padding:1px 5px;">{{ k }}: {{ v }}</span>
-                {% endfor %}
-                {% if q_items|length > 2 %}
-                <span class="qualifier-pill text-muted" style="font-size:10px;">+{{ q_items|length - 2 }}</span>
-                {% endif %}
-              </div>
-              {% else %}<span class="text-muted">—</span>{% endif %}
-            </td>
-            <td style="text-align:center;">
               {% if f.evidence_text %}
-              <span class="evidence-icon" data-tip="{{ f.evidence_text|e }}">📎</span>
+              <span class="truncate-inner text-xs text-muted"
+                {% if f.evidence_text|length > 45 %}data-tip="{{ f.evidence_text|e }}"{% endif %}>
+                {{ f.evidence_text[:45] }}{% if f.evidence_text|length > 45 %}…{% endif %}
+              </span>
               {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
             <td style="text-align:center;">

@@ -25,12 +25,12 @@
         </thead>
         <tbody>
           {% for doc in documents %}
-          <tr>
+          <tr style="cursor:pointer;" onclick="location.href='/documents/{{ doc.id }}'">
             <td class="cell-muted">{{ loop.index }}</td>
             <td class="title-cell">
               <div class="title-text">
                 {% if doc.url %}
-                <a href="{{ doc.url }}" target="_blank">{{ doc.title or '(无标题)' }}</a>
+                <a href="{{ doc.url }}" target="_blank" onclick="event.stopPropagation()">{{ doc.title or '(无标题)' }}</a>
                 {% else %}
                 {{ doc.title or '(无标题)' }}
                 {% endif %}
@@ -59,7 +59,7 @@
                 </div>
               </div>
             </td>
-            <td>
+            <td onclick="event.stopPropagation()">
               <a class="btn btn-sm btn-ghost" href="/documents/{{ doc.id }}">详情 →</a>
             </td>
           </tr>
