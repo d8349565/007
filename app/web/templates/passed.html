@@ -7,7 +7,7 @@
   <div class="page-header" style="margin-bottom:16px;">
     <div style="display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;">
       <div class="page-title">已通过结果</div>
-      <span class="text-muted text-sm">共 <strong style="color:#0f172a;">{{ total_count }}</strong> 条 · 自动 <strong class="text-success">{{ auto_pass_count }}</strong> · 人工 <strong style="color:#2563eb;">{{ human_pass_count }}</strong></span>
+      <span class="text-muted text-sm">共 <strong style="color:#ffffff;">{{ total_count }}</strong> 条 · 自动 <strong class="text-success">{{ auto_pass_count }}</strong> · 人工 <strong style="color:#60a5fa;">{{ human_pass_count }}</strong></span>
       {% if type_dist %}
       <span class="text-muted text-sm" style="display:flex;gap:6px;flex-wrap:wrap;">
         {% for t in type_dist %}
@@ -93,10 +93,19 @@
               <span class="badge badge-{{ f.fact_type }}">{{ FACT_TYPE_NAMES.get(f.fact_type, f.fact_type) }}</span>
             </td>
             <td>
-              <span class="truncate-inner font-bold" style="max-width:140px;color:#0f172a;"
+              {% if f.subject_entity_id %}
+              <a href="/entity/{{ f.subject_entity_id }}" class="truncate-inner font-bold" style="max-width:140px;color:#60a5fa;text-decoration:none;"
                 {% if f.subject_text and f.subject_text|length > 16 %}data-tip="{{ f.subject_text|e }}"{% endif %}>
                 {{ f.subject_text or '—' }}
-              </span>
+              </a>
+              {% elif f.subject_text %}
+              <a href="/entity/search?subject={{ f.subject_text|urlencode }}" class="truncate-inner font-bold" style="max-width:140px;color:#60a5fa;text-decoration:none;"
+                {% if f.subject_text|length > 16 %}data-tip="{{ f.subject_text|e }}"{% endif %}>
+                {{ f.subject_text }}
+              </a>
+              {% else %}
+              <span class="truncate-inner font-bold" style="max-width:140px;color:#808080;">—</span>
+              {% endif %}
             </td>
             <td>
               <div class="cell-stack" style="max-width:160px;">

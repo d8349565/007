@@ -2,7 +2,24 @@
 {% set active = 'index' %}
 {% block title %}概览 — 资讯颗粒化{% endblock %}
 
+{% block head %}
+<style>
+.index-page .metric-value { font-size: 42px; }
+.index-page .metric-label { font-size: 15px; margin-top: 10px; }
+.index-page .metric-footer { font-size: 13px; margin-top: 10px; }
+.index-page .page-title { font-size: 26px; }
+.index-page .card-header { font-size: 16px; padding: 18px 24px; }
+.index-page .data-table { font-size: 14px; }
+.index-page .data-table th { font-size: 13px; padding: 14px 12px; }
+.index-page .data-table td { padding: 12px; }
+.index-page .grid { gap: 20px; }
+.index-page .metric-card { padding: 28px; }
+.index-page .card { margin-bottom: 24px; }
+</style>
+{% endblock %}
+
 {% block content %}
+<div class="index-page">
   <div class="page-header">
     <div class="page-header-col">
       <div class="page-title">系统概览</div>
@@ -137,25 +154,49 @@
     </div>
   </div>
 
-  {# 各文档事实数 #}
-  {% if stats.doc_fact_counts %}
+  {# 实体图谱概览 #}
+  {% if entity_overview %}
   <div class="card" style="margin-bottom:20px;">
-    <div class="card-header">各文档事实抽取量</div>
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>实体图谱概览</span>
+      <a href="/graph" class="btn btn-sm btn-secondary" style="font-size:12px;">打开图谱 →</a>
+    </div>
+    <div style="padding:16px 20px 4px;display:flex;gap:28px;flex-wrap:wrap;border-bottom:1px solid #404040;">
+      <div>
+        <span style="font-size:28px;font-weight:800;color:#3b82f6;">{{ entity_overview.entity_count }}</span>
+        <span style="font-size:12px;color:#a0a0a0;margin-left:4px;">个实体节点</span>
+      </div>
+      <div>
+        <span style="font-size:28px;font-weight:800;color:#10b981;">{{ entity_overview.linked_fact_count }}</span>
+        <span style="font-size:12px;color:#a0a0a0;margin-left:4px;">条已链接事实</span>
+        {% if entity_overview.total_passed %}
+        <span style="font-size:11px;color:#808080;margin-left:2px;">/ {{ entity_overview.total_passed }} ({{ (entity_overview.linked_fact_count / entity_overview.total_passed * 100)|int }}%)</span>
+        {% endif %}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        {% for td in entity_overview.type_dist %}
+        <span style="font-size:11px;background:#404040;border-radius:4px;padding:3px 8px;color:#e0e0e0;">
+          {{ ENTITY_TYPE_ZH.get(td.entity_type, td.entity_type) }}: {{ td.cnt }}
+        </span>
+        {% endfor %}
+      </div>
+    </div>
     <div class="card-flush">
       <table class="data-table">
-        <thead><tr><th>文档标题</th><th>事实数</th><th style="width:200px">占比</th><th>操作</th></tr></thead>
+        <thead><tr><th>实体名称</th><th>类型</th><th>已通过事实数</th><th style="width:180px">占比</th><th>操作</th></tr></thead>
         <tbody>
-          {% set max_doc = stats.doc_fact_counts[0].fact_count if stats.doc_fact_counts[0].fact_count else 1 %}
-          {% for row in stats.doc_fact_counts %}
+          {% set max_fc = entity_overview.top_entities[0].fact_count if entity_overview.top_entities else 1 %}
+          {% for e in entity_overview.top_entities %}
           <tr>
-            <td class="title-text">{{ row.title or '(无标题)' }}</td>
-            <td>{{ row.fact_count }}</td>
+            <td class="font-bold" style="color:#ffffff;">{{ e.canonical_name }}</td>
+            <td><span style="font-size:11px;background:rgba(139,92,246,0.2);color:#a78bfa;padding:2px 7px;border-radius:10px;">{{ ENTITY_TYPE_ZH.get(e.entity_type, e.entity_type) }}</span></td>
+            <td>{{ e.fact_count }}</td>
             <td>
               <div class="bar-bg">
-                <div class="bar-fill bar-fill-primary" style="width:{{ (row.fact_count / max_doc * 100)|int }}%"></div>
+                <div class="bar-fill bar-fill-primary" style="width:{{ (e.fact_count / max_fc * 100)|int }}%"></div>
               </div>
             </td>
-            <td><a href="/documents/{{ row.id }}" class="text-sm">查看详情 →</a></td>
+            <td><a href="/entity/{{ e.id }}" class="text-sm" style="color:#2563eb;">时间轴 →</a></td>
           </tr>
           {% endfor %}
         </tbody>
@@ -205,4 +246,5 @@
     </div>
   </div>
   {% endif %}
+</div>
 {% endblock %}

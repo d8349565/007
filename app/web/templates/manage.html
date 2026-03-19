@@ -2,17 +2,115 @@
 {% set active = 'manage' %}
 {% block title %}文章管理 — 资讯颗粒化{% endblock %}
 
+{% block head %}
+<style>
+/* 管理页 Tab 切换 */
+.manage-tabs { display:flex; gap:4px; margin-bottom:20px; border-bottom:2px solid #262626; }
+.manage-tab {
+  padding:8px 18px; font-size:13px; font-weight:500; cursor:pointer;
+  border-bottom:2px solid transparent; margin-bottom:-2px; color:#6b6b6b;
+  transition: color .15s, border-color .15s; background:none; border-top:none; border-left:none; border-right:none;
+}
+.manage-tab.active { color:#3b82f6; border-bottom-color:#3b82f6; }
+.manage-pane { display:none; } .manage-pane.active { display:block; }
+
+/* 合并任务面板 */
+.merge-stats-bar {
+  display:flex; gap:16px; padding:12px 18px; background:#2a2a2a;
+  border-bottom:1px solid #404040; font-size:13px; flex-wrap:wrap; align-items:center;
+}
+.merge-stat-item { display:flex; align-items:center; gap:5px; }
+.merge-stat-num { font-weight:700; font-size:15px; }
+.merge-stat-num.pending { color:#f59e0b; }
+.merge-stat-num.executed { color:#10b981; }
+.merge-stat-num.rejected { color:#ef4444; }
+
+/* 合并任务卡片 */
+.merge-task-list { display:flex; flex-direction:column; gap:8px; }
+.merge-task-card {
+  background:#2a2a2a; border:1px solid #404040; border-radius:8px;
+  padding:12px 16px; display:grid;
+  grid-template-columns: 1fr auto; gap:10px; align-items:start;
+}
+.merge-task-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+.merge-task-card.verdict-merge { border-left:3px solid #10b981; }
+.merge-task-card.verdict-keep  { border-left:3px solid #ef4444; }
+.merge-task-card.verdict-uncertain { border-left:3px solid #f59e0b; }
+.merge-task-card.status-executed  { opacity:.6; }
+.merge-task-card.status-rejected  { opacity:.5; background:#323232; }
+
+.merge-entities-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+.entity-pill {
+  display:inline-flex; align-items:center; gap:4px;
+  border-radius:6px; padding:4px 9px; font-size:12px; font-weight:600;
+  border:1px solid;
+}
+.entity-pill.primary { background:rgba(16,185,129,0.15); border-color:rgba(16,185,129,0.3); color:#34d399; }
+.entity-pill.secondary { background:rgba(239,68,68,0.15); border-color:rgba(239,68,68,0.3); color:#f87171; }
+.entity-pill .pill-type { font-size:10px; font-weight:400; color:#6b6b6b; }
+.merge-arrow-icon { font-size:16px; color:#6b6b6b; }
+
+.llm-analysis-row { display:flex; align-items:flex-start; gap:8px; flex-wrap:wrap; }
+.verdict-badge {
+  display:inline-flex; align-items:center; gap:4px;
+  border-radius:4px; padding:2px 8px; font-size:11px; font-weight:600;
+  white-space:nowrap;
+}
+.verdict-badge.merge     { background:rgba(16,185,129,0.15); color:#34d399; }
+.verdict-badge.keep      { background:rgba(239,68,68,0.15); color:#f87171; }
+.verdict-badge.uncertain { background:rgba(245,158,11,0.15); color:#fbbf24; }
+.verdict-badge.rule-only { background:rgba(139,92,246,0.15); color:#a78bfa; }
+
+.conf-bar-wrap { display:flex; align-items:center; gap:4px; }
+.conf-bar { width:50px; height:5px; background:#333; border-radius:3px; overflow:hidden; }
+.conf-bar-fill { height:100%; border-radius:3px; }
+.llm-reason { font-size:12px; color:#6b6b6b; flex:1; min-width:120px; line-height:1.4; }
+.rule-score-tag { font-size:11px; color:#6b6b6b; white-space:nowrap; }
+
+.merge-task-actions { display:flex; flex-direction:column; gap:5px; min-width:90px; align-items:flex-end; }
+
+/* 过滤栏 */
+.merge-filter-bar {
+  display:flex; gap:8px; padding:10px 18px; border-bottom:1px solid #262626;
+  align-items:center; flex-wrap:wrap;
+}
+.filter-tab {
+  font-size:12px; padding:3px 10px; border-radius:16px; cursor:pointer;
+  border:1px solid #505050; background:#323232; color:#a0a0a0;
+  transition: background .1s, color .1s;
+}
+.filter-tab.active { background:#3b82f6; color:#fff; border-color:#3b82f6; }
+
+/* 状态标记 */
+.status-badge {
+  font-size:10px; padding:1px 6px; border-radius:3px; font-weight:600;
+}
+.status-badge.executed { background:rgba(16,185,129,0.15); color:#34d399; }
+.status-badge.rejected { background:rgba(239,68,68,0.15); color:#f87171; }
+
+/* 加载占位 */
+.task-loading { text-align:center; padding:40px; color:#6b6b6b; font-size:14px; }
+</style>
+{% endblock %}
+
 {% block content %}
   <div class="page-header">
     <div class="page-header-col">
-      <div class="page-title">文章管理</div>
-      <div class="page-subtitle">查看、编辑元信息、批量删除文章及其全部关联数据</div>
+      <div class="page-title">管理</div>
     </div>
     <div class="page-actions">
       <a href="/import" class="btn btn-sm btn-primary">导入新文章</a>
     </div>
   </div>
 
+  {# Tab 导航 #}
+  <div class="manage-tabs">
+    <button class="manage-tab active" onclick="switchTab('articles', this)">文章管理</button>
+    <button class="manage-tab" id="tab-entities" onclick="switchTab('entities', this)">实体合并审核</button>
+  </div>
+
+  {# ========================= 文章管理面板 ========================= #}
+  <div class="manage-pane active" id="pane-articles">
   <div class="toolbar">
     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
       <input type="checkbox" class="chk" id="select-all" onchange="toggleSelectAll()">
@@ -87,6 +185,61 @@
     <div class="empty-state">暂无文章。<a href="/import">去导入 →</a></div>
     {% endif %}
   </div>
+  </div>{# end pane-articles #}
+
+  {# ========================= 实体合并审核面板 ========================= #}
+  <div class="manage-pane" id="pane-entities">
+    <div class="card">
+      {# 顶部说明 + 操作栏 #}
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <span style="font-weight:600;">实体合并审核</span>
+          <span style="font-size:12px;color:#94a3b8;margin-left:8px;">
+            规则层筛选候选对 → DeepSeek AI 判断 → 人工批准/拒绝
+          </span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select id="gen-max-llm" style="font-size:12px;padding:4px 8px;border:1px solid #505050;border-radius:6px;background:#323232;color:#ffffff;">
+            <option value="10">LLM 分析 10 对</option>
+            <option value="20" selected>LLM 分析 20 对</option>
+            <option value="30">LLM 分析 30 对</option>
+            <option value="50">LLM 分析 50 对（较慢）</option>
+          </select>
+          <button class="btn btn-sm btn-primary" id="btn-generate" onclick="generateTasks()">运行 AI 分析</button>
+          <button class="btn btn-sm btn-secondary" id="btn-reload-tasks" onclick="loadTasks()">刷新列表</button>
+        </div>
+      </div>
+
+      {# 警告提示 #}
+      <div style="padding:8px 18px;background:rgba(245,158,11,0.1);border-bottom:1px solid rgba(245,158,11,0.3);font-size:12px;color:#fbbf24;">
+        ⚠️ 合并后不可撤销：副实体名称降级为主实体别名，所有关联事实自动重指向主实体。
+      </div>
+
+      {# 统计栏 #}
+      <div class="merge-stats-bar" id="merge-stats-bar">
+        <span class="merge-stat-item">待审核 <b class="merge-stat-num pending" id="cnt-pending">—</b></span>
+        <span style="color:#333;">|</span>
+        <span class="merge-stat-item">已执行 <b class="merge-stat-num executed" id="cnt-executed">—</b></span>
+        <span class="merge-stat-item">已拒绝 <b class="merge-stat-num rejected" id="cnt-rejected">—</b></span>
+        <span class="merge-stat-item" style="color:#6b6b6b;font-size:12px;">共 <b id="cnt-total">—</b> 条</span>
+      </div>
+
+      {# 过滤栏 #}
+      <div class="merge-filter-bar">
+        <span style="font-size:12px;color:#6b6b6b;">显示：</span>
+        <button class="filter-tab active" onclick="setFilter('pending', this)">待审核</button>
+        <button class="filter-tab" onclick="setFilter('all', this)">全部</button>
+        <button class="filter-tab" onclick="setFilter('executed', this)">已执行</button>
+        <button class="filter-tab" onclick="setFilter('rejected', this)">已拒绝</button>
+        <span style="margin-left:auto;font-size:12px;color:#6b6b6b;" id="task-count-label"></span>
+      </div>
+
+      {# 任务列表 #}
+      <div id="merge-tasks-container" style="padding:12px 16px;">
+        <div class="task-loading">点击"运行 AI 分析"生成合并建议，或"刷新列表"查看已有任务。</div>
+      </div>
+    </div>
+  </div>{# end pane-entities #}
 
   {# ===== 编辑弹窗 ===== #}
   <div class="modal-overlay" id="edit-modal">
@@ -145,7 +298,189 @@
 
 {% block scripts %}
 <script>
-let pendingDeleteIds = [];
+/* ===== Tab 切换 ===== */
+function switchTab(name, btn) {
+  document.querySelectorAll('.manage-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.manage-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('pane-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'entities') loadTasks();
+}
+
+/* ===== 工具 ===== */
+const TYPE_ZH = {
+  'COMPANY': '企业', 'GROUP': '群体/排名', 'PROJECT': '项目',
+  'REGION': '地区', 'PRODUCT': '产品', 'PERSON': '人物',
+  'ORG': '机构', 'OTHER': '其他', 'UNKNOWN': '未知', 'COUNTRY': '国家/地区',
+};
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ===== 实体合并任务 ===== */
+let currentFilter = 'pending';
+
+function setFilter(status, btn) {
+  currentFilter = status;
+  document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadTasks();
+}
+
+function loadTasks() {
+  const container = document.getElementById('merge-tasks-container');
+  container.innerHTML = '<div class="task-loading">加载中...</div>';
+  fetch('/api/entity/merge-tasks?status=' + currentFilter)
+    .then(r => r.json())
+    .then(data => {
+      updateStatsBar(data.stats || {});
+      renderTasks(data.tasks || []);
+    })
+    .catch(err => {
+      container.innerHTML = '<div class="task-loading" style="color:#dc2626;">加载失败: ' + err + '</div>';
+    });
+}
+
+function updateStatsBar(stats) {
+  document.getElementById('cnt-pending').textContent  = stats.pending  || 0;
+  document.getElementById('cnt-executed').textContent = stats.executed || 0;
+  document.getElementById('cnt-rejected').textContent = stats.rejected || 0;
+  document.getElementById('cnt-total').textContent    = stats.total    || 0;
+}
+
+function verdictLabel(v) {
+  if (v === 'merge')     return '<span class="verdict-badge merge">✓ 建议合并</span>';
+  if (v === 'keep')      return '<span class="verdict-badge keep">✗ 建议保留</span>';
+  if (v === 'rule-only') return '<span class="verdict-badge rule-only">规则极高置信</span>';
+  return '<span class="verdict-badge uncertain">? 不确定</span>';
+}
+
+function confBar(conf) {
+  if (conf == null) return '';
+  const pct = Math.round((conf || 0) * 100);
+  const color = conf >= 0.8 ? '#16a34a' : conf >= 0.5 ? '#d97706' : '#dc2626';
+  return `<span class="conf-bar-wrap" title="置信度 ${pct}%">
+    <span class="conf-bar"><span class="conf-bar-fill" style="width:${pct}%;background:${color};"></span></span>
+    <span style="font-size:11px;color:#6b6b6b">${pct}%</span>
+  </span>`;
+}
+
+function renderTasks(tasks) {
+  const container = document.getElementById('merge-tasks-container');
+  document.getElementById('task-count-label').textContent = tasks.length + ' 条';
+  if (!tasks.length) {
+    container.innerHTML = '<div class="task-loading">暂无' + (currentFilter === 'pending' ? '待审核' : '') + '任务。</div>';
+    return;
+  }
+  let html = '<div class="merge-task-list">';
+  tasks.forEach(t => {
+    const verdict = t.llm_verdict || 'uncertain';
+    const isPending = t.status === 'pending';
+    html += `
+    <div class="merge-task-card verdict-${verdict} status-${t.status}" id="task-${escHtml(t.id)}">
+      <div>
+        <div class="merge-entities-row">
+          <span class="entity-pill primary">主 ${escHtml(t.primary_name)} <span class="pill-type">${TYPE_ZH[t.primary_type] || t.primary_type||''}</span></span>
+          <span class="merge-arrow-icon">←</span>
+          <span class="entity-pill secondary">副 ${escHtml(t.secondary_name)} <span class="pill-type">${TYPE_ZH[t.secondary_type] || t.secondary_type||''}</span></span>
+          ${t.status !== 'pending' ? `<span class="status-badge ${t.status}">${t.status==='executed'?'已执行':'已拒绝'}</span>` : ''}
+        </div>
+        <div class="llm-analysis-row">
+          ${verdictLabel(verdict)}
+          ${confBar(t.llm_confidence)}
+          <span class="llm-reason">${escHtml(t.llm_reason || '（暂未分析）')}</span>
+          <span class="rule-score-tag">规则分 ${Math.round((t.rule_score||0)*100)}% · ${escHtml(t.rule_reason||'')}</span>
+        </div>
+      </div>
+      <div class="merge-task-actions">
+        ${isPending ? `
+        <button class="btn btn-sm btn-primary" onclick="approveTask('${escHtml(t.id)}')">批准合并</button>
+        <button class="btn btn-sm btn-secondary" style="font-size:11px;" onclick="swapApproveTask('${escHtml(t.id)}')" title="认为主副选反了？点此交换后合并">交换主副</button>
+        <button class="btn btn-sm btn-ghost" style="font-size:11px;" onclick="rejectTask('${escHtml(t.id)}')">拒绝</button>
+        ` : ''}
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function approveTask(taskId) {
+  if (!confirm('确认合并？此操作不可撤销。')) return;
+  doTaskAction(taskId, 'approve');
+}
+function rejectTask(taskId) {
+  doTaskAction(taskId, 'reject');
+}
+function swapApproveTask(taskId) {
+  if (!confirm('确认交换主副后合并？此操作不可撤销。')) return;
+  doTaskAction(taskId, 'swap-approve');
+}
+
+function doTaskAction(taskId, action) {
+  const card = document.getElementById('task-' + taskId);
+  const btns = card.querySelectorAll('button');
+  btns.forEach(b => { b.disabled = true; });
+
+  fetch(`/api/entity/merge-task/${taskId}/${action}`, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        alert('操作失败: ' + data.error);
+        btns.forEach(b => { b.disabled = false; });
+      } else {
+        if (action === 'reject') {
+          card.style.opacity = '0.5';
+          card.querySelector('.merge-task-actions').innerHTML = '<span style="font-size:11px;color:#dc2626;">已拒绝</span>';
+        } else {
+          const r = data.result || {};
+          card.style.background = '#f0fdf4';
+          card.querySelector('.merge-task-actions').innerHTML = `<span style="font-size:11px;color:#16a34a;">✓ 已合并<br>事实 ${r.facts_relinked||0} 条</span>`;
+        }
+        // 更新统计
+        fetch('/api/entity/merge-tasks?status=' + currentFilter)
+          .then(r => r.json())
+          .then(d => updateStatsBar(d.stats || {}));
+      }
+    })
+    .catch(err => {
+      alert('请求失败: ' + err);
+      btns.forEach(b => { b.disabled = false; });
+    });
+}
+
+function generateTasks() {
+  const btn = document.getElementById('btn-generate');
+  const maxLlm = parseInt(document.getElementById('gen-max-llm').value) || 20;
+  btn.disabled = true;
+  btn.textContent = 'AI 分析中...';
+  document.getElementById('merge-tasks-container').innerHTML =
+    '<div class="task-loading">正在运行规则筛选 + DeepSeek AI 分析，请稍候（每对约 1~2 秒）...</div>';
+
+  fetch('/api/entity/merge-tasks/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ max_llm: maxLlm })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) {
+      alert('生成失败: ' + data.error);
+      document.getElementById('merge-tasks-container').innerHTML =
+        '<div class="task-loading" style="color:#dc2626;">生成失败: ' + escHtml(data.error) + '</div>';
+    } else {
+      const msg = `新增 ${data.new_tasks} 条任务（LLM 分析 ${data.llm_analyzed} 对，跳过已有 ${data.skipped_existing} 对）`;
+      alert('✓ ' + msg);
+      loadTasks();
+    }
+  })
+  .catch(err => {
+    alert('请求失败: ' + err);
+    document.getElementById('merge-tasks-container').innerHTML =
+      '<div class="task-loading" style="color:#dc2626;">请求失败</div>';
+  })
+  .finally(() => { btn.disabled = false; btn.textContent = '运行 AI 分析'; });
+}
 
 /* ===== 多选 ===== */
 function toggleSelectAll() {

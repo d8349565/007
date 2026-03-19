@@ -1,0 +1,242 @@
+{% extends "_base.html" %}
+{% set active = 'graph' %}
+{% block title %}{{ entity.name }} — 实体时间轴{% endblock %}
+
+{% block head %}
+<style>
+/* Entity timeline page */
+.entity-header {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.entity-name { font-size: 24px; font-weight: 800; color: #fafafa; }
+.entity-type-badge {
+  display: inline-block; padding: 4px 12px; border-radius: 16px;
+  font-size: 12px; font-weight: 600; background: rgba(139,92,246,0.15); color: #a78bfa;
+}
+.entity-stats { font-size: 13px; color: #6b6b6b; margin-left: auto; }
+.entity-stats strong { color: #fafafa; }
+.entity-back { font-size: 13px; color: #3b82f6; text-decoration: none; }
+.entity-back:hover { text-decoration: underline; }
+
+/* Timeline filter */
+.tl-filter {
+  background: #2a2a2a; border-radius: 8px; padding: 12px 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3); margin-bottom: 20px;
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+}
+.tl-filter label { font-size: 12px; color: #a0a0a0; white-space: nowrap; font-weight: 500; }
+.tl-filter select { padding: 6px 10px; border: 1px solid #505050; border-radius: 4px; font-size: 13px; color: #ffffff; background: #323232; }
+
+/* Timeline layout */
+.timeline {
+  position: relative; padding-left: 140px; padding-bottom: 40px;
+}
+.timeline::before {
+  content: ''; position: absolute; left: 130px; top: 0; bottom: 0;
+  width: 3px; background: linear-gradient(to bottom, #3b82f6, #333);
+  border-radius: 2px;
+}
+
+/* Time group */
+.tl-group { margin-bottom: 28px; }
+.tl-group-label {
+  position: absolute; left: 0; width: 120px; text-align: right;
+  font-size: 14px; font-weight: 700; color: #fafafa;
+  padding-right: 16px;
+}
+
+/* Timeline dot */
+.tl-dot {
+  position: absolute; left: 125px; width: 13px; height: 13px;
+  border-radius: 50%; background: #3b82f6; border: 3px solid #080808;
+  box-shadow: 0 0 0 2px #3b82f6;
+  margin-top: 6px;
+}
+.tl-dot.dot-FINANCIAL_METRIC { background: #f59e0b; box-shadow: 0 0 0 2px #f59e0b; }
+.tl-dot.dot-SALES_VOLUME { background: #10b981; box-shadow: 0 0 0 2px #10b981; }
+.tl-dot.dot-CAPACITY { background: #3b82f6; box-shadow: 0 0 0 2px #3b82f6; }
+.tl-dot.dot-INVESTMENT { background: #ec4899; box-shadow: 0 0 0 2px #ec4899; }
+.tl-dot.dot-EXPANSION { background: #a855f7; box-shadow: 0 0 0 2px #a855f7; }
+.tl-dot.dot-MARKET_SHARE { background: #14b8a6; box-shadow: 0 0 0 2px #14b8a6; }
+.tl-dot.dot-COMPETITIVE_RANKING { background: #eab308; box-shadow: 0 0 0 2px #eab308; }
+.tl-dot.dot-COOPERATION { background: #8b5cf6; box-shadow: 0 0 0 2px #8b5cf6; }
+.tl-dot.dot-PRICE_CHANGE { background: #ef4444; box-shadow: 0 0 0 2px #ef4444; }
+
+/* Timeline item (card) */
+.tl-item {
+  position: relative; margin-bottom: 16px; padding-left: 24px;
+}
+.tl-card {
+  background: #2a2a2a; border-radius: 8px; padding: 14px 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  border-left: 4px solid #3b82f6;
+  transition: box-shadow 0.15s;
+}
+.tl-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+.tl-card.type-FINANCIAL_METRIC { border-left-color: #f59e0b; }
+.tl-card.type-SALES_VOLUME { border-left-color: #10b981; }
+.tl-card.type-CAPACITY { border-left-color: #3b82f6; }
+.tl-card.type-INVESTMENT { border-left-color: #ec4899; }
+.tl-card.type-EXPANSION { border-left-color: #a855f7; }
+.tl-card.type-MARKET_SHARE { border-left-color: #14b8a6; }
+.tl-card.type-COMPETITIVE_RANKING { border-left-color: #eab308; }
+.tl-card.type-COOPERATION { border-left-color: #8b5cf6; }
+.tl-card.type-PRICE_CHANGE { border-left-color: #ef4444; }
+
+.tl-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.tl-card-type { font-size: 11px; }
+.tl-card-predicate { font-size: 13px; color: #a1a1a1; font-weight: 500; }
+.tl-card-object { font-size: 13px; color: #6b6b6b; }
+.tl-card-value {
+  font-size: 22px; font-weight: 800; color: #3b82f6;
+  letter-spacing: -0.5px; line-height: 1.2; margin: 6px 0;
+}
+.tl-card-unit { font-size: 12px; color: #6b6b6b; margin-left: 3px; font-weight: 400; }
+.tl-card-value-text { font-size: 15px; font-weight: 700; color: #fafafa; margin: 4px 0; }
+.tl-card-meta {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px;
+  font-size: 11px; color: #6b6b6b;
+}
+.tl-card-meta span { display: flex; align-items: center; gap: 3px; }
+
+.tl-evidence {
+  margin-top: 8px; padding: 8px 10px;
+  background: #323232; border-radius: 4px; border-left: 3px solid #505050;
+  font-size: 12px; color: #e0e0e0; line-height: 1.6;
+  max-height: 3.6em; overflow: hidden; cursor: pointer;
+  transition: max-height 0.3s;
+}
+.tl-evidence.expanded { max-height: none; }
+
+/* Time label inline */
+.tl-time-label {
+  position: absolute; left: -140px; width: 120px; text-align: right;
+  font-size: 12px; color: #6b6b6b; padding-right: 16px; top: 4px;
+  white-space: nowrap;
+}
+
+/* Empty state */
+.tl-empty {
+  text-align: center; padding: 48px; color: #6b6b6b;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+  <!-- Header -->
+  <div class="entity-header">
+    <a class="entity-back" href="/graph">← 返回图谱</a>
+    <span class="entity-name">{{ entity.name }}</span>
+    {% if entity.entity_type %}
+    <span class="entity-type-badge">{{ ENTITY_TYPE_ZH.get(entity.entity_type, entity.entity_type) }}</span>
+    {% endif %}
+    <span class="entity-stats">共 <strong>{{ total_count }}</strong> 条相关事实</span>
+  </div>
+
+  <!-- Filter -->
+  <div class="tl-filter">
+    <label>事实类型</label>
+    <select onchange="filterTimeline(this.value)">
+      <option value="">全部类型</option>
+      {% for ft in available_types %}
+      <option value="{{ ft }}" {% if ft == current_type %}selected{% endif %}>{{ FACT_TYPE_NAMES.get(ft, ft) }}</option>
+      {% endfor %}
+    </select>
+    <span style="flex:1;"></span>
+    <span style="font-size:12px;color:#94a3b8;">双击图谱中的节点跳转到此页面 · 时间轴按时间倒序排列</span>
+  </div>
+
+  {% if facts %}
+  <!-- Timeline -->
+  <div class="timeline" id="timeline">
+    {% set ns = namespace(current_group='') %}
+    {% for fact in facts %}
+      {% set time_group = fact.time_expr or '时间不明' %}
+      {% set show_group = (time_group != ns.current_group) %}
+      {% if show_group %}
+        {% set ns.current_group = time_group %}
+      {% endif %}
+
+      <div class="tl-item">
+        {# Time label #}
+        <span class="tl-time-label">{% if show_group %}{{ time_group }}{% endif %}</span>
+
+        {# Dot #}
+        <span class="tl-dot dot-{{ fact.fact_type }}"></span>
+
+        {# Card #}
+        <div class="tl-card type-{{ fact.fact_type }}">
+          <div class="tl-card-head">
+            <span class="badge badge-{{ fact.fact_type }} tl-card-type">{{ FACT_TYPE_NAMES.get(fact.fact_type, fact.fact_type) }}</span>
+            <span class="tl-card-predicate">{{ fact.predicate or '' }}</span>
+            {% if fact.object_text %}
+            <span class="tl-card-object">→ {{ fact.object_text }}</span>
+            {% endif %}
+          </div>
+
+          {# Value #}
+          {% if fact.value_num is not none %}
+          <div class="tl-card-value">
+            {{ fact.value_num }}<span class="tl-card-unit">{{ fact.unit or '' }}{% if fact.currency %} ({{ fact.currency }}){% endif %}</span>
+          </div>
+          {% elif fact.value_text %}
+          <div class="tl-card-value-text">{{ fact.value_text }}</div>
+          {% endif %}
+
+          {# Subject (when it's the object side match) #}
+          {% if fact.subject_text and fact.subject_text != entity.name %}
+          <div style="font-size:12px;color:#a0a0a0;margin-top:2px;">
+            主体: <strong style="color:#e0e0e0;">{{ fact.subject_text }}</strong>
+          </div>
+          {% endif %}
+
+          {# Meta #}
+          <div class="tl-card-meta">
+            {% if fact.location_text %}
+            <span>📍 {{ fact.location_text }}</span>
+            {% endif %}
+            {% if fact.confidence_score is not none %}
+            <span>信度: {{ "%.2f"|format(fact.confidence_score) }}</span>
+            {% endif %}
+            {% if fact.document_title %}
+            <span>📄 <a href="/documents/{{ fact.document_id }}" style="color:#2563eb;font-size:11px;">{{ fact.document_title }}</a></span>
+            {% endif %}
+            {% if fact.review_status == 'AUTO_PASS' %}
+            <span class="badge badge-pass" style="font-size:10px;">自动✓</span>
+            {% elif fact.review_status == 'HUMAN_PASS' %}
+            <span class="badge badge-info" style="font-size:10px;">人工✓</span>
+            {% endif %}
+          </div>
+
+          {# Evidence #}
+          {% if fact.evidence_text %}
+          <div class="tl-evidence" onclick="this.classList.toggle('expanded')">
+            {{ fact.evidence_text }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="tl-empty">
+    <div style="font-size:48px;opacity:0.2;margin-bottom:16px;">📅</div>
+    <p>暂无相关事实数据</p>
+    <p style="font-size:12px;margin-top:4px;">需要已通过审核的事实来展示时间轴</p>
+  </div>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterTimeline(type) {
+  const url = new URL(window.location.href);
+  if (type) {
+    url.searchParams.set('fact_type', type);
+  } else {
+    url.searchParams.delete('fact_type');
+  }
+  window.location.href = url.toString();
+}
+</script>
+{% endblock %}

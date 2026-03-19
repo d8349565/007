@@ -8,7 +8,7 @@
   {# 文档头部 #}
   <div class="card" style="margin-bottom:20px;">
     <div class="card-body">
-      <div style="font-size:18px;font-weight:700;color:#0f172a;margin-bottom:8px;">{{ doc.title or '(无标题)' }}</div>
+      <div style="font-size:18px;font-weight:700;color:#ffffff;margin-bottom:8px;">{{ doc.title or '(无标题)' }}</div>
       <div style="font-size:12px;color:#94a3b8;display:flex;flex-wrap:wrap;gap:16px;">
         <span>📂 {% if doc.source_type == 'url' %}网址{% elif doc.source_type == 'file' %}文件{% elif doc.source_type == 'paste' %}粘贴{% else %}{{ doc.source_type }}{% endif %} · {{ doc.source_name or '—' }}</span>
         {% if doc.url %}<span>🔗 <a href="{{ doc.url }}" target="_blank">{{ doc.url[:80] }}{% if doc.url|length > 80 %}...{% endif %}</a></span>{% endif %}
@@ -146,7 +146,7 @@
             </td>
           </tr>
           {% if f.qualifiers_display %}
-          <tr style="background:#f8fafc;">
+          <tr style="background:#2a2a2a;">
             <td colspan="2"></td>
             <td colspan="7" style="padding-top:2px;padding-bottom:6px;">
               {% for k, v in f.qualifiers_display.items() %}
