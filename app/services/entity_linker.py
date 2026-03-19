@@ -1,4 +1,6 @@
-"""实体标准化 —— 精确匹配 + 别名匹配 + 未命中保留原文"""
+"""实体标准化 —— 精确匹配 + 别名匹配 + 自动发现 + 未命中保留原文"""
+
+import uuid
 
 from app.logger import get_logger
 from app.models.db import get_connection
@@ -61,7 +63,6 @@ def link_entity(raw_text: str, entity_type: str = "") -> dict:
 
 def add_entity(name: str, entity_type: str, entity_id: str | None = None) -> str:
     """手动添加实体（管理工具使用）"""
-    import uuid
     eid = entity_id or str(uuid.uuid4())
     conn = get_connection()
     try:
@@ -78,7 +79,6 @@ def add_entity(name: str, entity_type: str, entity_id: str | None = None) -> str
 
 def add_alias(entity_id: str, alias: str) -> None:
     """为实体添加别名"""
-    import uuid
     conn = get_connection()
     try:
         conn.execute(
@@ -91,28 +91,121 @@ def add_alias(entity_id: str, alias: str) -> None:
         conn.close()
 
 
+# --- 实体类型推断后缀规则 ---
+_COMPANY_SUFFIXES = (
+    "公司", "集团", "股份", "有限", "企业", "涂料", "化工", "科技",
+    "工业", "实业", "控股", "国际", "材料", "制造",
+)
+
+
+def _infer_entity_type(text: str, fact_type: str = "") -> str:
+    """
+    根据文本特征和 fact_type 上下文推断实体类型。
+    返回: COMPANY / PRODUCT / GROUP / UNKNOWN
+    """
+    if not text:
+        return "UNKNOWN"
+
+    # 集合主体检测（优先于公司后缀，因为"企业"同时出现在两者中）
+    if any(kw in text for kw in ("前十强", "前五强", "前三强", "上榜")):
+        return "GROUP"
+    if "品牌" in text and any(kw in text for kw in ("外资", "国产", "本土")):
+        return "GROUP"
+
+    # 主体包含公司类后缀 → COMPANY
+    for suffix in _COMPANY_SUFFIXES:
+        if suffix in text:
+            return "COMPANY"
+
+    # COOPERATION 类型的 object 通常是项目/产品
+    if fact_type == "COOPERATION":
+        return "PROJECT"
+
+    return "UNKNOWN"
+
+
+def _auto_discover_entities(rows: list, conn) -> int:
+    """
+    从 fact_atom 行中自动发现尚未存在的 subject_text / object_text，
+    去重后创建新的 entity 记录。
+
+    返回新创建的实体数。
+    """
+    # 收集所有需要检查的文本 → (text, fact_type, role)
+    candidates: dict[str, str] = {}  # text → fact_type
+    for row in rows:
+        if row["subject_text"] and row["subject_text"].strip():
+            text = row["subject_text"].strip()
+            if text not in candidates:
+                candidates[text] = row["fact_type"] or ""
+        if row["object_text"] and row["object_text"].strip():
+            text = row["object_text"].strip()
+            if text not in candidates:
+                candidates[text] = row["fact_type"] or ""
+
+    if not candidates:
+        return 0
+
+    created = 0
+    for text, fact_type in candidates.items():
+        # 检查是否已存在（精确匹配 canonical_name）
+        existing = conn.execute(
+            "SELECT id FROM entity WHERE canonical_name = ?", (text,)
+        ).fetchone()
+        if existing:
+            continue
+
+        # 也检查别名表
+        alias_match = conn.execute(
+            "SELECT entity_id FROM entity_alias WHERE alias_name = ?", (text,)
+        ).fetchone()
+        if alias_match:
+            continue
+
+        entity_type = _infer_entity_type(text, fact_type)
+        eid = str(uuid.uuid4())
+        conn.execute(
+            """INSERT INTO entity (id, canonical_name, normalized_name, entity_type)
+               VALUES (?, ?, ?, ?)""",
+            (eid, text, text, entity_type),
+        )
+        created += 1
+        logger.debug("自动创建实体: '%s' [type=%s]", text, entity_type)
+
+    if created:
+        conn.commit()
+        logger.info("自动发现并创建 %d 个新实体", created)
+
+    return created
+
+
 def batch_link_fact_atoms(fact_atom_ids: list[str] | None = None) -> dict:
     """
     批量为 fact_atom 记录执行实体链接。
     仅处理 subject_text / object_text 非空的记录。
+    会先自动发现并创建不存在的实体，再执行链接。
 
     返回:
-        {"processed": int, "matched": int, "unmatched": int}
+        {"processed": int, "matched": int, "unmatched": int, "created": int}
     """
     conn = get_connection()
-    stats = {"processed": 0, "matched": 0, "unmatched": 0}
+    stats = {"processed": 0, "matched": 0, "unmatched": 0, "created": 0}
 
     try:
         if fact_atom_ids:
             placeholders = ",".join(["?"] * len(fact_atom_ids))
             rows = conn.execute(
-                f"SELECT id, subject_text, object_text FROM fact_atom WHERE id IN ({placeholders})",
+                f"SELECT id, subject_text, object_text, fact_type FROM fact_atom WHERE id IN ({placeholders})",
                 fact_atom_ids,
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT id, subject_text, object_text FROM fact_atom WHERE subject_entity_id IS NULL OR object_entity_id IS NULL"
+                "SELECT id, subject_text, object_text, fact_type FROM fact_atom WHERE subject_entity_id IS NULL OR object_entity_id IS NULL"
             ).fetchall()
+
+        # 第一步：自动发现并创建不存在的实体
+        created = _auto_discover_entities(rows, conn)
+        stats["created"] = created
 
         for row in rows:
             stats["processed"] += 1

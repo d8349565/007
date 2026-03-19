@@ -365,3 +365,81 @@ def get_doc_stats(document_id: str) -> dict:
         }
     finally:
         conn.close()
+
+
+def cascade_delete_document(document_id: str) -> dict:
+    """
+    级联删除文档及其所有关联数据。
+    删除顺序（尊重外键）：
+      review_log → fact_atom → evidence_span → extraction_task → document_chunk → source_document
+    返回各表删除行数。
+    """
+    conn = get_connection()
+    stats = {}
+    try:
+        # 1. 删除 review_log（关联 fact_atom）
+        fact_ids = [r["id"] for r in conn.execute(
+            "SELECT id FROM fact_atom WHERE document_id=?", (document_id,)
+        ).fetchall()]
+
+        if fact_ids:
+            placeholders = ",".join(["?"] * len(fact_ids))
+            stats["review_log"] = conn.execute(
+                f"DELETE FROM review_log WHERE target_id IN ({placeholders})",
+                fact_ids,
+            ).rowcount
+        else:
+            stats["review_log"] = 0
+
+        # 2. 删除 fact_atom（清除实体链接 entity 本身保留）
+        stats["fact_atom"] = conn.execute(
+            "DELETE FROM fact_atom WHERE document_id=?", (document_id,)
+        ).rowcount
+
+        # 3. 删除 evidence_span
+        stats["evidence_span"] = conn.execute(
+            "DELETE FROM evidence_span WHERE document_id=?", (document_id,)
+        ).rowcount
+
+        # 4. 删除 extraction_task
+        stats["extraction_task"] = conn.execute(
+            "DELETE FROM extraction_task WHERE document_id=?", (document_id,)
+        ).rowcount
+
+        # 5. 删除 document_chunk
+        stats["document_chunk"] = conn.execute(
+            "DELETE FROM document_chunk WHERE document_id=?", (document_id,)
+        ).rowcount
+
+        # 6. 删除 source_document
+        stats["source_document"] = conn.execute(
+            "DELETE FROM source_document WHERE id=?", (document_id,)
+        ).rowcount
+
+        conn.commit()
+        logger.info("级联删除文档 %s: %s", document_id[:8], stats)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return stats
+
+
+def update_document_meta(document_id: str, title: str, author: str | None,
+                         source_name: str | None, publish_time: str | None) -> bool:
+    """更新文档元信息（标题、作者、来源、发布时间）"""
+    conn = get_connection()
+    try:
+        rowcount = conn.execute(
+            """UPDATE source_document SET
+               title=?, author=?, source_name=?, publish_time=?,
+               updated_at=CURRENT_TIMESTAMP
+               WHERE id=?""",
+            (title, author, source_name, publish_time, document_id),
+        ).rowcount
+        conn.commit()
+        return rowcount > 0
+    finally:
+        conn.close()

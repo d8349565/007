@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>导入任务 — 资讯颗粒化</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; }
+    .container { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
+    h1 { font-size: 22px; color: #1a3a5c; margin-bottom: 20px; }
+
+    /* 标签切换 */
+    .tab-bar { display: flex; gap: 0; margin-bottom: 0; }
+    .tab-btn {
+      padding: 10px 24px; background: #e4e8ee; border: none; cursor: pointer;
+      font-size: 14px; color: #555; border-radius: 8px 8px 0 0; margin-right: 3px;
+    }
+    .tab-btn.active { background: white; color: #1a3a5c; font-weight: 600; }
+    .tab-btn:hover:not(.active) { background: #d8dce3; }
+    .tab-content { background: white; border-radius: 0 8px 8px 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 28px; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* 表单 */
+    .form-group { margin-bottom: 18px; }
+    .form-group label { display: block; font-weight: 600; font-size: 13px; color: #444; margin-bottom: 6px; }
+    .form-group input[type="text"],
+    .form-group input[type="url"],
+    .form-group input[type="date"],
+    .form-group textarea {
+      width: 100%; padding: 9px 12px; border: 1px solid #d0d5dd; border-radius: 6px;
+      font-size: 14px; font-family: inherit; transition: border-color .15s;
+    }
+    .form-group input:focus, .form-group textarea:focus { border-color: #1a3a5c; outline: none; }
+    .form-group textarea { min-height: 220px; resize: vertical; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-hint { font-size: 12px; color: #888; margin-top: 4px; }
+
+    /* 文件上传区 */
+    .drop-zone {
+      border: 2px dashed #c0c8d5; border-radius: 8px; padding: 40px 20px;
+      text-align: center; cursor: pointer; transition: all .2s; color: #888;
+    }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: #1a3a5c; background: #f0f5ff; color: #1a3a5c; }
+    .drop-zone .icon { font-size: 36px; margin-bottom: 8px; }
+    .drop-zone input[type="file"] { display: none; }
+    .file-list { margin-top: 12px; font-size: 13px; }
+    .file-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+    .file-item .name { flex: 1; }
+    .file-item .remove { color: #dc3545; cursor: pointer; font-size: 12px; }
+
+    /* 按钮 */
+    .btn-row { display: flex; gap: 12px; margin-top: 20px; }
+    .btn {
+      padding: 10px 24px; border: none; border-radius: 6px; font-size: 14px;
+      cursor: pointer; font-weight: 600; transition: background .15s;
+    }
+    .btn-primary { background: #1a3a5c; color: white; }
+    .btn-primary:hover { background: #0d2847; }
+    .btn-primary:disabled { background: #8fa5be; cursor: not-allowed; }
+    .btn-secondary { background: #e4e8ee; color: #333; }
+
+    /* 复选框 */
+    .checkbox-group { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+    .checkbox-group input { width: 16px; height: 16px; }
+    .checkbox-group label { font-size: 13px; color: #555; font-weight: normal; }
+
+    /* 结果提示 */
+    .result-msg { margin-top: 16px; padding: 12px 16px; border-radius: 6px; font-size: 14px; display: none; }
+    .result-msg.success { background: #d4edda; color: #155724; display: block; }
+    .result-msg.error { background: #f8d7da; color: #721c24; display: block; }
+    .result-msg.info { background: #cce5ff; color: #004085; display: block; }
+  </style>
+</head>
+<body>
+{% set active = 'import' %}
+{% include '_nav.html' %}
+
+<div class="container">
+  <h1>📥 导入任务</h1>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('paste', this)">📋 粘贴文本</button>
+    <button class="tab-btn" onclick="showTab('file', this)">📁 上传文件</button>
+    <button class="tab-btn" onclick="showTab('url', this)">🔗 网址抓取</button>
+  </div>
+
+  <div class="tab-content">
+
+    {# ===== 粘贴文本 ===== #}
+    <div id="tab-paste" class="tab-pane active">
+      <form id="form-paste" onsubmit="return submitPaste(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>文章标题 *</label>
+            <input type="text" name="title" required placeholder="输入文章标题">
+          </div>
+          <div class="form-group">
+            <label>作者</label>
+            <input type="text" name="author" placeholder="可选">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>发布时间</label>
+          <input type="date" name="publish_time">
+        </div>
+        <div class="form-group">
+          <label>文章正文 *</label>
+          <textarea name="text" required placeholder="将文章内容粘贴到此处..."></textarea>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="paste-auto" name="auto_process" value="1" checked>
+          <label for="paste-auto">导入后自动开始处理（三 Agent 抽取流水线）</label>
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn-primary" id="btn-paste">导入</button>
+        </div>
+        <div class="result-msg" id="result-paste"></div>
+      </form>
+    </div>
+
+    {# ===== 上传文件 ===== #}
+    <div id="tab-file" class="tab-pane">
+      <form id="form-file" onsubmit="return submitFile(event)">
+        <div class="form-group">
+          <label>选择文件（支持 .txt / .md，可多选）</label>
+          <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+            <div class="icon">📄</div>
+            <div>点击选择文件，或将文件拖放到此区域</div>
+            <div class="form-hint">支持 .txt 和 .md 格式</div>
+            <input type="file" id="file-input" name="files" multiple accept=".txt,.md">
+          </div>
+          <div class="file-list" id="file-list"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>作者</label>
+            <input type="text" name="author" placeholder="可选，适用于所有文件">
+          </div>
+          <div class="form-group">
+            <label>发布时间</label>
+            <input type="date" name="publish_time">
+          </div>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="file-auto" name="auto_process" value="1" checked>
+          <label for="file-auto">导入后自动开始处理</label>
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn-primary" id="btn-file">上传并导入</button>
+        </div>
+        <div class="result-msg" id="result-file"></div>
+      </form>
+    </div>
+
+    {# ===== URL 抓取 ===== #}
+    <div id="tab-url" class="tab-pane">
+      <form id="form-url" onsubmit="return submitUrl(event)">
+        <div class="form-group">
+          <label>文章网址 *</label>
+          <input type="url" name="url" required placeholder="https://example.com/article">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>标题</label>
+            <input type="text" name="title" placeholder="可选，默认从网页提取">
+          </div>
+          <div class="form-group">
+            <label>作者</label>
+            <input type="text" name="author" placeholder="可选">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>发布时间</label>
+          <input type="date" name="publish_time">
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="url-auto" name="auto_process" value="1" checked>
+          <label for="url-auto">导入后自动开始处理</label>
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn-primary" id="btn-url">抓取并导入</button>
+        </div>
+        <div class="result-msg" id="result-url"></div>
+      </form>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+function showResult(elId, type, msg) {
+  const el = document.getElementById(elId);
+  el.className = 'result-msg ' + type;
+  el.textContent = msg;
+}
+
+/* 粘贴文本提交 */
+function submitPaste(e) {
+  e.preventDefault();
+  const form = document.getElementById('form-paste');
+  const btn = document.getElementById('btn-paste');
+  btn.disabled = true; btn.textContent = '导入中...';
+
+  const fd = new FormData(form);
+  fetch('/import/paste', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        showResult('result-paste', 'error', data.error);
+      } else {
+        let msg = '导入成功！';
+        if (data.processing) msg += ' 正在后台处理中...';
+        showResult('result-paste', 'success', msg);
+        form.reset();
+      }
+    })
+    .catch(err => showResult('result-paste', 'error', '请求失败: ' + err))
+    .finally(() => { btn.disabled = false; btn.textContent = '导入'; });
+  return false;
+}
+
+/* 文件上传 */
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const fileList = document.getElementById('file-list');
+
+if (dropZone) {
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    fileInput.files = e.dataTransfer.files;
+    renderFileList();
+  });
+  fileInput.addEventListener('change', renderFileList);
+}
+
+function renderFileList() {
+  const files = fileInput.files;
+  if (!files.length) { fileList.innerHTML = ''; return; }
+  let html = '';
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const size = f.size > 1024 ? (f.size/1024).toFixed(1) + ' KB' : f.size + ' B';
+    html += '<div class="file-item"><span class="name">📄 ' + f.name + '</span><span style="color:#888;font-size:12px">' + size + '</span></div>';
+  }
+  fileList.innerHTML = html;
+}
+
+function submitFile(e) {
+  e.preventDefault();
+  const form = document.getElementById('form-file');
+  const btn = document.getElementById('btn-file');
+  btn.disabled = true; btn.textContent = '上传中...';
+
+  const fd = new FormData(form);
+  fetch('/import/file', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        showResult('result-file', 'error', data.error);
+      } else {
+        let msg = '成功导入 ' + data.imported + ' 个文件';
+        if (data.errors && data.errors.length) msg += '，' + data.errors.length + ' 个失败';
+        if (data.processing) msg += '。正在后台处理中...';
+        showResult('result-file', 'success', msg);
+        fileList.innerHTML = '';
+        fileInput.value = '';
+      }
+    })
+    .catch(err => showResult('result-file', 'error', '请求失败: ' + err))
+    .finally(() => { btn.disabled = false; btn.textContent = '上传并导入'; });
+  return false;
+}
+
+/* URL 抓取 */
+function submitUrl(e) {
+  e.preventDefault();
+  const form = document.getElementById('form-url');
+  const btn = document.getElementById('btn-url');
+  btn.disabled = true; btn.textContent = '抓取中...';
+
+  const fd = new FormData(form);
+  fetch('/import/url', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        showResult('result-url', 'error', data.error);
+      } else {
+        let msg = '导入成功！';
+        if (data.processing) msg += ' 正在后台处理中...';
+        showResult('result-url', 'success', msg);
+        form.reset();
+      }
+    })
+    .catch(err => showResult('result-url', 'error', '请求失败: ' + err))
+    .finally(() => { btn.disabled = false; btn.textContent = '抓取并导入'; });
+  return false;
+}
+</script>
+</body>
+</html>

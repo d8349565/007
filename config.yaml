@@ -105,6 +105,7 @@ predicate_whitelist:
     - 占全国市场份额
     - 占全球市场份额
     - 市占率
+    - 市场份额为
     - 前十强市占率
     - 前五市占率
   COMPETITIVE_RANKING:
@@ -114,6 +115,7 @@ predicate_whitelist:
     - 入选
     - 连续排名
     - 名列
+    - 排名在范围内
   COOPERATION:
     - 签署合作协议
     - 战略合作
@@ -143,6 +145,7 @@ qualifier_whitelist:
     - equivalent_usd
     - equivalent_rmb
     - equivalent_weight
+    - is_approximate
   SALES_VOLUME:
     - metric_name
     - segment
@@ -152,6 +155,7 @@ qualifier_whitelist:
     - change_amount
     - change_from_previous_year
     - equivalent_weight
+    - is_approximate
   CAPACITY:
     - product_type
     - segment
@@ -166,6 +170,7 @@ qualifier_whitelist:
     - stage
     - equivalent_usd
     - equivalent_rmb
+    - is_approximate
   EXPANSION:
     - project_name
     - segment
@@ -179,6 +184,8 @@ qualifier_whitelist:
     - source_scope
     - yoy
     - change_amount
+    - change_pct
+    - is_approximate
   COMPETITIVE_RANKING:
     - ranking_name
     - ranking_year
@@ -200,16 +207,16 @@ qualifier_whitelist:
     - reason
     - yoy
     - change_amount
+    - is_approximate
+    - yoy
+    - change_amount
 
 # --- 审核 ---
 review:
   auto_pass_confidence: 0.90
   force_human_review_types:
-    - MARKET_SHARE
     - COMPETITIVE_RANKING
-  force_human_review_predicates:
-    - yoy
-    - qoq
+  force_human_review_predicates: []
 
 # --- 日志 ---
 logging:

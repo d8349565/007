@@ -7,9 +7,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-# 使用临时数据库
-os.environ["DATABASE_PATH_OVERRIDE"] = ":memory:"
-
 from app.models.db import init_db, get_connection
 from app.services.importer import import_file, import_paste
 from app.services.cleaner import clean_text

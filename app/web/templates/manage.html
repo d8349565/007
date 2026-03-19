@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>文章管理 — 资讯颗粒化</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; }
+    .container { max-width: 1300px; margin: 0 auto; padding: 24px 20px; }
+    h1 { font-size: 22px; color: #1a3a5c; margin-bottom: 6px; }
+    .sub { font-size: 13px; color: #888; margin-bottom: 20px; }
+
+    /* 工具栏 */
+    .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .toolbar .info { font-size: 13px; color: #666; }
+    .toolbar .spacer { flex: 1; }
+
+    /* 按钮 */
+    .btn {
+      padding: 7px 16px; border: none; border-radius: 5px; font-size: 13px;
+      cursor: pointer; font-weight: 600; transition: background .15s; display: inline-flex; align-items: center; gap: 4px;
+    }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-danger:hover { background: #c82333; }
+    .btn-danger:disabled { background: #e6a0a7; cursor: not-allowed; }
+    .btn-primary { background: #1a3a5c; color: white; }
+    .btn-primary:hover { background: #0d2847; }
+    .btn-secondary { background: #e4e8ee; color: #333; }
+    .btn-secondary:hover { background: #d0d6e0; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; font-weight: normal; }
+    .btn-ghost { background: none; color: #1a3a5c; padding: 4px 8px; }
+    .btn-ghost:hover { background: #f0f4fa; }
+
+    /* 卡片/表格 */
+    .card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 10px 12px; background: #f5f7fa; font-weight: 600; color: #555; border-bottom: 2px solid #e0e0e0; white-space: nowrap; }
+    td { padding: 9px 12px; border-top: 1px solid #f0f0f0; vertical-align: middle; }
+    tr:hover td { background: #fafbfc; }
+    tr.selected td { background: #e8f0fe; }
+    .title-cell { max-width: 300px; }
+    .title-text { font-weight: 600; color: #1a3a5c; }
+    .source-text { font-size: 11px; color: #888; margin-top: 2px; }
+    .chk { width: 16px; height: 16px; cursor: pointer; }
+    .num { font-weight: 700; color: #1a3a5c; text-align: center; }
+    .empty { text-align: center; padding: 48px; color: #999; font-size: 15px; }
+
+    /* 状态徽章 */
+    .badge { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:bold; }
+    .badge-active { background:#d4edda; color:#155724; }
+    .badge-processed { background:#cce5ff; color:#004085; }
+    .badge-empty { background:#e2e3e5; color:#383d41; }
+
+    /* 弹窗 */
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: white; border-radius: 10px; padding: 28px; max-width: 500px; width: 90%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal h3 { font-size: 18px; color: #1a3a5c; margin-bottom: 16px; }
+    .modal .form-group { margin-bottom: 14px; }
+    .modal .form-group label { display: block; font-weight: 600; font-size: 13px; color: #444; margin-bottom: 5px; }
+    .modal .form-group input {
+      width: 100%; padding: 8px 12px; border: 1px solid #d0d5dd; border-radius: 6px;
+      font-size: 14px; font-family: inherit;
+    }
+    .modal .form-group input:focus { border-color: #1a3a5c; outline: none; }
+    .modal .btn-row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+    /* 确认对话框 */
+    .confirm-text { font-size: 14px; color: #333; line-height: 1.6; margin-bottom: 12px; }
+    .confirm-warn { font-size: 13px; color: #dc3545; margin-bottom: 16px; }
+    .delete-stats { font-size: 12px; color: #888; margin-top: 8px; }
+
+    /* 操作按钮组 */
+    .actions { display: flex; gap: 6px; }
+  </style>
+</head>
+<body>
+{% set active = 'manage' %}
+{% include '_nav.html' %}
+
+<div class="container">
+  <h1>📁 文章管理</h1>
+  <p class="sub">支持查看、编辑元信息、批量删除文章及其全部关联数据</p>
+
+  <div class="toolbar">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+      <input type="checkbox" class="chk" id="select-all" onchange="toggleSelectAll()">
+      <span style="font-size:13px;color:#666;">全选</span>
+    </label>
+    <span class="info" id="selection-info">已选 0 篇</span>
+    <button class="btn btn-danger" id="btn-batch-delete" disabled onclick="confirmBatchDelete()">🗑 批量删除</button>
+    <div class="spacer"></div>
+    <a href="/import" class="btn btn-primary">📥 导入新文章</a>
+  </div>
+
+  <div class="card">
+    {% if documents %}
+    <table>
+      <thead>
+        <tr>
+          <th style="width:36px;"></th>
+          <th>#</th>
+          <th>标题 / 来源</th>
+          <th>作者</th>
+          <th>采集时间</th>
+          <th>状态</th>
+          <th style="text-align:center">数据统计</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for doc in documents %}
+        <tr id="row-{{ doc.id }}" data-id="{{ doc.id }}">
+          <td><input type="checkbox" class="chk doc-check" value="{{ doc.id }}" onchange="updateSelection()"></td>
+          <td style="color:#aaa;font-size:12px;">{{ loop.index }}</td>
+          <td class="title-cell">
+            <div class="title-text">{{ doc.title or '(无标题)' }}</div>
+            <div class="source-text">
+              {% if doc.source_type == 'url' %}网址{% elif doc.source_type == 'file' %}文件{% elif doc.source_type == 'paste' %}粘贴{% else %}{{ doc.source_type }}{% endif %}
+              · {{ doc.source_name or '—' }}
+            </div>
+          </td>
+          <td style="font-size:12px;color:#666;">{{ doc.author or '—' }}</td>
+          <td style="white-space:nowrap;font-size:12px;color:#555;">{{ (doc.crawl_time or '')[:16] }}</td>
+          <td>
+            {% if doc.status == 'processed' %}
+              <span class="badge badge-processed">已处理</span>
+            {% elif doc.status == 'ACTIVE' %}
+              <span class="badge badge-active">待处理</span>
+            {% else %}
+              <span class="badge badge-empty">{{ doc.status or '—' }}</span>
+            {% endif %}
+          </td>
+          <td style="text-align:center;font-size:12px;">
+            <span title="文本块">📦{{ doc.chunk_count }}</span>
+            <span title="证据">🔍{{ doc.evidence_count }}</span>
+            <span title="事实">💡{{ doc.fact_count }}</span>
+          </td>
+          <td>
+            <div class="actions">
+              <button class="btn btn-sm btn-secondary" onclick="openEdit('{{ doc.id }}', '{{ doc.title|e }}', '{{ (doc.author or '')|e }}', '{{ (doc.source_name or '')|e }}', '{{ (doc.publish_time or '')[:10] }}')">✏️ 编辑</button>
+              <button class="btn btn-sm btn-danger" onclick="confirmDelete(['{{ doc.id }}'])">🗑</button>
+              <a href="/documents/{{ doc.id }}" class="btn btn-sm btn-ghost">📄 详情</a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">暂无文章。<a href="/import" style="color:#1a3a5c;">去导入 →</a></div>
+    {% endif %}
+  </div>
+</div>
+
+{# ===== 编辑弹窗 ===== #}
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h3>✏️ 编辑文章信息</h3>
+    <input type="hidden" id="edit-id">
+    <div class="form-group">
+      <label>标题 *</label>
+      <input type="text" id="edit-title" required>
+    </div>
+    <div class="form-group">
+      <label>作者</label>
+      <input type="text" id="edit-author">
+    </div>
+    <div class="form-group">
+      <label>来源名称</label>
+      <input type="text" id="edit-source">
+    </div>
+    <div class="form-group">
+      <label>发布时间</label>
+      <input type="date" id="edit-publish-time">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeEdit()">取消</button>
+      <button class="btn btn-primary" id="btn-save-edit" onclick="saveEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+{# ===== 删除确认弹窗 ===== #}
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal">
+    <h3>⚠️ 确认删除</h3>
+    <div class="confirm-text" id="delete-confirm-text"></div>
+    <div class="confirm-warn">此操作将永久删除文章及其所有关联数据（文本块、证据片段、事实原子、审核日志、任务记录），且不可恢复！</div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeDelete()">取消</button>
+      <button class="btn btn-danger" id="btn-confirm-delete" onclick="executeDelete()">确认删除</button>
+    </div>
+    <div class="delete-stats" id="delete-result" style="display:none;"></div>
+  </div>
+</div>
+
+<script>
+let pendingDeleteIds = [];
+
+/* ===== 多选 ===== */
+function toggleSelectAll() {
+  const checked = document.getElementById('select-all').checked;
+  document.querySelectorAll('.doc-check').forEach(cb => { cb.checked = checked; });
+  updateSelection();
+}
+
+function updateSelection() {
+  const checked = document.querySelectorAll('.doc-check:checked');
+  document.getElementById('selection-info').textContent = '已选 ' + checked.length + ' 篇';
+  document.getElementById('btn-batch-delete').disabled = checked.length === 0;
+
+  // 行高亮
+  document.querySelectorAll('tr[data-id]').forEach(tr => tr.classList.remove('selected'));
+  checked.forEach(cb => {
+    const tr = document.getElementById('row-' + cb.value);
+    if (tr) tr.classList.add('selected');
+  });
+}
+
+function getSelectedIds() {
+  return Array.from(document.querySelectorAll('.doc-check:checked')).map(cb => cb.value);
+}
+
+/* ===== 编辑 ===== */
+function openEdit(id, title, author, source, publishTime) {
+  document.getElementById('edit-id').value = id;
+  document.getElementById('edit-title').value = title;
+  document.getElementById('edit-author').value = author;
+  document.getElementById('edit-source').value = source;
+  document.getElementById('edit-publish-time').value = publishTime;
+  document.getElementById('edit-modal').classList.add('show');
+}
+
+function closeEdit() {
+  document.getElementById('edit-modal').classList.remove('show');
+}
+
+function saveEdit() {
+  const id = document.getElementById('edit-id').value;
+  const fd = new FormData();
+  fd.append('title', document.getElementById('edit-title').value);
+  fd.append('author', document.getElementById('edit-author').value);
+  fd.append('source_name', document.getElementById('edit-source').value);
+  fd.append('publish_time', document.getElementById('edit-publish-time').value);
+
+  const btn = document.getElementById('btn-save-edit');
+  btn.disabled = true; btn.textContent = '保存中...';
+
+  fetch('/manage/' + id + '/edit', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        alert('保存失败: ' + data.error);
+      } else {
+        closeEdit();
+        location.reload();
+      }
+    })
+    .catch(err => alert('请求失败: ' + err))
+    .finally(() => { btn.disabled = false; btn.textContent = '保存'; });
+}
+
+/* ===== 删除 ===== */
+function confirmDelete(ids) {
+  pendingDeleteIds = ids;
+  document.getElementById('delete-confirm-text').textContent =
+    '即将删除 ' + ids.length + ' 篇文章及其全部关联数据。';
+  document.getElementById('delete-result').style.display = 'none';
+  document.getElementById('btn-confirm-delete').disabled = false;
+  document.getElementById('delete-modal').classList.add('show');
+}
+
+function confirmBatchDelete() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) return;
+  confirmDelete(ids);
+}
+
+function closeDelete() {
+  document.getElementById('delete-modal').classList.remove('show');
+  pendingDeleteIds = [];
+}
+
+function executeDelete() {
+  if (!pendingDeleteIds.length) return;
+  const btn = document.getElementById('btn-confirm-delete');
+  btn.disabled = true; btn.textContent = '删除中...';
+
+  fetch('/manage/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ doc_ids: pendingDeleteIds })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      closeDelete();
+      location.reload();
+    } else {
+      alert('删除失败: ' + JSON.stringify(data));
+    }
+  })
+  .catch(err => alert('请求失败: ' + err))
+  .finally(() => { btn.disabled = false; btn.textContent = '确认删除'; });
+}
+</script>
+</body>
+</html>

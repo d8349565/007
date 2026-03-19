@@ -2,6 +2,7 @@ Additional rules for COMPETITIVE_RANKING:
 - If the text only says a company is in "TOP 10" or "入选榜单", do NOT invent an exact rank number.
 - qualifiers.rank must be null or absent if no exact rank is given in the evidence.
 - ranking_name, ranking_year, segment, and ranking_scope should go into qualifiers when explicitly stated.
-- predicate must be a Chinese verb phrase. Available options: 排名第一、位居第、跻身前十、连续排名第一、入选排行榜 (choose the most appropriate Chinese phrase matching the evidence).
+- predicate must be a Chinese verb phrase. Available options: 排名第一、位居第、跻身前十、连续排名第一、入选排行榜、排名在范围内 (choose the most appropriate Chinese phrase matching the evidence).
+- **Range ranking**: If the evidence gives a range like "第4-10位" or "前5-10名", use predicate "排名在范围内" and put the range in qualifiers.position_range (e.g. "4-10"). Do NOT use "位居第" or "排名第" when only a range is given instead of a specific rank.
 - Do not confuse "入选" (listed/included) with "排名第一" (ranked #1).
 - If multiple companies are listed in the same ranking text, each company is a separate record.

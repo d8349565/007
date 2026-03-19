@@ -1,5 +1,6 @@
 """SQLite 数据库连接与初始化"""
 
+import os
 import sqlite3
 from pathlib import Path
 
@@ -10,6 +11,10 @@ logger = get_logger(__name__)
 
 
 def get_db_path() -> str:
+    # 允许通过环境变量覆盖（测试用）
+    override = os.environ.get("DATABASE_PATH_OVERRIDE")
+    if override:
+        return override
     cfg = get_config()
     return cfg["database"]["path"]
 
