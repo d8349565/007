@@ -15,8 +15,8 @@ build/
 *.bak
 *.swp
 *.swo
-*.~
-*__pycache__
+*~
+
 # Jupyter Notebooks
 .ipynb_checkpoints/
 *.ipynb
@@ -44,8 +44,7 @@ venv/
 *.h5
 *.json
 *.xml
-docs\superpowers\plans\image\*.png
-
+docs/superpowers/plans/image/*.png
 
 # OS
 Thumbs.db
@@ -65,28 +64,24 @@ htmlcov/
 *.docx
 *.pptx
 
-# Ignore all backup files
-*~
-
-# Ignore all temporary files
+# Temp files
 *.temp
-*.tmp
 
-# Ignore all cache files
+# Cache
 .cache/
 
-# Ignore all compiled files
+# Compiled
 *.so
 *.dll
 *.exe
 
-# Ignore all package files
+# Archives
 *.zip
 *.tar.gz
 *.rar
 
-# Ignore all node modules
+# Node
 node_modules/
-app/models/schema.sql
-docs/superpowers/plans/image/2026-03-19-project-improvements/1773894284598.png
+
+# Tools
 .gstack/
