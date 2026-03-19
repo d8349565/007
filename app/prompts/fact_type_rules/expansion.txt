@@ -1,7 +1,9 @@
 Additional rules for EXPANSION:
-- EXPANSION is an event-type fact (扩产/扩建/新建), NOT a numeric metric.
-- project_name goes into qualifiers if stated.
-- stage must reflect the actual phase: signed (签约), approved (获批), construction_started (开工), under_construction (建设中), completed (建成), operational (投产), full_capacity (达产).
+- EXPANSION is an event-type fact (扩产/扩建/新建/试生产), NOT a numeric metric.
+- **subject**: The company/organization that owns or operates the expansion. MUST be a company name, NOT just a facility name. E.g. "东方雨虹" not just "马来西亚工厂". If the evidence says "马来西亚工厂试生产", find the owning company from context and use it as subject; put the facility name in qualifiers.project_name.
+- project_name goes into qualifiers if stated (e.g. "马来西亚工厂", "TPO工厂").
+- location goes into the location field if a geographic place is mentioned.
+- stage must reflect the actual phase: signed (签约), approved (获批), construction_started (开工), under_construction (建设中), completed (建成), operational (投产), trial_production (试生产), full_capacity (达产).
 - Do not confuse with CAPACITY (产能数字) or INVESTMENT (金额). EXPANSION describes the event itself.
 - If the evidence mentions both the expansion event and a capacity number, extract them as separate records.
 - segment goes into qualifiers if stated (e.g. 汽车涂料, 船舶涂料).

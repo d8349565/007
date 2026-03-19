@@ -1,122 +1,36 @@
-"""完整处理链路编排 —— 导入 → 清洗 → 切分 → 证据发现 → 事实抽取 → 审核 → 实体链接"""
+"""完整处理链路编排 —— 导入 → 清洗 → 全文抽取 → 审核 → 实体链接"""
 
 import json
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
 
 from app.config import get_config
 from app.logger import get_logger
 from app.models.db import get_connection
 from app.services.cleaner import clean_text
-from app.services.text_splitter import split_text
-from app.services.evidence_finder import find_evidence
-from app.services.fact_extractor import extract_facts
-from app.services.reviewer import review_facts_batch
+from app.services.full_extractor import extract_facts_full_text
+from app.services.reviewer import review_document_facts
 from app.services.entity_linker import batch_link_fact_atoms
 from app.services.query import clear_document_results
 
 logger = get_logger(__name__)
 
-# chunk 并行度：受 API 速率限制，不宜太高
-_CHUNK_WORKERS = 3
-
-
-def _process_single_chunk(
-    chunk_index: int,
-    chunk_text: str,
-    document_id: str,
-    doc_title: str,
-    doc_source: str,
-    doc_publish_time: str,
-) -> dict:
-    """
-    处理单个 chunk：证据发现 → 事实抽取 → 审核。
-    线程安全：每次调用内部获取独立的 DB 连接。
-
-    返回:
-        {"evidences": int, "facts": int, "passed": int,
-         "rejected": int, "uncertain": int, "fact_atom_ids": [...]}
-    """
-    chunk_stats = {
-        "evidences": 0, "facts": 0,
-        "passed": 0, "rejected": 0, "uncertain": 0,
-        "fact_atom_ids": [],
-    }
-
-    chunk_id = str(uuid.uuid4())
-
-    # 写入 document_chunk
-    conn = get_connection()
-    try:
-        conn.execute(
-            """INSERT INTO document_chunk
-            (id, document_id, chunk_index, chunk_text, char_count)
-            VALUES (?, ?, ?, ?, ?)""",
-            (chunk_id, document_id, chunk_index, chunk_text, len(chunk_text)),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-    # Agent 1: 证据发现
-    evidences = find_evidence(
-        chunk_id=chunk_id,
-        chunk_text=chunk_text,
-        document_id=document_id,
-        doc_title=doc_title,
-        doc_source=doc_source,
-        doc_publish_time=doc_publish_time,
-    )
-    chunk_stats["evidences"] = len(evidences)
-
-    # Agent 2 + 3: 事实抽取 + 批量审核（按 evidence）
-    for ev in evidences:
-        facts = extract_facts(
-            evidence_id=ev["evidence_id"],
-            evidence_text=ev["evidence_text"],
-            fact_type=ev["fact_type"],
-            document_id=document_id,
-            doc_title=doc_title,
-            doc_source=doc_source,
-            doc_publish_time=doc_publish_time,
-        )
-        chunk_stats["facts"] += len(facts)
-
-        if facts:
-            facts_with_ids = [(f["fact_atom_id"], f) for f in facts]
-            review_results = review_facts_batch(
-                facts_with_ids=facts_with_ids,
-                evidence_text=ev["evidence_text"],
-                document_id=document_id,
-            )
-            for rr in review_results:
-                verdict = rr.get("verdict", "UNCERTAIN")
-                if verdict == "PASS":
-                    chunk_stats["passed"] += 1
-                elif verdict == "REJECT":
-                    chunk_stats["rejected"] += 1
-                else:
-                    chunk_stats["uncertain"] += 1
-                chunk_stats["fact_atom_ids"].append(rr["fact_atom_id"])
-
-    return chunk_stats
-
 
 def process_document(document_id: str) -> dict:
     """
-    处理单篇文档：全链路从清洗到审核。
+    处理单篇文档：清洗 → 全文抽取 → 审核 → 实体链接。
+
+    全文模式：将清洗后的完整文章一次性交给 LLM 分析，
+    不再切分 chunk，保留完整上下文。
 
     参数:
         document_id: source_document 表中的 id
 
     返回:
-        {"document_id": ..., "chunks": int, "evidences": int,
+        {"document_id": ..., "evidences": int,
          "facts": int, "passed": int, "rejected": int, "uncertain": int}
     """
     stats = {
         "document_id": document_id,
-        "chunks": 0,
         "evidences": 0,
         "facts": 0,
         "passed": 0,
@@ -159,62 +73,67 @@ def process_document(document_id: str) -> dict:
         _mark_document_status(document_id, "empty_after_clean")
         return stats
 
-    # 3. 文本切分
-    cfg = get_config()
-    chunk_dicts = split_text(cleaned, doc_id=document_id)
-    chunks = [c["chunk_text"] for c in chunk_dicts]
-    stats["chunks"] = len(chunks)
-    logger.info("切分为 %d 个 chunk", len(chunks))
+    # 3. 存储全文为单个 chunk（DB 兼容）
+    chunk_id = str(uuid.uuid4())
+    conn = get_connection()
+    try:
+        conn.execute(
+            """INSERT INTO document_chunk
+            (id, document_id, chunk_index, chunk_text, char_count)
+            VALUES (?, ?, 0, ?, ?)""",
+            (chunk_id, document_id, cleaned, len(cleaned)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
-    # 4. 并行处理各 chunk（证据发现 → 事实抽取 → 审核）
+    # 4. 全文抽取（Agent 1+2 合并：一次 LLM 调用完成证据发现 + 事实抽取）
+    fact_results = extract_facts_full_text(
+        cleaned_text=cleaned,
+        document_id=document_id,
+        chunk_id=chunk_id,
+        doc_title=doc_title,
+        doc_source=doc_source,
+        doc_publish_time=doc_publish_time,
+    )
+    stats["facts"] = len(fact_results)
+
+    # 统计 evidence 数量（去重）
+    evidence_ids = {fr["evidence_id"] for fr in fact_results}
+    stats["evidences"] = len(evidence_ids)
+
+    # 5. 结构性审核（一次 LLM 调用审核所有 fact）
     all_fact_atom_ids = []
 
-    if len(chunks) == 1:
-        # 单 chunk 无需线程池开销
-        chunk_stats = _process_single_chunk(
-            0, chunks[0], document_id, doc_title, doc_source, doc_publish_time,
+    if fact_results:
+        facts_with_ids = [
+            (fr["fact_atom_id"], fr["fact_record"]) for fr in fact_results
+        ]
+        review_results = review_document_facts(
+            facts_with_ids=facts_with_ids,
+            document_id=document_id,
         )
-        stats["evidences"] += chunk_stats["evidences"]
-        stats["facts"] += chunk_stats["facts"]
-        stats["passed"] += chunk_stats["passed"]
-        stats["rejected"] += chunk_stats["rejected"]
-        stats["uncertain"] += chunk_stats["uncertain"]
-        all_fact_atom_ids.extend(chunk_stats["fact_atom_ids"])
-    else:
-        workers = min(_CHUNK_WORKERS, len(chunks))
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = {
-                executor.submit(
-                    _process_single_chunk,
-                    i, chunk_text, document_id,
-                    doc_title, doc_source, doc_publish_time,
-                ): i
-                for i, chunk_text in enumerate(chunks)
-            }
-            for future in as_completed(futures):
-                chunk_idx = futures[future]
-                try:
-                    chunk_stats = future.result()
-                    stats["evidences"] += chunk_stats["evidences"]
-                    stats["facts"] += chunk_stats["facts"]
-                    stats["passed"] += chunk_stats["passed"]
-                    stats["rejected"] += chunk_stats["rejected"]
-                    stats["uncertain"] += chunk_stats["uncertain"]
-                    all_fact_atom_ids.extend(chunk_stats["fact_atom_ids"])
-                except Exception as e:
-                    logger.error("Chunk %d 处理失败: %s", chunk_idx, e)
+        for rr in review_results:
+            verdict = rr.get("verdict", "UNCERTAIN")
+            if verdict == "PASS":
+                stats["passed"] += 1
+            elif verdict == "REJECT":
+                stats["rejected"] += 1
+            else:
+                stats["uncertain"] += 1
+            all_fact_atom_ids.append(rr["fact_atom_id"])
 
-    # 5. 实体链接
+    # 6. 实体链接
     if all_fact_atom_ids:
         batch_link_fact_atoms(all_fact_atom_ids)
 
-    # 6. 更新文档状态
+    # 7. 更新文档状态
     _mark_document_status(document_id, "processed")
 
     logger.info(
-        "文档处理完成: %s — chunks=%d, evidences=%d, facts=%d, pass=%d, reject=%d, uncertain=%d",
+        "文档处理完成: %s — evidences=%d, facts=%d, pass=%d, reject=%d, uncertain=%d",
         document_id[:8],
-        stats["chunks"], stats["evidences"], stats["facts"],
+        stats["evidences"], stats["facts"],
         stats["passed"], stats["rejected"], stats["uncertain"],
     )
 

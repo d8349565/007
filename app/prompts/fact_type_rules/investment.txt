@@ -1,7 +1,67 @@
 Additional rules for INVESTMENT:
-- Distinguish between: 总投资 (total investment), 注册资本 (registered capital), 项目投资 (project investment).
-- investment_type goes into qualifiers: project_investment, strategic_investment, equity_investment, etc.
-- purpose goes into qualifiers if stated (e.g. 扩建汽车涂料产线).
-- stage goes into qualifiers: signed, approved, under_construction, completed.
-- "拟投资" (planned) vs "已投资" (completed) are different — indicate in qualifiers.stage.
-- If the same sentence mentions both investment amount and capacity, extract as separate records.
+
+## Field mapping for investment/acquisition facts:
+- **subject**: The investing/acquiring entity (company or subsidiary doing the deal). MUST be a company/organization name.
+- **object**: The TARGET of the investment — the entity being acquired, the company invested in, or the project receiving investment. MUST be a company name, project name, or asset description. NEVER put the monetary amount here.
+- **value_num / value_text / unit / currency**: The monetary amount of the investment. E.g. value_num=1.6410, unit="亿港元", currency="HKD".
+- **predicate**: Chinese verb phrase describing the action: 收购股权、计划投资、完成收购、战略投资、注册资本为.
+
+## Investment type classification (qualifiers.investment_type):
+- equity_investment: 股权收购/投资
+- project_investment: 项目投资/建设投资
+- strategic_investment: 战略投资
+- registered_capital: 注册资本
+
+## Required qualifiers:
+- investment_type: as classified above
+- stage: signed (签约), approved (获批), under_construction (建设中), completed (完成). "拟投资" → planned, "已投资/完成收购" → completed.
+- purpose: if stated (e.g. 扩建汽车涂料产线, 收购股权)
+- stake_percentage: for equity acquisitions, extract the ownership percentage (e.g. "100%股权" → 100, "60%股权" → 60). This is critical information.
+
+## Multi-currency rule (CRITICAL):
+When the same transaction is expressed in multiple currencies (e.g. "以约1.6410亿港元（约合1.4476亿人民币）收购..."), output ONLY ONE record:
+- Use the PRIMARY currency (the actual transaction currency, usually the first mentioned) for value_num/unit/currency
+- Put the equivalent amount in qualifiers: equivalent_cny, equivalent_cny_unit, etc.
+- Do NOT create separate records for each currency expression of the same deal.
+
+## Approximate values:
+- If the amount contains "约", "约合", "大约", "近", set qualifiers.is_approximate to true.
+
+## Separation rules:
+- If the same sentence mentions both investment amount and capacity/expansion, extract as separate records (INVESTMENT + CAPACITY/EXPANSION).
+- Different investments (different targets/projects) in the same evidence → separate records.
+- Same investment described with original + converted currency → ONE record only.
+
+## WRONG examples (DO NOT do this):
+```
+WRONG: subject="东方雨虹", predicate="收购股权", object="约1.6410亿港元"
+  → object is the amount, not the target!
+WRONG: Two records for "1.6410亿港元" and "1.4476亿人民币" for the same deal
+  → Same transaction, only one record needed!
+```
+
+## CORRECT example:
+Evidence: "香港东方雨虹投资有限公司将以约1.6410亿港元（约合1.4476亿人民币）收购世界五金塑胶厂有限公司100%股权"
+```json
+{
+  "fact_type": "INVESTMENT",
+  "subject": "香港东方雨虹投资有限公司",
+  "predicate": "收购股权",
+  "object": "世界五金塑胶厂有限公司",
+  "value_num": 1.6410,
+  "value_text": "约1.6410亿港元",
+  "unit": "亿港元",
+  "currency": "HKD",
+  "time_expr": null,
+  "location": "香港",
+  "qualifiers": {
+    "investment_type": "equity_investment",
+    "stage": "planned",
+    "stake_percentage": 100,
+    "is_approximate": true,
+    "equivalent_cny": 1.4476,
+    "equivalent_cny_unit": "亿元"
+  },
+  "confidence": 0.95
+}
+```

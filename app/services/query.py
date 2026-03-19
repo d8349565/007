@@ -333,15 +333,15 @@ def clear_document_results(document_id: str) -> dict:
     """
     清除文档的所有处理结果（保留文档本身）。
     用于重新处理前的幂等性清理。
-    删除顺序：review_log → fact_atom → evidence_span → extraction_task → document_chunk
+    删除顺序：review_log → fact_atom → evidence_span → extraction_task → document_sentence → document_chunk
     """
     conn = get_connection()
     stats = {}
     try:
+        # review_log via fact_atom
         fact_ids = [r["id"] for r in conn.execute(
             "SELECT id FROM fact_atom WHERE document_id=?", (document_id,)
         ).fetchall()]
-
         if fact_ids:
             placeholders = ",".join(["?"] * len(fact_ids))
             stats["review_log"] = conn.execute(
@@ -351,6 +351,17 @@ def clear_document_results(document_id: str) -> dict:
         else:
             stats["review_log"] = 0
 
+        # review_log via evidence_span
+        ev_ids = [r["id"] for r in conn.execute(
+            "SELECT id FROM evidence_span WHERE document_id=?", (document_id,)
+        ).fetchall()]
+        if ev_ids:
+            placeholders = ",".join(["?"] * len(ev_ids))
+            stats["review_log"] += conn.execute(
+                f"DELETE FROM review_log WHERE target_id IN ({placeholders})",
+                ev_ids,
+            ).rowcount
+
         stats["fact_atom"] = conn.execute(
             "DELETE FROM fact_atom WHERE document_id=?", (document_id,)
         ).rowcount
@@ -359,6 +370,9 @@ def clear_document_results(document_id: str) -> dict:
         ).rowcount
         stats["extraction_task"] = conn.execute(
             "DELETE FROM extraction_task WHERE document_id=?", (document_id,)
+        ).rowcount
+        stats["document_sentence"] = conn.execute(
+            "DELETE FROM document_sentence WHERE document_id=?", (document_id,)
         ).rowcount
         stats["document_chunk"] = conn.execute(
             "DELETE FROM document_chunk WHERE document_id=?", (document_id,)
@@ -379,7 +393,8 @@ def cascade_delete_document(document_id: str) -> dict:
     """
     级联删除文档及其所有关联数据。
     删除顺序（尊重外键）：
-      review_log → fact_atom → evidence_span → extraction_task → document_chunk → source_document
+      review_log → fact_atom → evidence_span → extraction_task
+      → document_sentence → document_chunk → source_document
     返回各表删除行数。
     """
     conn = get_connection()
@@ -389,7 +404,6 @@ def cascade_delete_document(document_id: str) -> dict:
         fact_ids = [r["id"] for r in conn.execute(
             "SELECT id FROM fact_atom WHERE document_id=?", (document_id,)
         ).fetchall()]
-
         if fact_ids:
             placeholders = ",".join(["?"] * len(fact_ids))
             stats["review_log"] = conn.execute(
@@ -399,27 +413,43 @@ def cascade_delete_document(document_id: str) -> dict:
         else:
             stats["review_log"] = 0
 
-        # 2. 删除 fact_atom（清除实体链接 entity 本身保留）
+        # 2. 删除 review_log（关联 evidence_span）
+        ev_ids = [r["id"] for r in conn.execute(
+            "SELECT id FROM evidence_span WHERE document_id=?", (document_id,)
+        ).fetchall()]
+        if ev_ids:
+            placeholders = ",".join(["?"] * len(ev_ids))
+            stats["review_log"] += conn.execute(
+                f"DELETE FROM review_log WHERE target_id IN ({placeholders})",
+                ev_ids,
+            ).rowcount
+
+        # 3. 删除 fact_atom（清除实体链接，entity 本身保留）
         stats["fact_atom"] = conn.execute(
             "DELETE FROM fact_atom WHERE document_id=?", (document_id,)
         ).rowcount
 
-        # 3. 删除 evidence_span
+        # 4. 删除 evidence_span
         stats["evidence_span"] = conn.execute(
             "DELETE FROM evidence_span WHERE document_id=?", (document_id,)
         ).rowcount
 
-        # 4. 删除 extraction_task
+        # 5. 删除 extraction_task
         stats["extraction_task"] = conn.execute(
             "DELETE FROM extraction_task WHERE document_id=?", (document_id,)
         ).rowcount
 
-        # 5. 删除 document_chunk
+        # 6. 删除 document_sentence
+        stats["document_sentence"] = conn.execute(
+            "DELETE FROM document_sentence WHERE document_id=?", (document_id,)
+        ).rowcount
+
+        # 7. 删除 document_chunk
         stats["document_chunk"] = conn.execute(
             "DELETE FROM document_chunk WHERE document_id=?", (document_id,)
         ).rowcount
 
-        # 6. 删除 source_document
+        # 8. 删除 source_document
         stats["source_document"] = conn.execute(
             "DELETE FROM source_document WHERE id=?", (document_id,)
         ).rowcount

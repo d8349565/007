@@ -91,8 +91,7 @@ def import_url(
     raw_text = body.get_text(separator="\n") if body else soup.get_text(separator="\n")
 
     if not title:
-        title_tag = soup.find("title")
-        title = title_tag.get_text().strip() if title_tag else url
+        title = _extract_title(soup, raw_text, url)
 
     return _upsert_document(
         source_type="url",
@@ -168,6 +167,43 @@ def import_batch(
 
     logger.info("批量导入完成: %d/%d 成功", len(doc_ids), len(files))
     return doc_ids
+
+
+def _extract_title(soup: BeautifulSoup, raw_text: str, fallback: str) -> str:
+    """
+    多策略提取文章标题。
+
+    优先级：
+    1. og:title meta 标签（微信公众号等平台通用）
+    2. h1 标签
+    3. <title> 标签
+    4. 正文第一个非空行
+    5. fallback（通常是 URL）
+    """
+    # 策略 1: og:title（微信/知乎/头条等平台标准）
+    og = soup.find("meta", property="og:title")
+    if og and og.get("content", "").strip():
+        return og["content"].strip()
+
+    # 策略 2: h1 标签
+    h1 = soup.find("h1")
+    if h1 and h1.get_text().strip():
+        return h1.get_text().strip()
+
+    # 策略 3: <title> 标签
+    title_tag = soup.find("title")
+    if title_tag and title_tag.get_text().strip():
+        return title_tag.get_text().strip()
+
+    # 策略 4: 正文第一个非空有意义行（至少 4 个字符，排除日期/作者行）
+    for line in raw_text.split("\n"):
+        line = line.strip()
+        if len(line) >= 4 and not line.startswith("http"):
+            return line[:200]
+
+    # 策略 5: fallback
+    logger.warning("无法提取标题，使用 fallback: %s", fallback[:50])
+    return fallback
 
 
 def _upsert_document(

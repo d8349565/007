@@ -323,3 +323,109 @@ def _persist_review(
         conn.commit()
     finally:
         conn.close()
+
+
+def review_document_facts(
+    facts_with_ids: list[tuple[str, dict]],
+    document_id: str,
+) -> list[dict]:
+    """
+    对整篇文档的所有 fact_atom 做结构性审核（一次 LLM 调用）。
+
+    审核内容：格式正确性、字段类型、主体合理性、字段归位、原子可还原性。
+    不审核事实内容准确性。
+
+    参数:
+        facts_with_ids: [(fact_atom_id, fact_record), ...]
+        document_id: 文档 ID
+
+    返回:
+        [{"fact_atom_id": ..., "verdict": ..., "score": ..., "review_status": ...}, ...]
+    """
+    if not facts_with_ids:
+        return []
+
+    cfg = get_config()
+    system_prompt = _load_prompt()
+
+    # 构建全部 fact records
+    fact_records_with_id = []
+    for fid, frec in facts_with_ids:
+        rec = dict(frec)
+        rec["id"] = fid
+        fact_records_with_id.append(rec)
+
+    user_input = json.dumps(
+        {"fact_records": fact_records_with_id},
+        ensure_ascii=False,
+    )
+
+    client = get_llm_client()
+    task_id = str(uuid.uuid4())
+    _record_task_start(task_id, document_id, "reviewer")
+
+    try:
+        result = client.chat_json(system_prompt, user_input)
+        raw_data = result["data"]
+        _record_task_end(
+            task_id, "success",
+            result["input_tokens"], result["output_tokens"],
+            result["model"],
+        )
+    except Exception as e:
+        _record_task_end(task_id, "failed", error=str(e))
+        logger.error("Reviewer 结构审核失败: %s", e)
+        results = []
+        for fid, frec in facts_with_ids:
+            fallback = {
+                "fact_atom_id": fid,
+                "verdict": "UNCERTAIN",
+                "score": 0.0,
+                "issues": [],
+                "review_note": "审核调用异常，进入人工审核池",
+                "review_status": "HUMAN_REVIEW_REQUIRED",
+            }
+            _persist_review(
+                fid, "UNCERTAIN", 0.0,
+                "HUMAN_REVIEW_REQUIRED", fallback["review_note"],
+            )
+            results.append(fallback)
+        return results
+
+    # 解析结果
+    if isinstance(raw_data, dict):
+        raw_data = [raw_data]
+
+    review_map = {}
+    for item in raw_data:
+        fid = item.get("fact_id", "") or item.get("id", "")
+        if fid:
+            review_map[fid] = item
+
+    results = []
+    for fid, frec in facts_with_ids:
+        item = review_map.get(fid, {})
+
+        verdict = item.get("verdict", "UNCERTAIN").upper()
+        score = item.get("score", 0.0)
+        issues = item.get("issues", [])
+        review_note = item.get("review_note", "")
+
+        review_status = _map_verdict_to_status(verdict, score, frec, cfg)
+        _persist_review(fid, verdict, score, review_status, review_note)
+
+        logger.info(
+            "[fact=%s] 结构审核: %s (score=%.2f) → %s",
+            fid[:8], verdict, score, review_status,
+        )
+
+        results.append({
+            "fact_atom_id": fid,
+            "verdict": verdict,
+            "score": score,
+            "issues": issues,
+            "review_note": review_note,
+            "review_status": review_status,
+        })
+
+    return results

@@ -250,6 +250,68 @@ def create_app() -> Flask:
         logger.info("人工审核 [%s]: %s → %s", fact_id[:8], old_status, action)
         return redirect(url_for("review_list"))
 
+    @app.route("/review/<fact_id>/edit", methods=["POST"])
+    def review_edit(fact_id):
+        """人工编辑事实原子字段"""
+        data = request.get_json(silent=True) or {}
+        action = data.get("action", "save_only")  # save_only | save_and_pass | save_and_reject
+
+        allowed_fields = [
+            "subject_text", "predicate", "object_text",
+            "value_num", "value_text", "unit", "currency",
+            "time_expr", "location_text", "qualifier_json", "review_note",
+        ]
+
+        update_vals = {}
+        for field in allowed_fields:
+            if field in data:
+                val = data[field]
+                if isinstance(val, str) and val.strip() == "":
+                    val = None
+                update_vals[field] = val
+
+        if action == "save_and_pass":
+            new_status = "HUMAN_PASS"
+        elif action == "save_and_reject":
+            new_status = "HUMAN_REJECTED"
+        else:
+            new_status = "HUMAN_REVIEW_REQUIRED"
+
+        conn = get_connection()
+        try:
+            old = conn.execute(
+                "SELECT review_status FROM fact_atom WHERE id=?", (fact_id,)
+            ).fetchone()
+            if not old:
+                return jsonify({"error": "not found"}), 404
+            old_status = old["review_status"]
+
+            update_vals["review_status"] = new_status
+            set_clause = (
+                ", ".join(f"{k}=?" for k in update_vals)
+                + ", updated_at=CURRENT_TIMESTAMP"
+            )
+            values = list(update_vals.values()) + [fact_id]
+            conn.execute(f"UPDATE fact_atom SET {set_clause} WHERE id=?", values)
+
+            import uuid
+            conn.execute(
+                """INSERT INTO review_log
+                (id, target_type, target_id, old_status, new_status,
+                 reviewer, review_action, review_note)
+                VALUES (?, 'fact_atom', ?, ?, ?, 'human', 'human_edit', ?)""",
+                (
+                    str(uuid.uuid4()), fact_id, old_status, new_status,
+                    update_vals.get("review_note") or "",
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        logger.info("人工编辑 [%s]: %s → %s", fact_id[:8], old_status, new_status)
+        return jsonify({"ok": True, "new_status": new_status})
+
     @app.route("/stats")
     def stats_page():
         """统计概览 API"""
@@ -424,18 +486,10 @@ def create_app() -> Flask:
             return jsonify({"error": "文档不存在"}), 404
 
         # 删除旧的处理数据（保留 source_document）
+        from app.services.query import clear_document_results
+        clear_document_results(doc_id)
         conn = get_connection()
         try:
-            fact_ids = [r["id"] for r in conn.execute(
-                "SELECT id FROM fact_atom WHERE document_id=?", (doc_id,)
-            ).fetchall()]
-            if fact_ids:
-                ph = ",".join(["?"] * len(fact_ids))
-                conn.execute(f"DELETE FROM review_log WHERE target_id IN ({ph})", fact_ids)
-            conn.execute("DELETE FROM fact_atom WHERE document_id=?", (doc_id,))
-            conn.execute("DELETE FROM evidence_span WHERE document_id=?", (doc_id,))
-            conn.execute("DELETE FROM extraction_task WHERE document_id=?", (doc_id,))
-            conn.execute("DELETE FROM document_chunk WHERE document_id=?", (doc_id,))
             conn.execute("UPDATE source_document SET status='ACTIVE' WHERE id=?", (doc_id,))
             conn.commit()
         finally:

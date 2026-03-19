@@ -51,95 +51,6 @@ Test-Path .venv
 
 ---
 
-## 架构
-
-### 3-Agent 流水线（`app/services/pipeline.py`）
-
-```
-原始文章
-  → clean_text()       [cleaner.py]     清洗 HTML/广告/免责
-  → split_text()       [text_splitter.py] 四级切分，自适应中文字数
-  → find_evidence()    [evidence_finder.py]  Agent 1：识别可抽取证据片段 → evidence_span
-  → extract_facts()    [fact_extractor.py]   Agent 2：抽取结构化 fact_atom
-  → review_fact()      [reviewer.py]         Agent 3：校验 PASS/REJECT/UNCERTAIN
-  → batch_link_fact_atoms() [entity_linker.py] 后置：标准化实体
-```
-
-### 服务层职责（一句话）
-
-| 文件 | 职责 |
-|------|------|
-| `services/pipeline.py` | 编排整个文档处理流程 |
-| `services/evidence_finder.py` | Agent 1：从 chunk 中识别证据片段 |
-| `services/fact_extractor.py` | Agent 2：分层加载 prompt，抽取  JSON 结构 |
-| `services/reviewer.py` | Agent 3：校验每条 fact 是否被证据明确支持 |
-| `services/cleaner.py` | HTML 去除、广告/导航/免责过滤、空白规范化 |
-| `services/text_splitter.py` | 四级切分（章节→段落→句群），短文直通 |
-| `services/entity_linker.py` | 精确/别名匹配标准化实体，未命中保留原文 |
-| `services/importer.py` | 导入 txt/md/URL，content_hash 去重 |
-| `services/llm_client.py` | DeepSeek API 封装，自动重试+Token 计数 |
-| `models/db.py` | SQLite 连接管理，WAL 模式，外键约束 |
-| `config.py` | 单例 `get_config()`，加载 config.yaml + .env |
-
-### Prompt 管理
-
-- 路径：`app/prompts/`
-- 加载：每个服务模块用 `Path(__file__).resolve().parent.parent / "prompts"` 定位
-- **分层**：`fact_extractor_common.txt`（通用规则）+ `fact_type_rules/{fact_type}.txt`（类型规则）拼接
-- **不能**在代码里硬编码 prompt 文本——必须放在 .txt 文件
-
----
-
-## 数据库核心表（SQLite）
-
-| 表 | 关键字段 |
-|----|---------|
-| `source_document` | id, content_hash（去重键）, status, raw_text |
-| `document_chunk` | id, document_id, chunk_index, chunk_text |
-| `evidence_span` | id, chunk_id, fact_type, evidence_text |
-| `fact_atom` | id, evidence_span_id, fact_type, subject_text, predicate, object_text, value_num, value_text, unit, currency, time_expr, qualifier_json, confidence_score, **review_status** |
-| `entity` / `entity_alias` | 标准实体库+别名 |
-| `extraction_task` | agent_type, status, error_message（调试用） |
-| `review_log` | 审核操作日志 |
-
-`review_status` 取值：`PENDING` / `AUTO_PASS` / `HUMAN_PASS` / `REJECTED` / `UNCERTAIN`
-
----
-
-## 支持的 fact_type（9 类，来自 config.yaml 白名单）
-
-`FINANCIAL_METRIC` · `SALES_VOLUME` · `CAPACITY` · `INVESTMENT` · `EXPANSION` · `MARKET_SHARE` · `COMPETITIVE_RANKING` · `COOPERATION` · `PRICE_CHANGE`
-
----
-
-## 关键约束与陷阱
-
-### 抽取规则（LLM 行为约束）
-- **禁止补脑**：只抽 evidence 明确写出的内容，不推断、不补标题、不用常识填空。
-- **一事一条**：一句话含多个事实时，必须拆成多条 fact_atom，不能合并。
-- **Reviewer 只判断，不修改**：PASS/REJECT/UNCERTAIN，不允许改写 subject 或数值。
-- **Entity Linking 后置**：Extractor 输出原文 subject_text；实体标准化在 pipeline 最后一步做。
-- `qualifier_json` 必须是严格 JSON 对象，不能是字符串。
-- 未知值填 `null`，不填 `None`（Python 序列化差异）。
-
-### 数据层约束
-- `content_hash` 去重是**覆盖式**：同文章重复导入返回同一 document_id。
-- 清洗必须在切分之前，否则广告/导航会进 LLM 浪费 Token。
-- `short_text_threshold: 1200`：≤1200 字的文章不切分，整篇作为一个 chunk，但仍走完整三 Agent 链路。
-- 时间有三种语义，不能混淆：`publish_time`（文章发布时间）/ `time_expr`（原文时间表达）/ `time_start`·`time_end`（标准化范围）。
-
-### 审核自动通过条件（全部满足）
-- Reviewer verdict = `PASS`
-- fact_type 在白名单中
-- subject_text、predicate、evidence_span 均非空
-- 数值类事实 value_text 非空
-
-### 强制人工审核
-- verdict = `UNCERTAIN`
-- 金额 / 财务数据
-- `MARKET_SHARE` / `COMPETITIVE_RANKING` 类型
-
----
 
 ## 修改前必做
 
@@ -159,6 +70,7 @@ Test-Path .venv
 ## 验证要求
 
 每次非平凡改动后：
+
 - 检查语法正确性
 - 检查 import 和类型一致性
 - 检查受影响的调用路径
@@ -189,6 +101,7 @@ Test-Path .venv
 ## 响应格式
 
 提出或实施任何修改时，始终说明：
+
 1. 改了什么
 2. 为什么改
 3. 潜在风险

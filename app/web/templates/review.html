@@ -72,6 +72,67 @@
         .table-wrap { overflow-x: auto; }
         .table-wrap table { min-width: 700px; }
         td.relative { position: relative; }
+        .btn-edit {
+            background: none; border: 1px solid #ddd; border-radius: 4px;
+            padding: 4px 7px; cursor: pointer; font-size: 13px; color: #666;
+            transition: all 0.2s; margin-right: 4px;
+        }
+        .btn-edit:hover { background: #fff8e1; border-color: #f0c36d; color: #a07000; }
+        /* 编辑弹窗 */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.45); z-index: 2000;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-box {
+            background: white; border-radius: 10px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+            width: 680px; max-width: 96vw; max-height: 90vh;
+            display: flex; flex-direction: column;
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 16px 20px 12px; border-bottom: 1px solid #eee;
+        }
+        .modal-header h3 { font-size: 17px; color: #1a3a5c; }
+        .modal-close {
+            background: none; border: none; font-size: 20px;
+            cursor: pointer; color: #999; line-height: 1;
+        }
+        .modal-close:hover { color: #333; }
+        .modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+        .edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+        .edit-group { display: flex; flex-direction: column; gap: 4px; }
+        .edit-group.full { grid-column: 1 / -1; }
+        .edit-group label { font-size: 12px; color: #888; font-weight: 600; }
+        .edit-group input, .edit-group textarea {
+            border: 1px solid #ddd; border-radius: 4px;
+            padding: 6px 8px; font-size: 13px; font-family: inherit;
+            transition: border-color 0.2s; resize: vertical;
+        }
+        .edit-group input:focus, .edit-group textarea:focus {
+            outline: none; border-color: #0066cc;
+        }
+        .evidence-box {
+            background: #f8f9fa; border-left: 3px solid #dee2e6;
+            padding: 8px 10px; border-radius: 4px; font-size: 12px;
+            color: #555; line-height: 1.6; max-height: 80px;
+            overflow-y: auto; white-space: pre-wrap;
+        }
+        .modal-footer {
+            padding: 12px 20px; border-top: 1px solid #eee;
+            display: flex; gap: 8px; justify-content: flex-end;
+        }
+        .btn-save { padding: 7px 16px; border-radius: 4px; font-size: 13px; cursor: pointer; border: none; }
+        .btn-save-queue { background: #e9ecef; color: #333; }
+        .btn-save-queue:hover { background: #dee2e6; }
+        .btn-save-pass { background: #28a745; color: white; }
+        .btn-save-pass:hover { background: #218838; }
+        .btn-save-reject { background: #dc3545; color: white; }
+        .btn-save-reject:hover { background: #c82333; }
+        .btn-cancel { background: none; border: 1px solid #ddd; padding: 7px 14px; border-radius: 4px; font-size: 13px; cursor: pointer; color: #666; }
+        .btn-cancel:hover { background: #f8f9fa; }
     </style>
 </head>
 <body>
@@ -185,6 +246,7 @@
                     </div>
                 </td>
                 <td>
+                    <button class="btn-edit" onclick="openEditModal('{{ f.id }}')" title="编辑字段">✏️</button>
                     <select class="select-action" onchange="if(this.value){var form=this.previousElementSibling;form.action='/review/'+'{{ f.id }}'+'/action';form.querySelector('input').value=this.value;form.submit();}">
                         <option value="">—</option>
                         <option value="HUMAN_PASS">✓ 通过</option>
@@ -240,6 +302,143 @@ document.addEventListener('click', () => {
 document.querySelectorAll('.detail-popup').forEach(p => {
     p.addEventListener('click', e => e.stopPropagation());
 });
+
+// ─── 编辑弹窗 ─────────────────────────────────────────────────────
+function openEditModal(factId) {
+    fetch('/review/' + factId)
+        .then(r => r.json())
+        .then(f => {
+            document.getElementById('editFactId').value = f.id;
+            document.getElementById('edit_subject_text').value = f.subject_text || '';
+            document.getElementById('edit_predicate').value = f.predicate || '';
+            document.getElementById('edit_object_text').value = f.object_text || '';
+            document.getElementById('edit_value_num').value = (f.value_num !== null && f.value_num !== undefined) ? f.value_num : '';
+            document.getElementById('edit_value_text').value = f.value_text || '';
+            document.getElementById('edit_unit').value = f.unit || '';
+            document.getElementById('edit_currency').value = f.currency || '';
+            document.getElementById('edit_time_expr').value = f.time_expr || '';
+            document.getElementById('edit_location_text').value = f.location_text || '';
+            document.getElementById('edit_qualifier_json').value = f.qualifier_json || '';
+            document.getElementById('edit_review_note').value = f.review_note || '';
+            var evBox = document.getElementById('edit_evidence');
+            evBox.textContent = f.evidence_text || '（无证据文本）';
+            document.getElementById('editModal').classList.add('show');
+        })
+        .catch(() => alert('加载事实数据失败'));
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').classList.remove('show');
+}
+
+function submitEdit(action) {
+    var factId = document.getElementById('editFactId').value;
+    var data = {
+        action: action,
+        subject_text: document.getElementById('edit_subject_text').value,
+        predicate: document.getElementById('edit_predicate').value,
+        object_text: document.getElementById('edit_object_text').value,
+        value_num: document.getElementById('edit_value_num').value,
+        value_text: document.getElementById('edit_value_text').value,
+        unit: document.getElementById('edit_unit').value,
+        currency: document.getElementById('edit_currency').value,
+        time_expr: document.getElementById('edit_time_expr').value,
+        location_text: document.getElementById('edit_location_text').value,
+        qualifier_json: document.getElementById('edit_qualifier_json').value,
+        review_note: document.getElementById('edit_review_note').value,
+    };
+    fetch('/review/' + factId + '/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.ok) {
+            closeEditModal();
+            window.location.reload();
+        } else {
+            alert('保存失败：' + (d.error || '未知错误'));
+        }
+    })
+    .catch(() => alert('请求失败，请检查网络'));
+}
+
+document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+});
 </script>
+
+<!-- 编辑事实弹窗 -->
+<div id="editModal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>✏️ 编辑事实原子</h3>
+            <button class="modal-close" onclick="closeEditModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editFactId">
+            <div style="margin-bottom:12px;">
+                <div class="edit-group full">
+                    <label>原始证据文本</label>
+                    <div id="edit_evidence" class="evidence-box">-</div>
+                </div>
+            </div>
+            <div class="edit-grid">
+                <div class="edit-group">
+                    <label>主体 *</label>
+                    <input type="text" id="edit_subject_text" placeholder="如：某公司、某品牌">
+                </div>
+                <div class="edit-group">
+                    <label>谓词 *</label>
+                    <input type="text" id="edit_predicate" placeholder="如：营业收入为、销量为">
+                </div>
+                <div class="edit-group">
+                    <label>客体</label>
+                    <input type="text" id="edit_object_text" placeholder="合作方/排名对象等">
+                </div>
+                <div class="edit-group">
+                    <label>数值</label>
+                    <input type="number" id="edit_value_num" step="any" placeholder="数字值">
+                </div>
+                <div class="edit-group">
+                    <label>单位</label>
+                    <input type="text" id="edit_unit" placeholder="如：亿元、万吨">
+                </div>
+                <div class="edit-group">
+                    <label>货币</label>
+                    <input type="text" id="edit_currency" placeholder="如：CNY、USD">
+                </div>
+                <div class="edit-group">
+                    <label>时间表达式</label>
+                    <input type="text" id="edit_time_expr" placeholder="如：2024年、2024Q1">
+                </div>
+                <div class="edit-group">
+                    <label>地点</label>
+                    <input type="text" id="edit_location_text" placeholder="如：中国、上海">
+                </div>
+                <div class="edit-group full">
+                    <label>文本值（非数字结果）</label>
+                    <input type="text" id="edit_value_text" placeholder="如：第一名、正增长">
+                </div>
+                <div class="edit-group full">
+                    <label>限定词 JSON</label>
+                    <textarea id="edit_qualifier_json" rows="2" placeholder='如：{"yoy_change": "+18%"}'></textarea>
+                </div>
+                <div class="edit-group full">
+                    <label>审核备注</label>
+                    <textarea id="edit_review_note" rows="2" placeholder="填写修改原因或说明..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeEditModal()">取消</button>
+            <button class="btn-save btn-save-queue" onclick="submitEdit('save_only')">💾 保存（返回队列）</button>
+            <button class="btn-save btn-save-reject" onclick="submitEdit('save_and_reject')">✗ 保存并拒绝</button>
+            <button class="btn-save btn-save-pass" onclick="submitEdit('save_and_pass')">✓ 保存并通过</button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>

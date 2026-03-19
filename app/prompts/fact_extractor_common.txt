@@ -15,11 +15,13 @@ You must follow these rules:
 10. One record = one atomic fact. Do not merge multiple metrics into one record.
 11. predicate MUST be written in Chinese. Use a concise Chinese verb phrase (e.g. 计划总投资、市场份额为、价格上涨). NEVER use English words as predicate.
 12. subject MUST be a non-empty string explicitly mentioned in the evidence text. If the subject entity cannot be found in the evidence text itself, DO NOT output this record at all. subject is NEVER null.
-13. subject MUST be a concrete entity name (company, organization, product, brand, person, project), NOT a measurement term, statistical concept, or business description. Examples of INVALID subjects: "全国造船完工量" (measurement), "手持订单量" (measurement), "中国船舶涂料市场" (market region), "公司船舶涂料业务" (business description). If the sentence describes a metric without a clear entity subject, use the entity that owns/reports that metric as subject.
+13. subject MUST be a concrete entity name (company, organization, product, brand, person, project), NOT a measurement term, statistical concept, or business description. Examples of INVALID subjects: "全国造船完工量" (measurement), "手持订单量" (measurement), "中国船舶涂料市场" (market region), "公司船舶涂料业务" (business description), "公告" (document type), "销售额" (metric name). If the sentence describes a metric without a clear entity subject, use the entity that owns/reports that metric as subject. Example: "2024年销售额280.56亿元" in an article about 东方雨虹 → subject should be "东方雨虹", not "销售额".
 14. subject should NOT end with generic suffixes like "业务", "市场", "行业", "领域" unless it refers to a named entity. Prefer the specific company/organization name.
 15. time_expr: If the evidence mentions any time reference (年份、季度、月份、"今年"、"去年"、"截至X月底" etc.), extract it as time_expr. Do NOT leave time_expr null when a time expression exists in the evidence.
 16. currency: For monetary values, always specify the currency code. Infer from context: "亿元" / "万元" / "元" → CNY; "亿日元" → JPY; "亿美元" → USD; "亿港元" → HKD. Only leave null if the value is non-monetary.
 17. location: If the evidence mentions a geographic scope (全国、中国、全球、华东、某省市 etc.), extract it as location. Do NOT leave location null when a geographic reference exists in the evidence.
+18. Multi-currency deduplication: When the same transaction/amount is expressed in multiple currencies (e.g. "1.6410亿港元（约合1.4476亿人民币）"), output ONLY ONE record. Use the primary currency (the transaction currency, usually first mentioned) for value_num/unit/currency. Put the converted equivalent in qualifiers (e.g. equivalent_cny, equivalent_cny_unit). NEVER create separate records for each currency expression of the same fact.
+19. object field usage: For INVESTMENT/COOPERATION types, object MUST be the target entity (the company being acquired, the partner, the project), NOT the monetary amount. Monetary amounts always go in value_num/value_text/unit/currency.
 
 Use this fixed schema for each record:
 {
