@@ -44,7 +44,7 @@ venv/
 *.h5
 *.json
 *.xml
-
+docs\superpowers\plans\image\*.png
 
 
 # OS
@@ -88,3 +88,4 @@ htmlcov/
 # Ignore all node modules
 node_modules/
 app/models/schema.sql
+docs/superpowers/plans/image/2026-03-19-project-improvements/1773894284598.png

@@ -329,6 +329,52 @@ def get_doc_stats(document_id: str) -> dict:
         conn.close()
 
 
+def clear_document_results(document_id: str) -> dict:
+    """
+    清除文档的所有处理结果（保留文档本身）。
+    用于重新处理前的幂等性清理。
+    删除顺序：review_log → fact_atom → evidence_span → extraction_task → document_chunk
+    """
+    conn = get_connection()
+    stats = {}
+    try:
+        fact_ids = [r["id"] for r in conn.execute(
+            "SELECT id FROM fact_atom WHERE document_id=?", (document_id,)
+        ).fetchall()]
+
+        if fact_ids:
+            placeholders = ",".join(["?"] * len(fact_ids))
+            stats["review_log"] = conn.execute(
+                f"DELETE FROM review_log WHERE target_id IN ({placeholders})",
+                fact_ids,
+            ).rowcount
+        else:
+            stats["review_log"] = 0
+
+        stats["fact_atom"] = conn.execute(
+            "DELETE FROM fact_atom WHERE document_id=?", (document_id,)
+        ).rowcount
+        stats["evidence_span"] = conn.execute(
+            "DELETE FROM evidence_span WHERE document_id=?", (document_id,)
+        ).rowcount
+        stats["extraction_task"] = conn.execute(
+            "DELETE FROM extraction_task WHERE document_id=?", (document_id,)
+        ).rowcount
+        stats["document_chunk"] = conn.execute(
+            "DELETE FROM document_chunk WHERE document_id=?", (document_id,)
+        ).rowcount
+
+        conn.commit()
+        if any(v > 0 for v in stats.values()):
+            logger.info("清除文档 %s 旧结果: %s", document_id[:8], stats)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return stats
+
+
 def cascade_delete_document(document_id: str) -> dict:
     """
     级联删除文档及其所有关联数据。

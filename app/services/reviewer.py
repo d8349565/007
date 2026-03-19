@@ -179,3 +179,147 @@ def _record_task_end(
         conn.commit()
     finally:
         conn.close()
+
+
+def review_facts_batch(
+    facts_with_ids: list[tuple[str, dict]],
+    evidence_text: str,
+    document_id: str,
+) -> list[dict]:
+    """
+    批量审核同一 evidence 下的多条 fact_atom。
+
+    与 review_fact() 相比，将多条 facts 打包成一次 LLM 调用，
+    共享 evidence_text，减少重复输入 token。
+
+    参数:
+        facts_with_ids: [(fact_atom_id, fact_record), ...]
+        evidence_text: 共享的证据文本
+        document_id: 文档 ID
+
+    返回:
+        [{"verdict": ..., "score": ..., "review_status": ..., "fact_atom_id": ...}, ...]
+    """
+    if not facts_with_ids:
+        return []
+
+    # 单条 fact 直接走原有逻辑（兼容性 + 避免数组开销）
+    if len(facts_with_ids) == 1:
+        fid, frec = facts_with_ids[0]
+        result = review_fact(fid, frec, evidence_text, document_id)
+        result["fact_atom_id"] = fid
+        return [result]
+
+    cfg = get_config()
+    system_prompt = _load_prompt()
+
+    # 构建批量输入：包含 evidence + 多条 fact_record
+    fact_records_with_id = []
+    for fid, frec in facts_with_ids:
+        rec = dict(frec)
+        rec["id"] = fid
+        fact_records_with_id.append(rec)
+
+    user_input = json.dumps(
+        {
+            "evidence_text": evidence_text,
+            "fact_records": fact_records_with_id,
+        },
+        ensure_ascii=False,
+    )
+
+    client = get_llm_client()
+    task_id = str(uuid.uuid4())
+    _record_task_start(task_id, document_id, "reviewer")
+
+    try:
+        result = client.chat_json(system_prompt, user_input)
+        raw_data = result["data"]
+        _record_task_end(
+            task_id, "success",
+            result["input_tokens"], result["output_tokens"],
+            result["model"],
+        )
+    except Exception as e:
+        _record_task_end(task_id, "failed", error=str(e))
+        logger.error("Reviewer 批量调用失败: %s", e)
+        # 全部标记 UNCERTAIN
+        results = []
+        for fid, frec in facts_with_ids:
+            fallback = {
+                "fact_atom_id": fid,
+                "verdict": "UNCERTAIN",
+                "score": 0.0,
+                "issues": [{"field": "system", "issue": f"批量审核调用失败: {e}"}],
+                "review_note": "审核调用异常，进入人工审核池",
+                "review_status": "HUMAN_REVIEW_REQUIRED",
+            }
+            _persist_review(fid, "UNCERTAIN", 0.0, "HUMAN_REVIEW_REQUIRED", fallback["review_note"])
+            results.append(fallback)
+        return results
+
+    # 解析批量结果
+    if isinstance(raw_data, dict):
+        raw_data = [raw_data]
+
+    # 建立 fact_id → 审核结果的映射
+    review_map = {}
+    for item in raw_data:
+        fid = item.get("fact_id", "")
+        if fid:
+            review_map[fid] = item
+
+    results = []
+    for fid, frec in facts_with_ids:
+        item = review_map.get(fid, {})
+
+        verdict = item.get("verdict", "UNCERTAIN").upper()
+        score = item.get("score", 0.0)
+        issues = item.get("issues", [])
+        review_note = item.get("review_note", "")
+
+        review_status = _map_verdict_to_status(verdict, score, frec, cfg)
+        _persist_review(fid, verdict, score, review_status, review_note)
+
+        logger.info(
+            "[fact=%s] 审核结果: %s (score=%.2f) → %s",
+            fid[:8], verdict, score, review_status,
+        )
+
+        results.append({
+            "fact_atom_id": fid,
+            "verdict": verdict,
+            "score": score,
+            "issues": issues,
+            "review_note": review_note,
+            "review_status": review_status,
+        })
+
+    return results
+
+
+def _persist_review(
+    fact_atom_id: str, verdict: str, score: float,
+    review_status: str, review_note: str,
+) -> None:
+    """将审核结果写入 fact_atom 和 review_log"""
+    conn = get_connection()
+    try:
+        conn.execute(
+            """UPDATE fact_atom SET
+            review_status=?, review_note=?, confidence_score=?,
+            updated_at=CURRENT_TIMESTAMP
+            WHERE id=?""",
+            (review_status, review_note, score, fact_atom_id),
+        )
+        conn.execute(
+            """INSERT INTO review_log
+            (id, target_type, target_id, old_status, new_status,
+             reviewer, review_action, review_note)
+            VALUES (?, 'fact_atom', ?, 'PENDING', ?, 'system_reviewer', ?, ?)""",
+            (str(uuid.uuid4()), fact_atom_id, review_status,
+             verdict.lower(), review_note),
+        )
+        conn.commit()
+    finally:
+        conn.close()

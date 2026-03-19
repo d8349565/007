@@ -5,7 +5,7 @@ Additional rules for FINANCIAL_METRIC:
 - **Distinguish cumulative/total values from incremental/change values:** If the evidence says "累计销售收入106.51亿元，较上一年增加16.63亿元", then value_num must be 106.51 (the total), and 16.63 should go into qualifiers.change_amount. Do NOT use the change/increment as value_num.
 - Use distinct predicates: "累计销售收入" or "销售收入为" for the total value; "同比增长" / "同比下降" for growth rates.
 - If the metric is a ratio (e.g. 毛利率 35%), unit should be "%".
-- If the metric is a monetary amount, currency must be specified (CNY/USD/EUR).
+- If the metric is a monetary amount, currency must be specified (CNY/USD/EUR). Default to CNY when the unit contains "元" without other currency indicator (e.g. "亿元" → CNY).
 - report_scope (e.g. 合并口径, 母公司口径) goes into qualifiers.report_scope if stated.
 - is_forecast should be true if the value is a forecast/estimate/guidance.
 - Do not confuse revenue (营收) with profit (利润) or cost (成本).

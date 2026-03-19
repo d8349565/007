@@ -17,6 +17,9 @@ You must follow these rules:
 12. subject MUST be a non-empty string explicitly mentioned in the evidence text. If the subject entity cannot be found in the evidence text itself, DO NOT output this record at all. subject is NEVER null.
 13. subject MUST be a concrete entity name (company, organization, product, brand, person, project), NOT a measurement term, statistical concept, or business description. Examples of INVALID subjects: "全国造船完工量" (measurement), "手持订单量" (measurement), "中国船舶涂料市场" (market region), "公司船舶涂料业务" (business description). If the sentence describes a metric without a clear entity subject, use the entity that owns/reports that metric as subject.
 14. subject should NOT end with generic suffixes like "业务", "市场", "行业", "领域" unless it refers to a named entity. Prefer the specific company/organization name.
+15. time_expr: If the evidence mentions any time reference (年份、季度、月份、"今年"、"去年"、"截至X月底" etc.), extract it as time_expr. Do NOT leave time_expr null when a time expression exists in the evidence.
+16. currency: For monetary values, always specify the currency code. Infer from context: "亿元" / "万元" / "元" → CNY; "亿日元" → JPY; "亿美元" → USD; "亿港元" → HKD. Only leave null if the value is non-monetary.
+17. location: If the evidence mentions a geographic scope (全国、中国、全球、华东、某省市 etc.), extract it as location. Do NOT leave location null when a geographic reference exists in the evidence.
 
 Use this fixed schema for each record:
 {

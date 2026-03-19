@@ -6,3 +6,4 @@ Additional rules for SALES_VOLUME:
 - If multiple volume metrics appear in one evidence (e.g. 产量 and 消费量), extract each as a separate record.
 - scope (e.g. 全国, 某地区) goes into qualifiers.scope if stated.
 - Do not confuse output (产量) with sales (销量) with consumption (消费量).
+- If the evidence mentions a time period (e.g. "2024年", "今年"), always extract it as time_expr.

@@ -179,10 +179,77 @@ def _auto_discover_entities(rows: list, conn) -> int:
     return created
 
 
+# --- 常用地点映射（自动创建用） ---
+_LOCATION_KEYWORDS = {
+    "全国": "REGION",
+    "中国": "COUNTRY",
+    "全球": "REGION",
+    "国内": "REGION",
+    "在华": "REGION",
+    "华东": "REGION",
+    "华南": "REGION",
+    "华北": "REGION",
+    "华中": "REGION",
+    "西南": "REGION",
+    "西北": "REGION",
+    "东北": "REGION",
+}
+
+
+def _ensure_location_entities(conn) -> int:
+    """确保常用地点实体存在，返回新创建数量。"""
+    created = 0
+    for name, loc_type in _LOCATION_KEYWORDS.items():
+        existing = conn.execute(
+            "SELECT id FROM entity WHERE canonical_name = ?", (name,)
+        ).fetchone()
+        if not existing:
+            eid = str(uuid.uuid4())
+            conn.execute(
+                """INSERT INTO entity (id, canonical_name, normalized_name, entity_type)
+                   VALUES (?, ?, ?, ?)""",
+                (eid, name, name, loc_type),
+            )
+            created += 1
+    if created:
+        conn.commit()
+        logger.info("创建 %d 个地点实体", created)
+    return created
+
+
+def _link_location_text(location_text: str, conn) -> str | None:
+    """
+    尝试将 location_text 匹配到已有实体。
+    支持精确匹配和包含匹配（如 "全国船舶涂料市场" 匹配 "全国"）。
+    返回 entity_id 或 None。
+    """
+    if not location_text or not location_text.strip():
+        return None
+    text = location_text.strip()
+
+    # 1. 精确匹配
+    row = conn.execute(
+        "SELECT id FROM entity WHERE canonical_name = ?", (text,)
+    ).fetchone()
+    if row:
+        return row["id"]
+
+    # 2. 包含匹配：location_text 中包含已知地点关键词
+    for kw in _LOCATION_KEYWORDS:
+        if kw in text:
+            row = conn.execute(
+                "SELECT id FROM entity WHERE canonical_name = ?", (kw,)
+            ).fetchone()
+            if row:
+                return row["id"]
+
+    return None
+
+
 def batch_link_fact_atoms(fact_atom_ids: list[str] | None = None) -> dict:
     """
     批量为 fact_atom 记录执行实体链接。
-    仅处理 subject_text / object_text 非空的记录。
+    仅处理 subject_text / object_text / location_text 非空的记录。
     会先自动发现并创建不存在的实体，再执行链接。
 
     返回:
@@ -192,15 +259,18 @@ def batch_link_fact_atoms(fact_atom_ids: list[str] | None = None) -> dict:
     stats = {"processed": 0, "matched": 0, "unmatched": 0, "created": 0}
 
     try:
+        # 确保地点实体存在
+        _ensure_location_entities(conn)
+
         if fact_atom_ids:
             placeholders = ",".join(["?"] * len(fact_atom_ids))
             rows = conn.execute(
-                f"SELECT id, subject_text, object_text, fact_type FROM fact_atom WHERE id IN ({placeholders})",
+                f"SELECT id, subject_text, object_text, location_text, fact_type FROM fact_atom WHERE id IN ({placeholders})",
                 fact_atom_ids,
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT id, subject_text, object_text, fact_type FROM fact_atom WHERE subject_entity_id IS NULL OR object_entity_id IS NULL"
+                "SELECT id, subject_text, object_text, location_text, fact_type FROM fact_atom WHERE subject_entity_id IS NULL OR object_entity_id IS NULL OR location_entity_id IS NULL"
             ).fetchall()
 
         # 第一步：自动发现并创建不存在的实体
@@ -229,6 +299,18 @@ def batch_link_fact_atoms(fact_atom_ids: list[str] | None = None) -> dict:
                     conn.execute(
                         "UPDATE fact_atom SET object_entity_id=? WHERE id=?",
                         (obj_result["entity_id"], row["id"]),
+                    )
+                    stats["matched"] += 1
+                else:
+                    stats["unmatched"] += 1
+
+            # location 链接
+            if row["location_text"]:
+                loc_id = _link_location_text(row["location_text"], conn)
+                if loc_id:
+                    conn.execute(
+                        "UPDATE fact_atom SET location_entity_id=? WHERE id=?",
+                        (loc_id, row["id"]),
                     )
                     stats["matched"] += 1
                 else:

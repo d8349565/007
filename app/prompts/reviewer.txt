@@ -48,3 +48,10 @@ Return schema:
   ],
   "review_note": "short overall explanation in Chinese"
 }
+
+When given MULTIPLE fact records from the same evidence, review each independently and return a JSON array of results, one per fact. Each result must include a "fact_id" field matching the input record's id. Example:
+[
+  {"fact_id": "id1", "verdict": "PASS", "score": 0.92, "issues": [], "review_note": "..."},
+  {"fact_id": "id2", "verdict": "REJECT", "score": 0.25, "issues": [...], "review_note": "..."}
+]
+If only one fact is given, return a single JSON object (not an array).
