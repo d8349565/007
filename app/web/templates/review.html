@@ -1,444 +1,521 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>事实原子审核</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; }
-        .page-body { padding: 20px; }
-        h1 { margin-bottom: 16px; font-size: 24px; }
-        .filters { display: flex; gap: 12px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
-        .filters select, .filters button {
-            padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;
-        }
-        .filters button { background: #0066cc; color: white; border: none; cursor: pointer; }
-        .filters button:hover { background: #0052a3; }
-        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        th { background: #f5f5f5; text-align: left; padding: 10px 12px; font-size: 12px; color: #666; font-weight: 600; }
-        td { padding: 10px 12px; font-size: 13px; border-top: 1px solid #eee; vertical-align: top; }
-        tr:hover { background: #fafafa; }
-        .badge {
-            display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; white-space: nowrap;
-        }
-        .badge-pass { background: #d4edda; color: #155724; }
-        .badge-reject { background: #f8d7da; color: #721c24; }
-        .badge-uncertain { background: #fff3cd; color: #856404; }
-        .badge-pending { background: #e2e3e5; color: #383d41; }
-        .badge-FINANCIAL_METRIC { background: #fff3e0; color: #c56000; }
-        .badge-SALES_VOLUME { background: #e8f5e9; color: #2e7d32; }
-        .badge-CAPACITY { background: #e3f2fd; color: #1565c0; }
-        .badge-INVESTMENT { background: #fce4ec; color: #880e4f; }
-        .badge-EXPANSION { background: #f3e5f5; color: #6a1b9a; }
-        .badge-MARKET_SHARE { background: #e0f7fa; color: #00695c; }
-        .badge-COMPETITIVE_RANKING { background: #fff8e1; color: #f57f17; }
-        .badge-COOPERATION { background: #e8eaf6; color: #283593; }
-        .badge-PRICE_CHANGE { background: #fbe9e7; color: #bf360c; }
-        .cell-subject { font-weight: 600; color: #1a3a5c; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .cell-predicate { color: #666; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .cell-value { font-weight: 600; white-space: nowrap; }
-        .cell-value-unit { color: #888; font-size: 12px; margin-left: 2px; }
-        .btn-detail {
-            background: none; border: 1px solid #ddd; border-radius: 4px; padding: 4px 8px;
-            cursor: pointer; font-size: 14px; color: #666; transition: all 0.2s;
-        }
-        .btn-detail:hover { background: #e8f0fe; border-color: #aaa; color: #1a3a5c; }
-        .detail-popup {
-            display: none; position: fixed; background: white; border: 1px solid #ddd;
-            border-radius: 8px; padding: 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-            z-index: 1000; min-width: 280px; max-width: 320px;
-        }
-        .detail-popup.show { display: block; }
-        .detail-row { margin-bottom: 8px; font-size: 12px; line-height: 1.5; }
-        .detail-row:last-child { margin-bottom: 0; }
-        .detail-label { color: #888; display: inline-block; width: 55px; }
-        .detail-value { color: #333; word-break: break-all; }
-        .detail-evidence { background: #f8f9fa; padding: 8px; border-radius: 4px; border-left: 3px solid #dee2e6; color: #555; font-size: 11px; line-height: 1.6; max-height: 80px; overflow-y: auto; white-space: pre-wrap; }
-        .select-action {
-            padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;
-            background: white; cursor: pointer; color: #666;
-        }
-        .select-action:hover { border-color: #aaa; }
-        .select-action option[value="HUMAN_PASS"] { color: #28a745; }
-        .select-action option[value="HUMAN_REJECTED"] { color: #dc3545; }
-        .pagination { margin-top: 16px; display: flex; gap: 8px; }
-        .pagination a { padding: 6px 12px; background: white; border: 1px solid #ccc; border-radius: 4px; text-decoration: none; color: #333; }
-        .pagination a:hover { background: #e9ecef; }
-        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        .export-link { font-size: 13px; color: #0066cc; text-decoration: none; }
-        .export-link:hover { text-decoration: underline; }
-        .empty-msg { text-align: center; padding: 40px; color: #999; font-size: 16px; }
-        .table-wrap { overflow-x: auto; }
-        .table-wrap table { min-width: 700px; }
-        td.relative { position: relative; }
-        .btn-edit {
-            background: none; border: 1px solid #ddd; border-radius: 4px;
-            padding: 4px 7px; cursor: pointer; font-size: 13px; color: #666;
-            transition: all 0.2s; margin-right: 4px;
-        }
-        .btn-edit:hover { background: #fff8e1; border-color: #f0c36d; color: #a07000; }
-        /* 编辑弹窗 */
-        .modal-overlay {
-            display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,0.45); z-index: 2000;
-            align-items: center; justify-content: center;
-        }
-        .modal-overlay.show { display: flex; }
-        .modal-box {
-            background: white; border-radius: 10px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
-            width: 680px; max-width: 96vw; max-height: 90vh;
-            display: flex; flex-direction: column;
-        }
-        .modal-header {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 16px 20px 12px; border-bottom: 1px solid #eee;
-        }
-        .modal-header h3 { font-size: 17px; color: #1a3a5c; }
-        .modal-close {
-            background: none; border: none; font-size: 20px;
-            cursor: pointer; color: #999; line-height: 1;
-        }
-        .modal-close:hover { color: #333; }
-        .modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
-        .edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
-        .edit-group { display: flex; flex-direction: column; gap: 4px; }
-        .edit-group.full { grid-column: 1 / -1; }
-        .edit-group label { font-size: 12px; color: #888; font-weight: 600; }
-        .edit-group input, .edit-group textarea {
-            border: 1px solid #ddd; border-radius: 4px;
-            padding: 6px 8px; font-size: 13px; font-family: inherit;
-            transition: border-color 0.2s; resize: vertical;
-        }
-        .edit-group input:focus, .edit-group textarea:focus {
-            outline: none; border-color: #0066cc;
-        }
-        .evidence-box {
-            background: #f8f9fa; border-left: 3px solid #dee2e6;
-            padding: 8px 10px; border-radius: 4px; font-size: 12px;
-            color: #555; line-height: 1.6; max-height: 80px;
-            overflow-y: auto; white-space: pre-wrap;
-        }
-        .modal-footer {
-            padding: 12px 20px; border-top: 1px solid #eee;
-            display: flex; gap: 8px; justify-content: flex-end;
-        }
-        .btn-save { padding: 7px 16px; border-radius: 4px; font-size: 13px; cursor: pointer; border: none; }
-        .btn-save-queue { background: #e9ecef; color: #333; }
-        .btn-save-queue:hover { background: #dee2e6; }
-        .btn-save-pass { background: #28a745; color: white; }
-        .btn-save-pass:hover { background: #218838; }
-        .btn-save-reject { background: #dc3545; color: white; }
-        .btn-save-reject:hover { background: #c82333; }
-        .btn-cancel { background: none; border: 1px solid #ddd; padding: 7px 14px; border-radius: 4px; font-size: 13px; cursor: pointer; color: #666; }
-        .btn-cancel:hover { background: #f8f9fa; }
-    </style>
-</head>
-<body>
+{% extends "_base.html" %}
 {% set active = 'review' %}
-{% include '_nav.html' %}
-<div class="page-body">
-    <div class="header-bar">
-        <h1>📋 事实原子审核</h1>
-        <a class="export-link" href="/export?fact_type={{ current_type }}&status={{ current_status }}">📥 导出 CSV</a>
-    </div>
+{% block title %}审核 — 资讯颗粒化{% endblock %}
 
-    <div class="filters">
-        <form method="get" action="/review" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <label>类型：</label>
-            <select name="fact_type">
-                <option value="">全部</option>
-                {% for ft in fact_types %}
-                <option value="{{ ft }}" {% if ft == current_type %}selected{% endif %}>{{ FACT_TYPE_NAMES.get(ft, ft) }}</option>
-                {% endfor %}
-            </select>
-            <label>状态：</label>
-            <select name="status">
-                <option value="">全部</option>
-                {% for s in statuses %}
-                <option value="{{ s }}" {% if s == current_status %}selected{% endif %}>
-                  {% if s == 'HUMAN_REVIEW_REQUIRED' %}待人工审核
-                  {% elif s == 'AUTO_PASS' %}自动通过
-                  {% elif s == 'HUMAN_PASS' %}人工通过
-                  {% elif s == 'REJECTED' %}已拒绝
-                  {% elif s == 'HUMAN_REJECTED' %}人工拒绝
-                  {% elif s == 'PENDING' %}待处理
-                  {% else %}{{ s }}{% endif %}
-                </option>
-                {% endfor %}
-            </select>
-            <button type="submit">筛选</button>
-        </form>
+{% block content %}
+  <div class="page-header">
+    <div class="page-title">事实原子审核</div>
+    <div class="page-actions">
+      <a class="btn btn-sm btn-success" href="/export?fact_type={{ current_type }}&status={{ current_status }}">导出 CSV</a>
     </div>
+  </div>
 
-    {% if facts %}
-    <div class="table-wrap">
-    <table>
+  {# 筛选栏 + 翻页控制 #}
+  <div class="filter-bar">
+    <form method="get" action="/review" id="filterForm" style="display:contents;">
+      <label>类型</label>
+      <select name="fact_type" onchange="this.form.submit()">
+        <option value="">全部类型</option>
+        {% for ft in fact_types %}
+        <option value="{{ ft }}" {% if ft == current_type %}selected{% endif %}>{{ FACT_TYPE_NAMES.get(ft, ft) }}</option>
+        {% endfor %}
+      </select>
+      <label>状态</label>
+      <select name="status" onchange="this.form.submit()">
+        <option value="">全部</option>
+        {% for s in statuses %}
+        <option value="{{ s }}" {% if s == current_status %}selected{% endif %}>
+          {% if s == 'HUMAN_REVIEW_REQUIRED' %}待人工审核
+          {% elif s == 'AUTO_PASS' %}自动通过
+          {% elif s == 'HUMAN_PASS' %}人工通过
+          {% elif s == 'REJECTED' %}已拒绝
+          {% elif s == 'HUMAN_REJECTED' %}人工拒绝
+          {% elif s == 'PENDING' %}待处理
+          {% else %}{{ s }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </form>
+    <span class="filter-spacer"></span>
+    <span class="text-sm text-muted">第 {{ page }} 页 · {{ facts|length }} 条</span>
+    {% if page > 1 %}
+    <a class="btn btn-sm btn-secondary" href="/review?fact_type={{ current_type }}&status={{ current_status }}&page={{ page - 1 }}">← 上页</a>
+    {% endif %}
+    {% if has_more %}
+    <a class="btn btn-sm btn-secondary" href="/review?fact_type={{ current_type }}&status={{ current_status }}&page={{ page + 1 }}">下页 →</a>
+    {% endif %}
+  </div>
+
+  {# 表格区 #}
+  {% if facts %}
+  <div class="card">
+    <div style="overflow-x:auto;">
+      <table class="data-table review-table" id="reviewTable">
         <thead>
-            <tr>
-                <th style="width:40px;">#</th>
-                <th style="width:85px;">类型</th>
-                <th>主体</th>
-                <th>谓词</th>
-                <th style="width:100px;">数值</th>
-                <th style="width:70px;">时间</th>
-                <th style="width:75px;">状态</th>
-                <th style="width:50px;">详情</th>
-                <th style="width:80px;">操作</th>
-            </tr>
+          <tr>
+            <th style="width:32px;">
+              <input type="checkbox" class="chk" id="cb-all" title="全选 (Ctrl+A) / 取消 (Esc)">
+            </th>
+            <th style="width:92px;">类型</th>
+            <th style="min-width:130px;max-width:160px;">主体</th>
+            <th style="min-width:140px;max-width:180px;">谓词 / 客体</th>
+            <th style="min-width:100px;">数值</th>
+            <th style="min-width:90px;">时间 / 地点</th>
+            <th style="min-width:110px;">限定词</th>
+            <th style="width:34px;" title="证据原文（悬浮查看）">证</th>
+            <th style="width:42px;" title="置信度分值">信</th>
+            <th style="width:70px;">状态</th>
+            <th style="width:92px;">操作</th>
+          </tr>
         </thead>
         <tbody>
-            {% for f in facts %}
-            <tr>
-                <td style="color:#bbb; font-size:12px;">{{ (page - 1) * 20 + loop.index }}</td>
-                <td><span class="badge badge-{{ f.fact_type }}">{{ FACT_TYPE_NAMES.get(f.fact_type, f.fact_type) }}</span></td>
-                <td class="cell-subject" title="{{ f.subject_text or '' }}">{{ f.subject_text or '-' }}</td>
-                <td class="cell-predicate" title="{{ f.predicate or '' }}">{{ f.predicate or '-' }}</td>
-                <td class="cell-value">
-                    {% if f.value_num is not none and f.value_num != '' %}
-                        {{ f.value_num }}{% if f.unit %}<span class="cell-value-unit">{{ f.unit }}</span>{% endif %}
-                    {% elif f.value_text %}
-                        {{ f.value_text[:20] }}{% if f.value_text|length > 20 %}…{% endif %}
-                    {% else %}
-                        -
-                    {% endif %}
-                </td>
-                <td style="font-size:12px; color:#888; white-space:nowrap;">{{ f.time_expr or '-' }}</td>
-                <td>
-                    {% if f.review_status == 'AUTO_PASS' or f.review_status == 'HUMAN_PASS' %}
-                    <span class="badge badge-pass">{% if f.review_status == 'AUTO_PASS' %}自动{% else %}人工{% endif %}</span>
-                    {% elif f.review_status == 'REJECTED' or f.review_status == 'HUMAN_REJECTED' %}
-                    <span class="badge badge-reject">{% if f.review_status == 'REJECTED' %}已拒{% else %}人工拒{% endif %}</span>
-                    {% elif f.review_status == 'HUMAN_REVIEW_REQUIRED' %}
-                    <span class="badge badge-uncertain">待审</span>
-                    {% else %}
-                    <span class="badge badge-pending">待处理</span>
-                    {% endif %}
-                </td>
-                <td class="relative">
-                    <button class="btn-detail" onclick="toggleDetail(this, event)">📎</button>
-                    <div class="detail-popup">
-                        {% if f.object_text %}
-                        <div class="detail-row"><span class="detail-label">客体</span><span class="detail-value">{{ f.object_text }}</span></div>
-                        {% endif %}
-                        {% if f.currency %}
-                        <div class="detail-row"><span class="detail-label">货币</span><span class="detail-value">{{ f.currency }}</span></div>
-                        {% endif %}
-                        {% if f.time_expr %}
-                        <div class="detail-row"><span class="detail-label">时间</span><span class="detail-value">{{ f.time_expr }}</span></div>
-                        {% endif %}
-                        {% if f.location_text %}
-                        <div class="detail-row"><span class="detail-label">地点</span><span class="detail-value">{{ f.location_text }}</span></div>
-                        {% endif %}
-                        {% if f.confidence_score %}
-                        <div class="detail-row"><span class="detail-label">置信度</span><span class="detail-value">{{ '%.2f'|format(f.confidence_score) }}</span></div>
-                        {% endif %}
-                        {% if f.qualifier_json %}
-                        <div class="detail-row"><span class="detail-label">限定词</span><span class="detail-value" style="font-family:monospace;font-size:11px;">{{ f.qualifier_json[:100] }}{% if f.qualifier_json|length > 100 %}…{% endif %}</span></div>
-                        {% endif %}
-                        {% if f.evidence_text %}
-                        <div class="detail-row" style="margin-top:8px;">
-                            <div class="detail-label">证据</div>
-                            <div class="detail-evidence">{{ f.evidence_text }}</div>
-                        </div>
-                        {% endif %}
-                    </div>
-                </td>
-                <td>
-                    <button class="btn-edit" onclick="openEditModal('{{ f.id }}')" title="编辑字段">✏️</button>
-                    <select class="select-action" onchange="if(this.value){var form=this.previousElementSibling;form.action='/review/'+'{{ f.id }}'+'/action';form.querySelector('input').value=this.value;form.submit();}">
-                        <option value="">—</option>
-                        <option value="HUMAN_PASS">✓ 通过</option>
-                        <option value="HUMAN_REJECTED">✗ 拒绝</option>
-                    </select>
-                    <form method="post" style="display:none;">
-                        <input type="hidden" name="action" value="">
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
+          {% for f in facts %}
+          {% set q_items = f.qualifiers_display.items()|list if f.qualifiers_display else [] %}
+          <tr class="review-row" data-id="{{ f.id }}" onclick="handleRowClick(this,event)" style="cursor:pointer;">
+            <td onclick="event.stopPropagation()">
+              <input type="checkbox" class="chk row-cb" value="{{ f.id }}" onchange="handleCbChange(this,event)">
+            </td>
+            <td>
+              <span class="badge badge-{{ f.fact_type }}">{{ FACT_TYPE_NAMES.get(f.fact_type, f.fact_type) }}</span>
+            </td>
+            <td>
+              <span class="truncate-inner font-bold"
+                {% if f.subject_text and f.subject_text|length > 18 %}data-tip="{{ f.subject_text|e }}"{% endif %}>
+                {{ f.subject_text or '—' }}
+              </span>
+            </td>
+            <td>
+              <div class="cell-stack">
+                <span class="truncate-inner text-sm"
+                  {% if f.predicate and f.predicate|length > 16 %}data-tip="{{ f.predicate|e }}"{% endif %}>
+                  {{ f.predicate or '—' }}
+                </span>
+                {% if f.object_text %}
+                <span class="truncate-inner text-xs text-muted"
+                  {% if f.object_text|length > 16 %}data-tip="{{ f.object_text|e }}"{% endif %}>
+                  → {{ f.object_text }}
+                </span>
+                {% endif %}
+              </div>
+            </td>
+            <td style="white-space:nowrap;">
+              {% if f.value_num is not none and f.value_num != '' %}
+                <span class="font-bold" style="color:#0f172a;">{{ f.value_num }}</span>
+                {% if f.unit %}<span class="text-xs text-muted"> {{ f.unit }}</span>{% endif %}
+                {% if f.currency %}<span class="text-xs text-muted"> {{ f.currency }}</span>{% endif %}
+              {% elif f.value_text %}
+                <span class="font-bold"
+                  {% if f.value_text|length > 14 %}data-tip="{{ f.value_text|e }}"{% endif %}>
+                  {{ f.value_text[:14] }}{% if f.value_text|length > 14 %}…{% endif %}
+                </span>
+                {% if f.unit %}<span class="text-xs text-muted"> {{ f.unit }}</span>{% endif %}
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              <div class="cell-stack" style="max-width:100px;">
+                {% if f.time_expr %}
+                <span class="text-xs nowrap">⏱ {{ f.time_expr }}</span>
+                {% endif %}
+                {% if f.location_text %}
+                <span class="truncate-inner text-xs text-muted"
+                  {% if f.location_text|length > 12 %}data-tip="{{ f.location_text|e }}"{% endif %}>
+                  📍 {{ f.location_text }}
+                </span>
+                {% endif %}
+                {% if not f.time_expr and not f.location_text %}<span class="text-muted">—</span>{% endif %}
+              </div>
+            </td>
+            <td>
+              {% if q_items %}
+              <div data-tip="{{ f.qualifier_json|e }}">
+                {% for k, v in q_items[:2] %}
+                <span class="qualifier-pill" style="font-size:10px;padding:1px 5px;">{{ k }}: {{ v }}</span>
+                {% endfor %}
+                {% if q_items|length > 2 %}
+                <span class="qualifier-pill text-muted" style="font-size:10px;padding:1px 5px;">+{{ q_items|length - 2 }}</span>
+                {% endif %}
+              </div>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td style="text-align:center;">
+              {% if f.evidence_text %}
+              <span class="evidence-icon" data-tip="{{ f.evidence_text|e }}">📎</span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td style="text-align:center;">
+              {% if f.confidence_score %}
+              <span class="text-xs {% if f.confidence_score >= 0.8 %}text-success{% elif f.confidence_score >= 0.5 %}text-warning{% else %}text-danger{% endif %}">
+                {{ '%.2f'|format(f.confidence_score) }}
+              </span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              {% if f.review_status == 'HUMAN_REVIEW_REQUIRED' %}
+              <span class="badge badge-review">待审</span>
+              {% elif f.review_status == 'AUTO_PASS' %}
+              <span class="badge badge-pass">自动✓</span>
+              {% elif f.review_status == 'HUMAN_PASS' %}
+              <span class="badge badge-pass">人工✓</span>
+              {% elif f.review_status == 'REJECTED' or f.review_status == 'HUMAN_REJECTED' %}
+              <span class="badge badge-reject">已拒</span>
+              {% else %}
+              <span class="badge badge-pending">{{ f.review_status[:6] }}</span>
+              {% endif %}
+            </td>
+            <td onclick="event.stopPropagation()">
+              <div class="row-actions">
+                <button class="btn-qpass" onclick="quickAction('{{ f.id }}','HUMAN_PASS')" title="通过">✓</button>
+                <button class="btn-qreject" onclick="quickAction('{{ f.id }}','HUMAN_REJECTED')" title="拒绝">✗</button>
+                <button class="btn-qedit" onclick="openEditModal('{{ f.id }}')" title="编辑">✏</button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
         </tbody>
-    </table>
+      </table>
     </div>
+  </div>
 
-    <div class="pagination">
-        {% if page > 1 %}
-        <a href="/review?fact_type={{ current_type }}&status={{ current_status }}&page={{ page - 1 }}">← 上一页</a>
-        {% endif %}
-        <span style="padding:6px 12px;background:#f5f5f5;border-radius:4px;font-size:13px;">第 {{ page }} 页</span>
-        {% if has_more %}
-        <a href="/review?fact_type={{ current_type }}&status={{ current_status }}&page={{ page + 1 }}">下一页 →</a>
-        {% endif %}
+  {% else %}
+  <div class="card"><div class="empty-state">暂无匹配的事实记录</div></div>
+  {% endif %}
+
+  {# ===== 批量操作浮动条 ===== #}
+  <div class="batch-bar hidden" id="batchBar">
+    <span class="batch-bar-count">已选 <strong id="batchCount">0</strong> 条</span>
+    <button class="btn btn-sm btn-success" onclick="batchAction('HUMAN_PASS')">✓ 批量通过</button>
+    <button class="btn btn-sm btn-danger" onclick="batchAction('HUMAN_REJECTED')">✗ 批量拒绝</button>
+    <button class="btn btn-sm btn-secondary" onclick="clearSelection()">× 取消</button>
+  </div>
+
+  {# ===== 全局悬浮提示框 ===== #}
+  <div class="hover-tip" id="hoverTip"></div>
+
+  {# ===== 编辑弹窗 ===== #}
+  <div id="editModal" class="modal-overlay">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <div class="modal-title">编辑事实原子</div>
+        <button class="modal-close" onclick="closeEditModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editFactId">
+        <div class="edit-group full" style="margin-bottom:16px;">
+          <label>证据原文</label>
+          <div id="edit_evidence" class="evidence-box" style="max-height:none;"></div>
+        </div>
+        <div class="edit-grid">
+          <div class="edit-group">
+            <label>主体 *</label>
+            <input type="text" id="edit_subject_text" placeholder="主体名称">
+          </div>
+          <div class="edit-group">
+            <label>谓词 *</label>
+            <input type="text" id="edit_predicate" placeholder="谓词描述">
+          </div>
+          <div class="edit-group">
+            <label>客体</label>
+            <input type="text" id="edit_object_text" placeholder="客体名称（可选）">
+          </div>
+          <div class="edit-group">
+            <label>数值</label>
+            <input type="number" id="edit_value_num" step="any" placeholder="数字值">
+          </div>
+          <div class="edit-group">
+            <label>单位</label>
+            <input type="text" id="edit_unit" placeholder="如：亿元、万吨">
+          </div>
+          <div class="edit-group">
+            <label>货币</label>
+            <input type="text" id="edit_currency" placeholder="如：CNY、USD">
+          </div>
+          <div class="edit-group">
+            <label>时间表达式</label>
+            <input type="text" id="edit_time_expr" placeholder="如：2024年、2024Q1">
+          </div>
+          <div class="edit-group">
+            <label>地点</label>
+            <input type="text" id="edit_location_text" placeholder="如：中国、上海">
+          </div>
+          <div class="edit-group full">
+            <label>文本值（非数字结果）</label>
+            <input type="text" id="edit_value_text" placeholder="如：第一名、正增长">
+          </div>
+          <div class="edit-group full">
+            <label>限定词 JSON</label>
+            <textarea id="edit_qualifier_json" rows="2" placeholder='如：{"yoy_change": "+18%"}'></textarea>
+          </div>
+          <div class="edit-group full">
+            <label>审核备注</label>
+            <textarea id="edit_review_note" rows="2" placeholder="填写修改原因或说明..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+        <button class="btn btn-secondary" onclick="submitEdit('save_only')">💾 仅保存</button>
+        <button class="btn btn-danger" onclick="submitEdit('save_and_reject')">✗ 保存并拒绝</button>
+        <button class="btn btn-success" onclick="submitEdit('save_and_pass')">✓ 保存并通过</button>
+      </div>
     </div>
-    {% else %}
-    <div class="empty-msg">暂无匹配的事实记录</div>
-    {% endif %}
-</div>
+  </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
-function toggleDetail(btn, e) {
-    e.stopPropagation();
-    document.querySelectorAll('.detail-popup.show').forEach(p => {
-        if (p !== btn.nextElementSibling) p.classList.remove('show');
-    });
-    var popup = btn.nextElementSibling;
-    popup.classList.toggle('show');
-    if (popup.classList.contains('show')) {
-        var rect = btn.getBoundingClientRect();
-        var popupRect = popup.getBoundingClientRect();
-        var top = rect.bottom + 8;
-        var left = Math.max(10, Math.min(rect.left, window.innerWidth - popupRect.width - 10));
-        popup.style.top = top + 'px';
-        popup.style.left = left + 'px';
-        if (top + popupRect.height > window.innerHeight - 10) {
-            popup.style.top = (rect.top - popupRect.height - 8) + 'px';
-        }
-    }
+/* ==========================================================
+ *  多选逻辑（支持 Ctrl / Shift / Ctrl+A / Esc）
+ * ========================================================== */
+const selectedIds = new Set();
+let lastClickedIndex = -1;
+
+function getRows() {
+  return Array.from(document.querySelectorAll('.review-row'));
 }
-document.addEventListener('click', () => {
-    document.querySelectorAll('.detail-popup.show').forEach(p => p.classList.remove('show'));
-});
-document.querySelectorAll('.detail-popup').forEach(p => {
-    p.addEventListener('click', e => e.stopPropagation());
+
+function handleRowClick(row, e) {
+  if (['INPUT','BUTTON','A','SELECT'].includes(e.target.tagName)) return;
+  const id = row.dataset.id;
+  const idx = getRows().indexOf(row);
+
+  if (e.shiftKey && lastClickedIndex >= 0) {
+    const rows = getRows();
+    const lo = Math.min(lastClickedIndex, idx);
+    const hi = Math.max(lastClickedIndex, idx);
+    if (!e.ctrlKey && !e.metaKey) selectedIds.clear();
+    for (let i = lo; i <= hi; i++) selectedIds.add(rows[i].dataset.id);
+  } else if (e.ctrlKey || e.metaKey) {
+    selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id);
+    lastClickedIndex = idx;
+  } else {
+    selectedIds.clear();
+    selectedIds.add(id);
+    lastClickedIndex = idx;
+  }
+  updateSelection();
+}
+
+function handleCbChange(cb, e) {
+  e.stopPropagation();
+  const row = cb.closest('tr');
+  const id = row.dataset.id;
+  const idx = getRows().indexOf(row);
+
+  if (e.shiftKey && lastClickedIndex >= 0) {
+    const rows = getRows();
+    const lo = Math.min(lastClickedIndex, idx);
+    const hi = Math.max(lastClickedIndex, idx);
+    for (let i = lo; i <= hi; i++) {
+      cb.checked ? selectedIds.add(rows[i].dataset.id) : selectedIds.delete(rows[i].dataset.id);
+    }
+  } else {
+    cb.checked ? selectedIds.add(id) : selectedIds.delete(id);
+    lastClickedIndex = idx;
+  }
+  updateSelection();
+}
+
+document.getElementById('cb-all').addEventListener('change', function() {
+  if (this.checked) getRows().forEach(r => selectedIds.add(r.dataset.id));
+  else selectedIds.clear();
+  lastClickedIndex = -1;
+  updateSelection();
 });
 
-// ─── 编辑弹窗 ─────────────────────────────────────────────────────
+document.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+    e.preventDefault();
+    getRows().forEach(r => selectedIds.add(r.dataset.id));
+    lastClickedIndex = -1;
+    updateSelection();
+  }
+  if (e.key === 'Escape') clearSelection();
+});
+
+function updateSelection() {
+  const rows = getRows();
+  rows.forEach(r => {
+    const sel = selectedIds.has(r.dataset.id);
+    r.classList.toggle('selected', sel);
+    const cb = r.querySelector('.row-cb');
+    if (cb) cb.checked = sel;
+  });
+  const allCb = document.getElementById('cb-all');
+  if (selectedIds.size === 0) {
+    allCb.checked = false; allCb.indeterminate = false;
+  } else if (selectedIds.size === rows.length) {
+    allCb.checked = true; allCb.indeterminate = false;
+  } else {
+    allCb.checked = false; allCb.indeterminate = true;
+  }
+  document.getElementById('batchCount').textContent = selectedIds.size;
+  document.getElementById('batchBar').classList.toggle('hidden', selectedIds.size === 0);
+}
+
+function clearSelection() {
+  selectedIds.clear();
+  lastClickedIndex = -1;
+  updateSelection();
+}
+
+/* ==========================================================
+ *  单行快速操作（直接表单提交，简单可靠）
+ * ========================================================== */
+function quickAction(factId, action) {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '/review/' + factId + '/action';
+  const inp = document.createElement('input');
+  inp.type = 'hidden'; inp.name = 'action'; inp.value = action;
+  form.appendChild(inp);
+  document.body.appendChild(form);
+  form.submit();
+}
+
+/* ==========================================================
+ *  批量操作（逐条 AJAX，使用 edit 接口避免 redirect）
+ * ========================================================== */
+async function batchAction(action) {
+  if (!selectedIds.size) return;
+  const ids = [...selectedIds];
+  const label = action === 'HUMAN_PASS' ? '通过' : '拒绝';
+  if (!confirm('确认' + label + ' ' + ids.length + ' 条事实原子？')) return;
+
+  const bar = document.getElementById('batchBar');
+  bar.querySelectorAll('button').forEach(b => b.disabled = true);
+
+  const apiAction = action === 'HUMAN_PASS' ? 'save_and_pass' : 'save_and_reject';
+  let ok = 0, fail = 0;
+  for (const id of ids) {
+    try {
+      const r = await fetch('/review/' + id + '/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: apiAction })
+      });
+      const d = await r.json();
+      d.ok ? ok++ : fail++;
+    } catch { fail++; }
+  }
+  location.reload();
+}
+
+/* ==========================================================
+ *  悬浮提示框（事件委托，data-tip 属性触发）
+ * ========================================================== */
+const tipEl = document.getElementById('hoverTip');
+let tipVis = false;
+
+function findTipAncestor(el) {
+  for (let i = 0; i < 6; i++) {
+    if (!el || el === document.body) return null;
+    if (el.dataset && el.dataset.tip) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+document.addEventListener('mouseover', function(e) {
+  const anchor = findTipAncestor(e.target);
+  if (anchor) {
+    let txt = anchor.dataset.tip;
+    // 尝试格式化 JSON 内容
+    try {
+      const obj = JSON.parse(txt);
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        txt = Object.entries(obj).map(([k, v]) => k + ': ' + v).join('\n');
+      }
+    } catch {}
+    tipEl.textContent = txt;
+    tipEl.style.display = 'block';
+    tipVis = true;
+  } else if (tipVis) {
+    tipEl.style.display = 'none';
+    tipVis = false;
+  }
+});
+
+document.addEventListener('mousemove', function(e) {
+  if (!tipVis) return;
+  let x = e.clientX + 18, y = e.clientY + 14;
+  const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  if (x + w > window.innerWidth - 8) x = e.clientX - w - 10;
+  if (y + h > window.innerHeight - 8) y = e.clientY - h - 10;
+  tipEl.style.left = x + 'px';
+  tipEl.style.top = y + 'px';
+});
+
+document.addEventListener('mouseout', function(e) {
+  if (!tipVis) return;
+  const src = findTipAncestor(e.target);
+  if (!src) return;
+  const dst = findTipAncestor(e.relatedTarget);
+  if (!dst) { tipEl.style.display = 'none'; tipVis = false; }
+});
+
+/* ==========================================================
+ *  编辑弹窗
+ * ========================================================== */
 function openEditModal(factId) {
-    fetch('/review/' + factId)
-        .then(r => r.json())
-        .then(f => {
-            document.getElementById('editFactId').value = f.id;
-            document.getElementById('edit_subject_text').value = f.subject_text || '';
-            document.getElementById('edit_predicate').value = f.predicate || '';
-            document.getElementById('edit_object_text').value = f.object_text || '';
-            document.getElementById('edit_value_num').value = (f.value_num !== null && f.value_num !== undefined) ? f.value_num : '';
-            document.getElementById('edit_value_text').value = f.value_text || '';
-            document.getElementById('edit_unit').value = f.unit || '';
-            document.getElementById('edit_currency').value = f.currency || '';
-            document.getElementById('edit_time_expr').value = f.time_expr || '';
-            document.getElementById('edit_location_text').value = f.location_text || '';
-            document.getElementById('edit_qualifier_json').value = f.qualifier_json || '';
-            document.getElementById('edit_review_note').value = f.review_note || '';
-            var evBox = document.getElementById('edit_evidence');
-            evBox.textContent = f.evidence_text || '（无证据文本）';
-            document.getElementById('editModal').classList.add('show');
-        })
-        .catch(() => alert('加载事实数据失败'));
+  fetch('/review/' + factId)
+    .then(r => r.json())
+    .then(f => {
+      document.getElementById('editFactId').value = f.id;
+      document.getElementById('edit_subject_text').value = f.subject_text || '';
+      document.getElementById('edit_predicate').value = f.predicate || '';
+      document.getElementById('edit_object_text').value = f.object_text || '';
+      document.getElementById('edit_value_num').value =
+        (f.value_num !== null && f.value_num !== undefined) ? f.value_num : '';
+      document.getElementById('edit_value_text').value = f.value_text || '';
+      document.getElementById('edit_unit').value = f.unit || '';
+      document.getElementById('edit_currency').value = f.currency || '';
+      document.getElementById('edit_time_expr').value = f.time_expr || '';
+      document.getElementById('edit_location_text').value = f.location_text || '';
+      document.getElementById('edit_qualifier_json').value = f.qualifier_json || '';
+      document.getElementById('edit_review_note').value = f.review_note || '';
+      document.getElementById('edit_evidence').textContent =
+        f.evidence_text || '（无证据文本）';
+      document.getElementById('editModal').classList.add('show');
+    })
+    .catch(() => alert('加载详情失败'));
 }
 
 function closeEditModal() {
-    document.getElementById('editModal').classList.remove('show');
+  document.getElementById('editModal').classList.remove('show');
 }
 
 function submitEdit(action) {
-    var factId = document.getElementById('editFactId').value;
-    var data = {
-        action: action,
-        subject_text: document.getElementById('edit_subject_text').value,
-        predicate: document.getElementById('edit_predicate').value,
-        object_text: document.getElementById('edit_object_text').value,
-        value_num: document.getElementById('edit_value_num').value,
-        value_text: document.getElementById('edit_value_text').value,
-        unit: document.getElementById('edit_unit').value,
-        currency: document.getElementById('edit_currency').value,
-        time_expr: document.getElementById('edit_time_expr').value,
-        location_text: document.getElementById('edit_location_text').value,
-        qualifier_json: document.getElementById('edit_qualifier_json').value,
-        review_note: document.getElementById('edit_review_note').value,
-    };
-    fetch('/review/' + factId + '/edit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-    })
-    .then(r => r.json())
-    .then(d => {
-        if (d.ok) {
-            closeEditModal();
-            window.location.reload();
-        } else {
-            alert('保存失败：' + (d.error || '未知错误'));
-        }
-    })
-    .catch(() => alert('请求失败，请检查网络'));
+  const factId = document.getElementById('editFactId').value;
+  const data = {
+    action,
+    subject_text: document.getElementById('edit_subject_text').value,
+    predicate: document.getElementById('edit_predicate').value,
+    object_text: document.getElementById('edit_object_text').value,
+    value_num: document.getElementById('edit_value_num').value,
+    value_text: document.getElementById('edit_value_text').value,
+    unit: document.getElementById('edit_unit').value,
+    currency: document.getElementById('edit_currency').value,
+    time_expr: document.getElementById('edit_time_expr').value,
+    location_text: document.getElementById('edit_location_text').value,
+    qualifier_json: document.getElementById('edit_qualifier_json').value,
+    review_note: document.getElementById('edit_review_note').value,
+  };
+  fetch('/review/' + factId + '/edit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.ok) { closeEditModal(); location.reload(); }
+    else alert('保存失败：' + (d.error || '未知错误'));
+  })
+  .catch(() => alert('请求失败，请检查网络'));
 }
 
 document.getElementById('editModal').addEventListener('click', function(e) {
-    if (e.target === this) closeEditModal();
+  if (e.target === this) closeEditModal();
 });
 </script>
-
-<!-- 编辑事实弹窗 -->
-<div id="editModal" class="modal-overlay">
-    <div class="modal-box">
-        <div class="modal-header">
-            <h3>✏️ 编辑事实原子</h3>
-            <button class="modal-close" onclick="closeEditModal()">×</button>
-        </div>
-        <div class="modal-body">
-            <input type="hidden" id="editFactId">
-            <div style="margin-bottom:12px;">
-                <div class="edit-group full">
-                    <label>原始证据文本</label>
-                    <div id="edit_evidence" class="evidence-box">-</div>
-                </div>
-            </div>
-            <div class="edit-grid">
-                <div class="edit-group">
-                    <label>主体 *</label>
-                    <input type="text" id="edit_subject_text" placeholder="如：某公司、某品牌">
-                </div>
-                <div class="edit-group">
-                    <label>谓词 *</label>
-                    <input type="text" id="edit_predicate" placeholder="如：营业收入为、销量为">
-                </div>
-                <div class="edit-group">
-                    <label>客体</label>
-                    <input type="text" id="edit_object_text" placeholder="合作方/排名对象等">
-                </div>
-                <div class="edit-group">
-                    <label>数值</label>
-                    <input type="number" id="edit_value_num" step="any" placeholder="数字值">
-                </div>
-                <div class="edit-group">
-                    <label>单位</label>
-                    <input type="text" id="edit_unit" placeholder="如：亿元、万吨">
-                </div>
-                <div class="edit-group">
-                    <label>货币</label>
-                    <input type="text" id="edit_currency" placeholder="如：CNY、USD">
-                </div>
-                <div class="edit-group">
-                    <label>时间表达式</label>
-                    <input type="text" id="edit_time_expr" placeholder="如：2024年、2024Q1">
-                </div>
-                <div class="edit-group">
-                    <label>地点</label>
-                    <input type="text" id="edit_location_text" placeholder="如：中国、上海">
-                </div>
-                <div class="edit-group full">
-                    <label>文本值（非数字结果）</label>
-                    <input type="text" id="edit_value_text" placeholder="如：第一名、正增长">
-                </div>
-                <div class="edit-group full">
-                    <label>限定词 JSON</label>
-                    <textarea id="edit_qualifier_json" rows="2" placeholder='如：{"yoy_change": "+18%"}'></textarea>
-                </div>
-                <div class="edit-group full">
-                    <label>审核备注</label>
-                    <textarea id="edit_review_note" rows="2" placeholder="填写修改原因或说明..."></textarea>
-                </div>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button class="btn-cancel" onclick="closeEditModal()">取消</button>
-            <button class="btn-save btn-save-queue" onclick="submitEdit('save_only')">💾 保存（返回队列）</button>
-            <button class="btn-save btn-save-reject" onclick="submitEdit('save_and_reject')">✗ 保存并拒绝</button>
-            <button class="btn-save btn-save-pass" onclick="submitEdit('save_and_pass')">✓ 保存并通过</button>
-        </div>
-    </div>
-</div>
-
-</body>
-</html>
+{% endblock %}

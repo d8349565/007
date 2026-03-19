@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}资讯颗粒化{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <nav class="top-nav">
+    <span class="nav-brand">◆ 资讯颗粒化</span>
+    <div class="nav-links">
+      <a href="/" class="nav-link {% if active == 'index' %}active{% endif %}">概览</a>
+      <a href="/import" class="nav-link {% if active == 'import' %}active{% endif %}">导入</a>
+      <a href="/documents" class="nav-link {% if active == 'documents' %}active{% endif %}">文档</a>
+      <a href="/review" class="nav-link {% if active == 'review' %}active{% endif %}">审核</a>
+      <a href="/passed" class="nav-link {% if active == 'passed' %}active{% endif %}">结果</a>
+      <a href="/manage" class="nav-link {% if active == 'manage' %}active{% endif %}">管理</a>
+    </div>
+  </nav>
+  <main class="main-content">
+    <div class="{% block container_class %}container{% endblock %}">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

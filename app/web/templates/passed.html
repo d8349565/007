@@ -1,239 +1,247 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>已通过结果 — 资讯颗粒化</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; }
-    .container { max-width: 1300px; margin: 0 auto; padding: 24px 20px; }
-    h1 { font-size: 22px; color: #1a3a5c; margin-bottom: 4px; }
-    .subtitle { font-size: 13px; color: #888; margin-bottom: 20px; }
-
-    /* 筛选栏 */
-    .filter-bar { background: white; border-radius: 8px; padding: 14px 20px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 20px;
-      display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-    .filter-bar label { font-size: 13px; color: #666; white-space: nowrap; }
-    .filter-bar select, .filter-bar input {
-      padding: 5px 10px; border: 1px solid #d0d5dd; border-radius: 4px; font-size: 13px; }
-    .filter-bar button { padding: 6px 16px; background: #1a3a5c; color: white;
-      border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
-    .filter-bar button:hover { background: #0d2847; }
-    .export-btn { padding: 6px 14px; background: #28a745; color: white;
-      border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
-      text-decoration: none; display: inline-block; }
-    .export-btn:hover { background: #218838; }
-
-    /* 统计条 */
-    .summary-bar { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
-    .summary-card { background: white; border-radius: 8px; padding: 14px 20px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08); flex: 1; min-width: 160px; text-align: center; }
-    .summary-card .val { font-size: 28px; font-weight: 700; color: #1a3a5c; }
-    .summary-card .lbl { font-size: 12px; color: #888; margin-top: 4px; }
-
-    /* 事实卡片网格 */
-    .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
-    .fact-card { background: white; border-radius: 8px; padding: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #28a745;
-      transition: box-shadow .15s; }
-    .fact-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
-    .fact-card.human-pass { border-left-color: #0066cc; }
-
-    .fact-card-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
-    .fact-type-badge { display: inline-block; padding: 2px 8px; border-radius: 3px;
-      font-size: 11px; font-weight: bold; background: #dce8f8; color: #1a3a5c; }
-    .pass-badge { display: inline-block; padding: 2px 8px; border-radius: 3px;
-      font-size: 11px; font-weight: bold; }
-    .pass-auto { background: #d4edda; color: #155724; }
-    .pass-human { background: #cce5ff; color: #004085; }
-
-    .fact-subject { font-size: 15px; font-weight: 700; color: #1a3a5c; margin-bottom: 4px; }
-    .fact-predicate { font-size: 12px; color: #888; margin-bottom: 8px; }
-
-    .fact-value-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 8px; }
-    .fact-value { font-size: 22px; font-weight: 700; color: #1a3a5c; }
-    .fact-unit { font-size: 13px; color: #666; }
-    .fact-value-text { font-size: 14px; font-weight: 600; color: #333; }
-
-    .fact-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 12px; color: #666; }
-    .fact-meta-item { display: flex; gap: 3px; align-items: center; }
-    .fact-meta-item .icon { color: #999; }
-
-    .evidence-text { margin-top: 10px; padding: 8px 10px; background: #f8f9fa;
-      border-radius: 4px; font-size: 12px; color: #555; line-height: 1.6;
-      border-left: 2px solid #dee2e6; max-height: 4em; overflow: hidden;
-      cursor: pointer; }
-    .evidence-text.expanded { max-height: none; }
-
-    .qualifier-row { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
-    .qualifier-pill { display: inline-block; background: #f0f4ff; border: 1px solid #c8d8f0;
-      border-radius: 3px; padding: 1px 6px; font-size: 11px; color: #2255aa; }
-
-    /* 工具栏右侧统计 */
-    .fact-seq { font-size: 11px; color: #bbb; float: right; }
-
-    /* 分页 */
-    .pagination { margin-top: 24px; display: flex; gap: 8px; justify-content: center; }
-    .pagination a { padding: 7px 14px; background: white; border: 1px solid #d0d5dd;
-      border-radius: 4px; text-decoration: none; color: #333; font-size: 13px; }
-    .pagination a:hover { background: #e9ecef; }
-    .pagination .cur { padding: 7px 14px; background: #1a3a5c; color: white;
-      border-radius: 4px; font-size: 13px; }
-
-    .empty { text-align: center; padding: 60px; color: #aaa; font-size: 16px; background: white;
-      border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-
-    /* 类型颜色映射 */
-    .type-FINANCIAL_METRIC  { background: #fff3e0; color: #c56000; }
-    .type-SALES_VOLUME      { background: #e8f5e9; color: #2e7d32; }
-    .type-CAPACITY          { background: #e3f2fd; color: #1565c0; }
-    .type-INVESTMENT        { background: #fce4ec; color: #880e4f; }
-    .type-EXPANSION         { background: #f3e5f5; color: #6a1b9a; }
-    .type-MARKET_SHARE      { background: #e0f7fa; color: #00695c; }
-    .type-COMPETITIVE_RANKING { background: #fff8e1; color: #f57f17; }
-    .type-COOPERATION       { background: #e8eaf6; color: #283593; }
-    .type-PRICE_CHANGE      { background: #fbe9e7; color: #bf360c; }
-  </style>
-</head>
-<body>
+{% extends "_base.html" %}
 {% set active = 'passed' %}
-{% include '_nav.html' %}
+{% block title %}已通过结果 — 资讯颗粒化{% endblock %}
 
-<div class="container">
-  <h1>✅ 已通过结果</h1>
-  <div class="subtitle">展示审核状态为"自动通过"或"人工通过"的全部事实原子</div>
+{% block content %}
+  {# 统计摘要行 + 操作 #}
+  <div class="page-header" style="margin-bottom:16px;">
+    <div style="display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;">
+      <div class="page-title">已通过结果</div>
+      <span class="text-muted text-sm">共 <strong style="color:#0f172a;">{{ total_count }}</strong> 条 · 自动 <strong class="text-success">{{ auto_pass_count }}</strong> · 人工 <strong style="color:#2563eb;">{{ human_pass_count }}</strong></span>
+      {% if type_dist %}
+      <span class="text-muted text-sm" style="display:flex;gap:6px;flex-wrap:wrap;">
+        {% for t in type_dist %}
+        <span class="type-dist-pill">{{ FACT_TYPE_NAMES.get(t.fact_type, t.fact_type) }}: <b>{{ t.cnt }}</b></span>
+        {% endfor %}
+      </span>
+      {% endif %}
+    </div>
+    <div class="page-actions">
+      <a class="btn btn-sm btn-success" href="/export?fact_type={{ current_type }}&status={{ current_pass_type or 'AUTO_PASS,HUMAN_PASS' }}">导出 CSV</a>
+    </div>
+  </div>
 
-  {# 筛选栏 #}
+  {# 筛选栏（即时生效） #}
   <div class="filter-bar">
-    <form method="get" action="/passed" style="display:contents;">
-      <label>事实类型：</label>
-      <select name="fact_type">
+    <form method="get" action="/passed" id="filterForm" style="display:contents;">
+      <label>事实类型</label>
+      <select name="fact_type" onchange="this.form.submit()">
         <option value="">全部类型</option>
         {% for ft in fact_types %}
         <option value="{{ ft }}" {% if ft == current_type %}selected{% endif %}>{{ FACT_TYPE_NAMES.get(ft, ft) }}</option>
         {% endfor %}
       </select>
-      <label>来源文档：</label>
-      <select name="doc_id">
+      <label>来源文档</label>
+      <select name="doc_id" onchange="this.form.submit()">
         <option value="">全部文档</option>
         {% for doc in all_docs %}
-        <option value="{{ doc.id }}" {% if doc.id == current_doc %}selected{% endif %}>{{ doc.title or '(无标题)' }}</option>
+        <option value="{{ doc.id }}" {% if doc.id|string == current_doc|string %}selected{% endif %}>{{ doc.title or '(无标题)' }}</option>
         {% endfor %}
       </select>
-      <label>通过方式：</label>
-      <select name="pass_type">
-        <option value="" {% if not current_pass_type %}selected{% endif %}>全部通过</option>
+      <label>通过方式</label>
+      <select name="pass_type" onchange="this.form.submit()">
+        <option value="" {% if not current_pass_type %}selected{% endif %}>全部</option>
         <option value="AUTO_PASS" {% if current_pass_type == 'AUTO_PASS' %}selected{% endif %}>自动通过</option>
         <option value="HUMAN_PASS" {% if current_pass_type == 'HUMAN_PASS' %}selected{% endif %}>人工通过</option>
       </select>
-      <button type="submit">🔍 筛选</button>
     </form>
-    <a class="export-btn" href="/export?fact_type={{ current_type }}&status={{ current_pass_type or 'AUTO_PASS,HUMAN_PASS' }}">📥 导出 CSV</a>
+    <span class="filter-spacer"></span>
+    {# 翻页嵌在筛选栏右侧 #}
+    <div class="pager">
+      {% if page > 1 %}
+      <a class="pager-btn" href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&page={{ page - 1 }}">&#8592;</a>
+      {% else %}
+      <span class="pager-btn pager-disabled">&#8592;</span>
+      {% endif %}
+      <span class="pager-info">
+        {% set total_pages = ((total_count - 1) // 30 + 1) if total_count > 0 else 1 %}
+        {{ page }} / {{ total_pages }}
+      </span>
+      {% if has_more %}
+      <a class="pager-btn" href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&page={{ page + 1 }}">&#8594;</a>
+      {% else %}
+      <span class="pager-btn pager-disabled">&#8594;</span>
+      {% endif %}
+    </div>
   </div>
 
-  {# 统计概览 #}
-  <div class="summary-bar">
-    <div class="summary-card">
-      <div class="val">{{ facts|length }}</div>
-      <div class="lbl">本页显示</div>
-    </div>
-    <div class="summary-card">
-      <div class="val">{{ total_count }}</div>
-      <div class="lbl">筛选结果总数</div>
-    </div>
-    <div class="summary-card">
-      <div class="val" style="color:#28a745;">{{ auto_pass_count }}</div>
-      <div class="lbl">自动通过</div>
-    </div>
-    <div class="summary-card">
-      <div class="val" style="color:#0066cc;">{{ human_pass_count }}</div>
-      <div class="lbl">人工通过</div>
-    </div>
-    {% if type_dist %}
-    <div class="summary-card" style="flex:2;">
-      <div style="font-size:11px;color:#888;margin-bottom:6px;">类型分布</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;">
-        {% for t in type_dist %}
-        <span style="font-size:12px;background:#f0f4ff;border-radius:3px;padding:2px 8px;">{{ FACT_TYPE_NAMES.get(t.fact_type, t.fact_type) }}: <b>{{ t.cnt }}</b></span>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-  </div>
-
-  {# 事实卡片 #}
+  {# 数据表格 #}
   {% if facts %}
-  <div class="cards-grid">
-    {% for f in facts %}
-    <div class="fact-card {% if f.review_status == 'HUMAN_PASS' %}human-pass{% endif %}">
-      <div class="fact-card-head">
-        <span class="fact-type-badge type-{{ f.fact_type }}">{{ FACT_TYPE_NAMES.get(f.fact_type, f.fact_type) }}</span>
-        <span>
-          {% if f.review_status == 'AUTO_PASS' %}
-          <span class="pass-badge pass-auto">自动通过</span>
-          {% else %}
-          <span class="pass-badge pass-human">人工通过</span>
-          {% endif %}
-        </span>
-      </div>
-
-      <div class="fact-subject">{{ f.subject_text or '—' }}</div>
-      <div class="fact-predicate">{{ f.predicate or '' }}</div>
-
-      <div class="fact-value-row">
-        {% if f.value_num is not none and f.value_num != '' %}
-          <span class="fact-value">{% if f.value_num == f.value_num|int %}{{ f.value_num|int }}{% else %}{{ f.value_num }}{% endif %}</span>
-          {% if f.unit %}<span class="fact-unit">{{ f.unit }}</span>{% endif %}
-          {% if f.currency %}<span class="fact-unit">{{ f.currency }}</span>{% endif %}
-        {% elif f.value_text %}
-          <span class="fact-value-text">{{ f.value_text }}</span>
-          {% if f.unit %}<span class="fact-unit">{{ f.unit }}</span>{% endif %}
-        {% elif f.object_text %}
-          <span class="fact-value-text">{{ f.object_text }}</span>
-        {% else %}
-          <span style="color:#aaa;font-size:13px;">（无数值）</span>
-        {% endif %}
-      </div>
-
-      <div class="fact-meta">
-        {% if f.time_expr %}<span class="fact-meta-item"><span class="icon">🕐</span>{{ f.time_expr }}</span>{% endif %}
-        {% if f.location_text %}<span class="fact-meta-item"><span class="icon">📍</span>{{ f.location_text }}</span>{% endif %}
-        {% if f.confidence_score %}<span class="fact-meta-item"><span class="icon">📊</span>置信度 {{ '%.2f'|format(f.confidence_score) }}</span>{% endif %}
-        {% if f.document_title %}<span class="fact-meta-item" style="color:#aaa;font-size:11px;">📄 {{ f.document_title[:30] }}{% if f.document_title|length > 30 %}…{% endif %}</span>{% endif %}
-      </div>
-
-      {% if f.qualifiers_display %}
-      <div class="qualifier-row">
-        {% for k, v in f.qualifiers_display.items() %}
-        <span class="qualifier-pill">{{ k }}: {{ v }}</span>
-        {% endfor %}
-      </div>
-      {% endif %}
-
-      {% if f.evidence_text %}
-      <div class="evidence-text" onclick="this.classList.toggle('expanded')" title="点击展开证据原文">
-        "{{ f.evidence_text }}"
-      </div>
-      {% endif %}
+  <div class="card">
+    <div style="overflow-x:auto;">
+      <table class="data-table review-table" id="passedTable">
+        <thead>
+          <tr>
+            <th style="width:36px;">#</th>
+            <th style="width:90px;">类型</th>
+            <th style="min-width:140px;">主体</th>
+            <th style="min-width:160px;">谓词</th>
+            <th style="min-width:110px;" class="col-value">核心数值</th>
+            <th style="min-width:80px;">时间</th>
+            <th style="min-width:80px;">地点</th>
+            <th style="min-width:100px;">限定词</th>
+            <th style="width:34px;" title="证据原文（悬浮查看）">证</th>
+            <th style="width:44px;">信度</th>
+            <th style="width:72px;">通过</th>
+            <th style="min-width:120px;">来源文档</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in facts %}
+          {% set q_items = f.qualifiers_display.items()|list if f.qualifiers_display else [] %}
+          <tr>
+            <td class="cell-muted text-xs">{{ (page - 1) * 30 + loop.index }}</td>
+            <td>
+              <span class="badge badge-{{ f.fact_type }}">{{ FACT_TYPE_NAMES.get(f.fact_type, f.fact_type) }}</span>
+            </td>
+            <td>
+              <span class="truncate-inner font-bold" style="max-width:140px;color:#0f172a;"
+                {% if f.subject_text and f.subject_text|length > 16 %}data-tip="{{ f.subject_text|e }}"{% endif %}>
+                {{ f.subject_text or '—' }}
+              </span>
+            </td>
+            <td>
+              <div class="cell-stack" style="max-width:160px;">
+                <span class="truncate-inner text-sm"
+                  {% if f.predicate and f.predicate|length > 18 %}data-tip="{{ f.predicate|e }}"{% endif %}>
+                  {{ f.predicate or '—' }}
+                </span>
+                {% if f.object_text %}
+                <span class="truncate-inner text-xs text-muted"
+                  {% if f.object_text|length > 18 %}data-tip="{{ f.object_text|e }}"{% endif %}>
+                  → {{ f.object_text }}
+                </span>
+                {% endif %}
+              </div>
+            </td>
+            {# 核心数值列：最突出 #}
+            <td class="col-value">
+              {% if f.value_num is not none and f.value_num != '' %}
+                <span class="passed-value">{{ f.value_num }}</span>
+                <span class="passed-unit">{{ f.unit or '' }}{% if f.currency %} {{ f.currency }}{% endif %}</span>
+              {% elif f.value_text %}
+                <span class="passed-value-text"
+                  {% if f.value_text|length > 12 %}data-tip="{{ f.value_text|e }}"{% endif %}>
+                  {{ f.value_text[:12] }}{% if f.value_text|length > 12 %}…{% endif %}
+                </span>
+                {% if f.unit %}<span class="passed-unit">{{ f.unit }}</span>{% endif %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="text-sm nowrap">{{ f.time_expr or '—' }}</td>
+            <td>
+              {% if f.location_text %}
+              <span class="truncate-inner text-sm" style="max-width:80px;"
+                {% if f.location_text|length > 8 %}data-tip="{{ f.location_text|e }}"{% endif %}>
+                {{ f.location_text }}
+              </span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              {% if q_items %}
+              <div data-tip="{{ f.qualifier_json|e }}">
+                {% for k, v in q_items[:2] %}
+                <span class="qualifier-pill" style="font-size:10px;padding:1px 5px;">{{ k }}: {{ v }}</span>
+                {% endfor %}
+                {% if q_items|length > 2 %}
+                <span class="qualifier-pill text-muted" style="font-size:10px;">+{{ q_items|length - 2 }}</span>
+                {% endif %}
+              </div>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td style="text-align:center;">
+              {% if f.evidence_text %}
+              <span class="evidence-icon" data-tip="{{ f.evidence_text|e }}">📎</span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td style="text-align:center;">
+              {% if f.confidence_score %}
+              <span class="text-xs {% if f.confidence_score >= 0.8 %}text-success{% elif f.confidence_score >= 0.5 %}text-warning{% else %}text-danger{% endif %}">
+                {{ '%.2f'|format(f.confidence_score) }}
+              </span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              {% if f.review_status == 'AUTO_PASS' %}
+              <span class="badge badge-pass" style="font-size:10px;">自动</span>
+              {% else %}
+              <span class="badge badge-info" style="font-size:10px;">人工</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if f.document_title %}
+              <span class="truncate-inner text-xs text-muted" style="max-width:120px;"
+                data-tip="{{ f.document_title|e }}">
+                {{ f.document_title[:18] }}{% if f.document_title|length > 18 %}…{% endif %}
+              </span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-    {% endfor %}
   </div>
 
-  <div class="pagination">
+  {# 底部翻页 #}
+  <div class="pager pager-bottom">
     {% if page > 1 %}
-    <a href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&page={{ page - 1 }}">← 上一页</a>
+    <a class="pager-btn" href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&page={{ page - 1 }}">&#8592; 上一页</a>
+    {% else %}
+    <span class="pager-btn pager-disabled">&#8592; 上一页</span>
     {% endif %}
-    <span class="cur">第 {{ page }} 页</span>
+    <span class="pager-info" style="padding:0 8px;">
+      {% set total_pages = ((total_count - 1) // 30 + 1) if total_count > 0 else 1 %}
+      第 <strong>{{ page }}</strong> 页 · 共 <strong>{{ total_pages }}</strong> 页 · {{ total_count }} 条
+    </span>
     {% if has_more %}
-    <a href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&page={{ page + 1 }}">下一页 →</a>
+    <a class="pager-btn" href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&page={{ page + 1 }}">下一页 &#8594;</a>
+    {% else %}
+    <span class="pager-btn pager-disabled">下一页 &#8594;</span>
     {% endif %}
   </div>
 
   {% else %}
-  <div class="empty">暂无已通过的事实原子</div>
+  <div class="card"><div class="empty-state">暂无已通过的事实原子</div></div>
   {% endif %}
-</div>
-</body>
-</html>
+
+  {# 全局悬浮提示框（与审核页共用同一逻辑） #}
+  <div class="hover-tip" id="hoverTip"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* 悬浮提示 */
+const tipEl = document.getElementById('hoverTip');
+let tipVis = false;
+function findTip(el) {
+  for (let i = 0; i < 6 && el && el !== document.body; i++, el = el.parentElement)
+    if (el.dataset && el.dataset.tip) return el;
+  return null;
+}
+document.addEventListener('mouseover', function(e) {
+  const a = findTip(e.target);
+  if (a) {
+    let txt = a.dataset.tip;
+    try { const o = JSON.parse(txt); if (o && typeof o === 'object' && !Array.isArray(o)) txt = Object.entries(o).map(([k,v])=>k+': '+v).join('\n'); } catch {}
+    tipEl.textContent = txt;
+    tipEl.style.display = 'block';
+    tipVis = true;
+  } else if (tipVis) { tipEl.style.display = 'none'; tipVis = false; }
+});
+document.addEventListener('mousemove', function(e) {
+  if (!tipVis) return;
+  let x = e.clientX + 18, y = e.clientY + 14;
+  const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  if (x + w > window.innerWidth - 8) x = e.clientX - w - 10;
+  if (y + h > window.innerHeight - 8) y = e.clientY - h - 10;
+  tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px';
+});
+document.addEventListener('mouseout', function(e) {
+  if (!tipVis) return;
+  if (!findTip(e.target)) return;
+  if (!findTip(e.relatedTarget)) { tipEl.style.display = 'none'; tipVis = false; }
+});
+</script>
+{% endblock %}

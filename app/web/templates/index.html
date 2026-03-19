@@ -1,236 +1,208 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>概览 — 资讯颗粒化</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; }
-    .container { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
-    h2 { font-size: 17px; color: #1a3a5c; margin-bottom: 14px; border-left: 4px solid #1a3a5c; padding-left: 10px; }
-    .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
-    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
-    .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-    .metric-val { font-size: 38px; font-weight: 700; color: #1a3a5c; line-height: 1.1; }
-    .metric-label { font-size: 13px; color: #666; margin-top: 6px; }
-    .metric-sub { font-size: 12px; color: #999; margin-top: 4px; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { text-align: left; padding: 8px 10px; background: #f5f7fa; font-weight: 600; color: #555; border-bottom: 2px solid #e8e8e8; }
-    td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
-    tr:last-child td { border-bottom: none; }
-    .bar-wrap { background: #eee; border-radius: 3px; height: 10px; min-width: 60px; }
-    .bar { background: #1a3a5c; border-radius: 3px; height: 10px; }
-    .bar-pass { background: #28a745; }
-    .bar-reject { background: #dc3545; }
-    .bar-human { background: #ffc107; }
-    .bar-pending { background: #aaa; }
-    .token-table td:first-child { font-weight: 600; }
-    .badge { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:bold; }
-    .badge-pass { background:#d4edda; color:#155724; }
-    .badge-reject { background:#f8d7da; color:#721c24; }
-    .badge-human { background:#fff3cd; color:#856404; }
-    .badge-pending { background:#e2e3e5; color:#383d41; }
-    .action-btn { display:inline-block; padding:6px 14px; background:#1a3a5c; color:white; border-radius:4px; text-decoration:none; font-size:13px; margin-top:12px; }
-    .action-btn:hover { background:#0d2847; }
-  </style>
-</head>
-<body>
+{% extends "_base.html" %}
 {% set active = 'index' %}
-{% include '_nav.html' %}
+{% block title %}概览 — 资讯颗粒化{% endblock %}
 
-<div class="container">
-  <div style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
-    <h1 style="font-size:22px; color:#1a3a5c;">系统概览</h1>
-    <a class="action-btn" href="/documents">查看文档列表 →</a>
+{% block content %}
+  <div class="page-header">
+    <div class="page-header-col">
+      <div class="page-title">系统概览</div>
+    </div>
+    <div class="page-actions">
+      <a class="btn btn-primary" href="/import">导入文章</a>
+      <a class="btn btn-secondary" href="/documents">查看文档 →</a>
+    </div>
   </div>
 
   {# 核心指标卡片 #}
-  <div class="grid4">
-    <div class="card">
-      <div class="metric-val">{{ stats.document_count }}</div>
-      <div class="metric-label">已处理文档数</div>
-      <div class="metric-sub"><a href="/documents" style="color:#1a3a5c;">查看全部 →</a></div>
+  <div class="grid grid-4" style="margin-bottom:20px;">
+    <div class="card metric-card">
+      <div class="metric-value">{{ stats.document_count }}</div>
+      <div class="metric-label">已处理文档</div>
+      <div class="metric-footer"><a href="/documents">查看全部 →</a></div>
     </div>
-    <div class="card">
-      <div class="metric-val">{{ stats.fact_count }}</div>
+    <div class="card metric-card">
+      <div class="metric-value">{{ stats.fact_count }}</div>
       <div class="metric-label">事实原子总数</div>
+      <div class="metric-footer"><a href="/passed">查看结果 →</a></div>
     </div>
-    <div class="card">
+    <div class="card metric-card">
       {% set auto_pass = stats.review_status_distribution | selectattr('review_status','eq','AUTO_PASS') | list %}
-      <div class="metric-val" style="color:#28a745;">{{ auto_pass[0].cnt if auto_pass else 0 }}</div>
+      <div class="metric-value text-success">{{ auto_pass[0].cnt if auto_pass else 0 }}</div>
       <div class="metric-label">自动通过</div>
-      <div class="metric-sub">
+      <div class="metric-footer">
         {% if stats.fact_count %}
-          {{ '%.1f'|format((auto_pass[0].cnt if auto_pass else 0) / stats.fact_count * 100) }}%
+          占 {{ '%.1f'|format((auto_pass[0].cnt if auto_pass else 0) / stats.fact_count * 100) }}%
         {% endif %}
       </div>
     </div>
-    <div class="card">
+    <div class="card metric-card">
       {% set human = stats.review_status_distribution | selectattr('review_status','eq','HUMAN_REVIEW_REQUIRED') | list %}
-      <div class="metric-val" style="color:#c8930a;">{{ human[0].cnt if human else 0 }}</div>
+      <div class="metric-value text-warning">{{ human[0].cnt if human else 0 }}</div>
       <div class="metric-label">待人工审核</div>
-      <div class="metric-sub"><a href="/review" style="color:#c8930a;">前往审核 →</a></div>
+      <div class="metric-footer"><a href="/review" style="color:#d97706;">前往审核 →</a></div>
     </div>
   </div>
 
-  {# 费用汇总卡片 #}
+  {# 费用汇总 #}
   {% if stats.total_cost is defined %}
-  <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:28px;">
-    <div class="card" style="background:#1a3a5c; color:white;">
-      <div style="font-size:13px;opacity:0.8;margin-bottom:6px;">💰 累计总费用</div>
-      <div style="font-size:32px;font-weight:700;">¥ {{ '%.4f'|format(stats.total_cost) }}</div>
-      <div style="font-size:12px;opacity:0.7;margin-top:6px;">DeepSeek-V3.2 标准计价</div>
+  <div class="grid grid-3" style="margin-bottom:20px;">
+    <div class="card card-accent metric-card">
+      <div class="metric-label">累计总费用</div>
+      <div class="metric-value">¥ {{ '%.4f'|format(stats.total_cost) }}</div>
+      <div class="metric-footer">DeepSeek-V3.2 标准计价</div>
     </div>
-    <div class="card">
-      <div style="font-size:13px;color:#666;margin-bottom:6px;">📄 篇均费用</div>
-      <div style="font-size:32px;font-weight:700;color:#1a3a5c;">¥ {{ '%.4f'|format(stats.cost_per_document) }}</div>
-      <div style="font-size:12px;color:#999;margin-top:6px;">{{ stats.document_count }} 篇文档</div>
+    <div class="card metric-card">
+      <div class="metric-label">篇均费用</div>
+      <div class="metric-value">¥ {{ '%.4f'|format(stats.cost_per_document) }}</div>
+      <div class="metric-footer">{{ stats.document_count }} 篇文档</div>
     </div>
-    <div class="card">
-      <div style="font-size:13px;color:#666;margin-bottom:6px;">💡 事实均费用</div>
-      <div style="font-size:32px;font-weight:700;color:#1a3a5c;">
-        {% if stats.fact_count %}
-          ¥ {{ '%.4f'|format(stats.total_cost / stats.fact_count) }}
-        {% else %}
-          ¥ 0
-        {% endif %}
+    <div class="card metric-card">
+      <div class="metric-label">事实均费用</div>
+      <div class="metric-value">
+        {% if stats.fact_count %}¥ {{ '%.4f'|format(stats.total_cost / stats.fact_count) }}{% else %}¥ 0{% endif %}
       </div>
-      <div style="font-size:12px;color:#999;margin-top:6px;">{{ stats.fact_count }} 条事实</div>
+      <div class="metric-footer">{{ stats.fact_count }} 条事实</div>
     </div>
   </div>
   {% endif %}
 
-  <div class="grid2">
-    {# 事实类型分布 #}
+  {# 分布图 #}
+  <div class="grid grid-2" style="margin-bottom:20px;">
     <div class="card">
-      <h2>事实类型分布</h2>
-      {% set max_cnt = stats.fact_type_distribution[0].cnt if stats.fact_type_distribution else 1 %}
-      <table>
-        <thead><tr><th>类型</th><th>数量</th><th style="width:140px">占比</th></tr></thead>
-        <tbody>
-          {% for row in stats.fact_type_distribution %}
-          <tr>
-            <td>{{ FACT_TYPE_NAMES.get(row.fact_type, row.fact_type) }}</td>
-            <td>{{ row.cnt }}</td>
-            <td>
-              <div class="bar-wrap">
-                <div class="bar" style="width:{{ (row.cnt / max_cnt * 100)|int }}%"></div>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="card-header">事实类型分布</div>
+      <div class="card-flush">
+        {% set max_cnt = stats.fact_type_distribution[0].cnt if stats.fact_type_distribution else 1 %}
+        <table class="data-table">
+          <thead><tr><th>类型</th><th>数量</th><th style="width:140px">占比</th></tr></thead>
+          <tbody>
+            {% for row in stats.fact_type_distribution %}
+            <tr>
+              <td><span class="badge badge-{{ row.fact_type }}">{{ FACT_TYPE_NAMES.get(row.fact_type, row.fact_type) }}</span></td>
+              <td>{{ row.cnt }}</td>
+              <td>
+                <div class="bar-bg">
+                  <div class="bar-fill bar-fill-primary" style="width:{{ (row.cnt / max_cnt * 100)|int }}%"></div>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    {# 审核状态分布 #}
     <div class="card">
-      <h2>审核状态分布</h2>
-      {% set total = stats.fact_count if stats.fact_count else 1 %}
-      <table>
-        <thead><tr><th>状态</th><th>数量</th><th style="width:140px">占比</th></tr></thead>
-        <tbody>
-          {% for row in stats.review_status_distribution %}
-          {% set pct = (row.cnt / total * 100)|int %}
-          <tr>
-            <td>
-              {% if row.review_status == 'AUTO_PASS' or row.review_status == 'HUMAN_PASS' %}
-                <span class="badge badge-pass">{% if row.review_status == 'AUTO_PASS' %}自动通过{% else %}人工通过{% endif %}</span>
-              {% elif row.review_status in ('REJECTED', 'HUMAN_REJECTED') %}
-                <span class="badge badge-reject">{% if row.review_status == 'REJECTED' %}已拒绝{% else %}人工拒绝{% endif %}</span>
-              {% elif row.review_status == 'HUMAN_REVIEW_REQUIRED' %}
-                <span class="badge badge-human">待人工审核</span>
-              {% else %}
-                <span class="badge badge-pending">待处理</span>
-              {% endif %}
-            </td>
-            <td>{{ row.cnt }}</td>
-            <td>
-              <div class="bar-wrap">
-                {% if row.review_status in ('AUTO_PASS','HUMAN_PASS') %}
-                  <div class="bar bar-pass" style="width:{{ pct }}%"></div>
-                {% elif row.review_status in ('REJECTED','HUMAN_REJECTED') %}
-                  <div class="bar bar-reject" style="width:{{ pct }}%"></div>
+      <div class="card-header">审核状态分布</div>
+      <div class="card-flush">
+        {% set total = stats.fact_count if stats.fact_count else 1 %}
+        <table class="data-table">
+          <thead><tr><th>状态</th><th>数量</th><th style="width:140px">占比</th></tr></thead>
+          <tbody>
+            {% for row in stats.review_status_distribution %}
+            {% set pct = (row.cnt / total * 100)|int %}
+            <tr>
+              <td>
+                {% if row.review_status == 'AUTO_PASS' or row.review_status == 'HUMAN_PASS' %}
+                  <span class="badge badge-pass">{% if row.review_status == 'AUTO_PASS' %}自动通过{% else %}人工通过{% endif %}</span>
+                {% elif row.review_status in ('REJECTED', 'HUMAN_REJECTED') %}
+                  <span class="badge badge-reject">{% if row.review_status == 'REJECTED' %}已拒绝{% else %}人工拒绝{% endif %}</span>
                 {% elif row.review_status == 'HUMAN_REVIEW_REQUIRED' %}
-                  <div class="bar bar-human" style="width:{{ pct }}%"></div>
+                  <span class="badge badge-review">待人工审核</span>
                 {% else %}
-                  <div class="bar bar-pending" style="width:{{ pct }}%"></div>
+                  <span class="badge badge-pending">待处理</span>
                 {% endif %}
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <p style="font-size:11px;color:#999;margin-top:10px;">
-        * 待人工审核含：Reviewer判为不确定、类型强制人工（MARKET_SHARE/COMPETITIVE_RANKING）
-      </p>
+              </td>
+              <td>{{ row.cnt }}</td>
+              <td>
+                <div class="bar-bg">
+                  {% if row.review_status in ('AUTO_PASS','HUMAN_PASS') %}
+                    <div class="bar-fill bar-fill-pass" style="width:{{ pct }}%"></div>
+                  {% elif row.review_status in ('REJECTED','HUMAN_REJECTED') %}
+                    <div class="bar-fill bar-fill-reject" style="width:{{ pct }}%"></div>
+                  {% elif row.review_status == 'HUMAN_REVIEW_REQUIRED' %}
+                    <div class="bar-fill bar-fill-review" style="width:{{ pct }}%"></div>
+                  {% else %}
+                    <div class="bar-fill bar-fill-pending" style="width:{{ pct }}%"></div>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div style="padding:8px 16px;font-size:11px;color:#94a3b8;">
+          * 待人工审核含：Reviewer判为不确定、类型强制人工（MARKET_SHARE / COMPETITIVE_RANKING）
+        </div>
+      </div>
     </div>
   </div>
 
   {# 各文档事实数 #}
   {% if stats.doc_fact_counts %}
-  <div class="card" style="margin-bottom:28px;">
-    <h2>各文档事实抽取量</h2>
-    <table>
-    <thead><tr><th>文档标题</th><th>事实数</th><th style="width:200px">占比</th><th>操作</th></tr></thead>
-      <tbody>
-        {% set max_doc = stats.doc_fact_counts[0].fact_count if stats.doc_fact_counts[0].fact_count else 1 %}
-        {% for row in stats.doc_fact_counts %}
-        <tr>
-          <td>{{ row.title or '(无标题)' }}</td>
-          <td>{{ row.fact_count }}</td>
-          <td>
-            <div class="bar-wrap">
-              <div class="bar" style="width:{{ (row.fact_count / max_doc * 100)|int }}%"></div>
-            </div>
-          </td>
-          <td><a href="/documents/{{ row.id }}" style="color:#1a3a5c;font-size:12px;">查看详情</a></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">各文档事实抽取量</div>
+    <div class="card-flush">
+      <table class="data-table">
+        <thead><tr><th>文档标题</th><th>事实数</th><th style="width:200px">占比</th><th>操作</th></tr></thead>
+        <tbody>
+          {% set max_doc = stats.doc_fact_counts[0].fact_count if stats.doc_fact_counts[0].fact_count else 1 %}
+          {% for row in stats.doc_fact_counts %}
+          <tr>
+            <td class="title-text">{{ row.title or '(无标题)' }}</td>
+            <td>{{ row.fact_count }}</td>
+            <td>
+              <div class="bar-bg">
+                <div class="bar-fill bar-fill-primary" style="width:{{ (row.fact_count / max_doc * 100)|int }}%"></div>
+              </div>
+            </td>
+            <td><a href="/documents/{{ row.id }}" class="text-sm">查看详情 →</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
   {% endif %}
 
   {# Token 使用 #}
   {% if stats.token_usage %}
   <div class="card">
-    <h2>Token 使用统计（各 Agent）</h2>
-    <table class="token-table">
-      <thead><tr><th>处理阶段</th><th>调用次数</th><th>输入 Token</th><th>输出 Token</th><th>合计 Token</th><th>费用（元）</th></tr></thead>
-      <tbody>
-        {% set total_in = namespace(v=0) %}
-        {% set total_out = namespace(v=0) %}
-        {% set total_cost = namespace(v=0) %}
-        {% for row in stats.token_usage %}
-        {% set total_in.v = total_in.v + (row.total_input or 0) %}
-        {% set total_out.v = total_out.v + (row.total_output or 0) %}
-        {% set total_cost.v = total_cost.v + (row.cost or 0) %}
-        <tr>
-          <td>{{ row.task_type }}</td>
-          <td>{{ row.calls }}</td>
-          <td>{{ '{:,}'.format(row.total_input or 0) }}</td>
-          <td>{{ '{:,}'.format(row.total_output or 0) }}</td>
-          <td>{{ '{:,}'.format((row.total_input or 0) + (row.total_output or 0)) }}</td>
-          <td>¥ {{ '%.4f'|format(row.cost or 0) }}</td>
-        </tr>
-        {% endfor %}
-        <tr style="font-weight:bold;border-top:2px solid #eee;">
-          <td>合计</td><td>—</td>
-          <td>{{ '{:,}'.format(total_in.v) }}</td>
-          <td>{{ '{:,}'.format(total_out.v) }}</td>
-          <td>{{ '{:,}'.format(total_in.v + total_out.v) }}</td>
-          <td>¥ {{ '%.4f'|format(total_cost.v) }}</td>
-        </tr>
-      </tbody>
-    </table>
-    <p style="font-size:11px;color:#999;margin-top:10px;">
-      * 费用 = 输入token × 2元/百万 + 输出token × 3元/百万（DeepSeek-V3.2 标准价）
-    </p>
+    <div class="card-header">Token 使用统计</div>
+    <div class="card-flush">
+      <table class="data-table">
+        <thead><tr><th>处理阶段</th><th>调用次数</th><th style="text-align:right">输入 Token</th><th style="text-align:right">输出 Token</th><th style="text-align:right">合计</th><th style="text-align:right">费用</th></tr></thead>
+        <tbody>
+          {% set total_in = namespace(v=0) %}
+          {% set total_out = namespace(v=0) %}
+          {% set total_cost = namespace(v=0) %}
+          {% for row in stats.token_usage %}
+          {% set total_in.v = total_in.v + (row.total_input or 0) %}
+          {% set total_out.v = total_out.v + (row.total_output or 0) %}
+          {% set total_cost.v = total_cost.v + (row.cost or 0) %}
+          <tr>
+            <td><code>{{ row.task_type }}</code></td>
+            <td>{{ row.calls }}</td>
+            <td class="cell-num">{{ '{:,}'.format(row.total_input or 0) }}</td>
+            <td class="cell-num">{{ '{:,}'.format(row.total_output or 0) }}</td>
+            <td class="cell-num">{{ '{:,}'.format((row.total_input or 0) + (row.total_output or 0)) }}</td>
+            <td class="cell-num">¥ {{ '%.4f'|format(row.cost or 0) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>合计</td><td>—</td>
+            <td class="cell-num">{{ '{:,}'.format(total_in.v) }}</td>
+            <td class="cell-num">{{ '{:,}'.format(total_out.v) }}</td>
+            <td class="cell-num">{{ '{:,}'.format(total_in.v + total_out.v) }}</td>
+            <td class="cell-num">¥ {{ '%.4f'|format(total_cost.v) }}</td>
+          </tr>
+        </tfoot>
+      </table>
+      <div style="padding:8px 16px;font-size:11px;color:#94a3b8;">
+        * 费用 = 输入token × 2元/百万 + 输出token × 3元/百万（DeepSeek-V3.2 标准价）
+      </div>
+    </div>
   </div>
   {% endif %}
-</div>
-</body>
-</html>
+{% endblock %}

@@ -1,102 +1,74 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>文档列表 — 资讯颗粒化</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
-    h1 { font-size: 22px; color: #1a3a5c; margin-bottom: 20px; }
-    .card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { text-align: left; padding: 10px 14px; background: #f5f7fa; font-weight: 600; color: #555; border-bottom: 2px solid #e0e0e0; white-space: nowrap; }
-    td { padding: 10px 14px; border-top: 1px solid #f0f0f0; vertical-align: middle; }
-    tr:hover td { background: #fafbfc; }
-    .badge { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:bold; }
-    .badge-active { background:#d4edda; color:#155724; }
-    .status-pill { display:inline-flex; align-items:center; gap:4px; }
-    .num { font-weight: 700; color: #1a3a5c; }
-    .num-small { font-size:12px; color:#888; }
-    .lnk { color:#1a3a5c; text-decoration:none; font-weight:600; }
-    .lnk:hover { text-decoration:underline; }
-    .title-cell { max-width: 360px; }
-    .title-text { font-weight:600; color:#1a3a5c; }
-    .source-text { font-size:11px; color:#888; margin-top:2px; }
-    .pipeline-cells { display:flex; gap:16px; align-items:center; }
-    .pipeline-step { text-align:center; }
-    .pipeline-step .n { font-size: 18px; font-weight: 700; color: #1a3a5c; }
-    .pipeline-step .l { font-size: 11px; color: #999; }
-    .arrow { color: #ccc; font-size: 16px; }
-    .empty { text-align:center; padding:48px; color:#999; font-size:15px; }
-  </style>
-</head>
-<body>
+{% extends "_base.html" %}
 {% set active = 'documents' %}
-{% include '_nav.html' %}
+{% block title %}文档列表 — 资讯颗粒化{% endblock %}
 
-<div class="container">
-  <h1>📄 文档列表</h1>
+{% block content %}
+  <div class="page-header">
+    <div class="page-title">文档列表</div>
+    <div class="page-actions">
+      <a class="btn btn-primary" href="/import">导入文章</a>
+    </div>
+  </div>
 
   <div class="card">
     {% if documents %}
-    <table>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>标题 / 来源</th>
-          <th>采集时间</th>
-          <th style="text-align:center">流水线进度</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for doc in documents %}
-        <tr>
-          <td style="color:#aaa;font-size:12px;">{{ loop.index }}</td>
-          <td class="title-cell">
-            <div class="title-text">
-              {% if doc.url %}
-              <a href="{{ doc.url }}" target="_blank" style="color:#1a3a5c;">{{ doc.title or '(无标题)' }}</a>
-              {% else %}
-              {{ doc.title or '(无标题)' }}
-              {% endif %}
-            </div>
-            <div class="source-text">
-              {% if doc.source_type == 'url' %}网址{% elif doc.source_type == 'file' %}文件{% elif doc.source_type == 'paste' %}粘贴{% else %}{{ doc.source_type }}{% endif %}
-              · {{ doc.source_name or '—' }}</div>
-          </td>
-          <td style="white-space:nowrap;font-size:12px;color:#555;">{{ (doc.crawl_time or '')[:16] }}</td>
-          <td>
-            <div class="pipeline-cells">
-              <div class="pipeline-step">
-                <div class="n">{{ doc.chunk_count }}</div>
-                <div class="l">文本块</div>
+    <div class="card-flush">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>标题 / 来源</th>
+            <th>采集时间</th>
+            <th style="text-align:center">流水线进度</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for doc in documents %}
+          <tr>
+            <td class="cell-muted">{{ loop.index }}</td>
+            <td class="title-cell">
+              <div class="title-text">
+                {% if doc.url %}
+                <a href="{{ doc.url }}" target="_blank">{{ doc.title or '(无标题)' }}</a>
+                {% else %}
+                {{ doc.title or '(无标题)' }}
+                {% endif %}
               </div>
-              <div class="arrow">→</div>
-              <div class="pipeline-step">
-                <div class="n">{{ doc.evidence_count }}</div>
-                <div class="l">证据片段</div>
+              <div class="source-text">
+                {% if doc.source_type == 'url' %}网址{% elif doc.source_type == 'file' %}文件{% elif doc.source_type == 'paste' %}粘贴{% else %}{{ doc.source_type }}{% endif %}
+                · {{ doc.source_name or '—' }}
               </div>
-              <div class="arrow">→</div>
-              <div class="pipeline-step">
-                <div class="n">{{ doc.fact_count }}</div>
-                <div class="l">事实原子</div>
+            </td>
+            <td class="nowrap text-sm text-muted">{{ (doc.crawl_time or '')[:16] }}</td>
+            <td>
+              <div class="pipeline">
+                <div class="pipeline-step">
+                  <div class="num">{{ doc.chunk_count }}</div>
+                  <div class="label">文本块</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-step">
+                  <div class="num">{{ doc.evidence_count }}</div>
+                  <div class="label">证据</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-step">
+                  <div class="num">{{ doc.fact_count }}</div>
+                  <div class="label">事实</div>
+                </div>
               </div>
-            </div>
-          </td>
-          <td>
-            <a class="lnk" href="/documents/{{ doc.id }}">详情 →</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+            </td>
+            <td>
+              <a class="btn btn-sm btn-ghost" href="/documents/{{ doc.id }}">详情 →</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% else %}
-    <div class="empty">暂无文档。请先准备文档并运行导入命令。</div>
+    <div class="empty-state">暂无文档。<a href="/import">去导入 →</a></div>
     {% endif %}
   </div>
-</div>
-</body>
-</html>
+{% endblock %}
