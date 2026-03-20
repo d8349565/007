@@ -14,6 +14,7 @@ from app.services.query import (
     get_document_evidences, get_document_tasks, get_doc_stats,
     get_passed_facts_stats, cascade_delete_document, update_document_meta,
     get_graph_data, get_entity_list, get_entity_timeline, get_entity_overview,
+    get_entity_hierarchy,
 )
 
 logger = get_logger(__name__)
@@ -762,6 +763,12 @@ def create_app() -> Flask:
         entity_type = request.args.get("entity_type", "")
         entities = get_entity_list(search=search, entity_type=entity_type)
         return jsonify({"entities": entities})
+
+    @app.route("/api/entity/hierarchy")
+    def api_entity_hierarchy():
+        """实体层级树数据 API"""
+        data = get_entity_hierarchy()
+        return jsonify(data)
 
     @app.route("/api/dedup/search")
     def api_dedup_search():

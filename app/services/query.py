@@ -999,3 +999,82 @@ def get_entity_overview(top_n: int = 10) -> dict:
         }
     finally:
         conn.close()
+
+
+def get_entity_hierarchy() -> dict:
+    """
+    从 entity_relation 构建层级树数据。
+    返回 {roots: [...]}。
+    roots: 嵌套 children 结构的顶层实体列表（无 parent 的为根，含直接子节点）
+    """
+    conn = get_connection()
+    try:
+        # 读取所有实体关系
+        rows = conn.execute("""
+            SELECT r.from_entity_id, r.to_entity_id, r.relation_type,
+                   e1.canonical_name AS from_name, e1.entity_type AS from_type,
+                   e2.canonical_name AS to_name, e2.entity_type AS to_type
+            FROM entity_relation r
+            JOIN entity e1 ON e1.id = r.from_entity_id
+            JOIN entity e2 ON e2.id = r.to_entity_id
+        """).fetchall()
+
+        # 构建 parent_id -> children 映射
+        children_map: dict[str, list] = {}
+        all_entity_ids = set()
+        entity_info: dict = {}
+
+        for r in rows:
+            parent_id = r["from_entity_id"]
+            child_id = r["to_entity_id"]
+            all_entity_ids.add(parent_id)
+            all_entity_ids.add(child_id)
+            entity_info[parent_id] = {"name": r["from_name"], "type": r["from_type"]}
+            entity_info[child_id] = {"name": r["to_name"], "type": r["to_type"]}
+            children_map.setdefault(parent_id, []).append({
+                "id": child_id,
+                "name": r["to_name"],
+                "entity_type": r["to_type"],
+                "relation_type": r["relation_type"],
+                "fact_count": 0,
+            })
+
+        # 找出根节点（出现在 from_entity_id 从未出现在 to_entity_id 的）
+        to_ids = {r["to_entity_id"] for r in rows}
+        root_ids = [eid for eid in all_entity_ids if eid not in to_ids]
+
+        # 获取每个实体的关联事实数
+        entity_fact_count: dict = {}
+        if all_entity_ids:
+            counts = conn.execute(
+                f"""SELECT subject_entity_id, COUNT(*) as cnt FROM fact_atom
+                    WHERE subject_entity_id IN ({','.join('?' * len(all_entity_ids))})
+                    AND review_status IN ('AUTO_PASS','HUMAN_PASS')
+                    GROUP BY subject_entity_id""",
+                list(all_entity_ids),
+            ).fetchall()
+            for row in counts:
+                entity_fact_count[row["subject_entity_id"]] = row["cnt"]
+
+        # 为 children 补充 fact_count
+        for parent_id in children_map:
+            for child in children_map[parent_id]:
+                child["fact_count"] = entity_fact_count.get(child["id"], 0)
+
+        # 构建 roots 树（只取两层：root + direct children）
+        roots = []
+        for eid in root_ids:
+            info = entity_info.get(eid, {"name": "未知", "type": "UNKNOWN"})
+            children = children_map.get(eid, [])
+            roots.append({
+                "id": eid,
+                "name": info["name"],
+                "entity_type": info["type"],
+                "fact_count": entity_fact_count.get(eid, 0),
+                "relation_type": None,
+                "children": children,
+            })
+
+        return {"roots": roots}
+    finally:
+        conn.close()
