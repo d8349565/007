@@ -50,6 +50,7 @@ def query_facts(
 
     sql = f"""
         SELECT f.*, sd.title AS document_title, sd.source_name AS document_source,
+               sd.url AS document_url, sd.source_type AS document_source_type,
                es.evidence_text
         FROM fact_atom f
         LEFT JOIN source_document sd ON f.document_id = sd.id
@@ -638,9 +639,12 @@ def get_graph_data(fact_type: str = "", doc_id: str = "") -> dict:
     """
     构建知识图谱数据。
 
-    节点：所有在已通过事实中出现为 subject_entity_id 的实体（即有事实的实体）。
-    边：已通过事实中 subject_entity_id 和 object_entity_id 均非空的关系型事实。
-    也将边的 object 节点纳入节点集（即使其本身没有作为 subject 的事实）。
+    节点：所有在已通过事实中出现为 subject_text 的实体。
+    节点 ID 规则：
+      - 有 entity_id 时使用 entity_id（标准化节点，从 entity 表补充名称/类型）
+      - 无 entity_id 时使用 "text::{subject_text}"（文本节点，is_text_node=True）
+    边：已通过事实中 object_text 或 object_entity_id 不为空的事实，
+    对象端同样可以是文本节点。
 
     返回 {nodes, edges, stats}。
     """
@@ -657,21 +661,8 @@ def get_graph_data(fact_type: str = "", doc_id: str = "") -> dict:
             base_params.append(doc_id)
         where_base = " AND ".join(base_cond)
 
-        # ── Step 1: 收集所有 subject 实体 ID（作为节点） ──
-        subj_rows = conn.execute(
-            f"SELECT DISTINCT f.subject_entity_id FROM fact_atom f "
-            f"WHERE {where_base} AND f.subject_entity_id IS NOT NULL",
-            base_params,
-        ).fetchall()
-        all_entity_ids: set = {r["subject_entity_id"] for r in subj_rows}
-
-        # ── Step 2: 查询关系型边（双端均有实体 ID） ──
-        edge_cond = base_cond + [
-            "f.subject_entity_id IS NOT NULL",
-            "f.object_entity_id IS NOT NULL",
-        ]
-        where_edge = " AND ".join(edge_cond)
-        edge_rows = conn.execute(
+        # ── 一次性查询所有已通过事实（含 subject_text / object_text） ──
+        all_rows = conn.execute(
             f"""SELECT f.id, f.fact_type, f.subject_text, f.predicate,
                        f.object_text, f.value_num, f.value_text, f.unit,
                        f.currency, f.time_expr, f.location_text,
@@ -680,79 +671,149 @@ def get_graph_data(fact_type: str = "", doc_id: str = "") -> dict:
                 FROM fact_atom f
                 LEFT JOIN evidence_span es ON f.evidence_span_id = es.id
                 LEFT JOIN source_document sd ON f.document_id = sd.id
-                WHERE {where_edge}
+                WHERE {where_base} AND f.subject_text IS NOT NULL
                 ORDER BY f.created_at DESC
                 LIMIT 2000""",
             base_params,
         ).fetchall()
 
-        # 将边的对象节点也纳入节点集
-        for r in edge_rows:
-            all_entity_ids.add(r["object_entity_id"])
+        def make_node_id(entity_id: str | None, text: str | None) -> str | None:
+            """优先用 entity_id，否则用文本构建虚拟 ID。"""
+            if entity_id:
+                return entity_id
+            return f"text::{text}" if text else None
 
-        # ── Step 3: 批量获取实体信息 ──
         node_map: dict = {}
-        if all_entity_ids:
-            ph = ",".join(["?"] * len(all_entity_ids))
+        edges = []
+        entity_ids_to_fetch: set = set()
+
+        for r in all_rows:
+            sid = make_node_id(r["subject_entity_id"], r["subject_text"])
+            if not sid:
+                continue
+
+            is_subj_text = not r["subject_entity_id"]
+            if sid not in node_map:
+                node_map[sid] = {
+                    "id": sid,
+                    "name": r["subject_text"] or sid,
+                    "entity_type": "UNKNOWN",
+                    "fact_count": 0,
+                    "is_text_node": is_subj_text,
+                }
+                if r["subject_entity_id"]:
+                    entity_ids_to_fetch.add(r["subject_entity_id"])
+            node_map[sid]["fact_count"] += 1
+
+            # 有 object（关系型事实）
+            oid = make_node_id(r["object_entity_id"], r["object_text"])
+            if oid:
+                is_obj_text = not r["object_entity_id"]
+                if oid not in node_map:
+                    node_map[oid] = {
+                        "id": oid,
+                        "name": r["object_text"] or oid,
+                        "entity_type": "UNKNOWN",
+                        "fact_count": 0,
+                        "is_text_node": is_obj_text,
+                    }
+                    if r["object_entity_id"]:
+                        entity_ids_to_fetch.add(r["object_entity_id"])
+                edges.append({
+                    "id": r["id"],
+                    "source": sid,
+                    "target": oid,
+                    "fact_type": r["fact_type"],
+                    "subject_text": r["subject_text"],
+                    "predicate": r["predicate"],
+                    "object_text": r["object_text"],
+                    "value_num": r["value_num"],
+                    "value_text": r["value_text"],
+                    "unit": r["unit"],
+                    "currency": r["currency"],
+                    "time_expr": r["time_expr"],
+                    "location_text": r["location_text"],
+                    "confidence_score": r["confidence_score"],
+                    "evidence_text": r["evidence_text"],
+                    "document_title": r["document_title"],
+                })
+
+        # ── 补全标准化实体的 canonical_name 和 entity_type ──
+        if entity_ids_to_fetch:
+            ph = ",".join(["?"] * len(entity_ids_to_fetch))
             entities = conn.execute(
                 f"SELECT id, canonical_name, entity_type FROM entity WHERE id IN ({ph})",
-                list(all_entity_ids),
+                list(entity_ids_to_fetch),
             ).fetchall()
             for e in entities:
-                node_map[e["id"]] = {
-                    "id": e["id"],
-                    "name": e["canonical_name"],
-                    "entity_type": e["entity_type"] or "OTHER",
-                    "fact_count": 0,
-                }
+                if e["id"] in node_map:
+                    node_map[e["id"]]["name"] = e["canonical_name"]
+                    node_map[e["id"]]["entity_type"] = e["entity_type"] or "UNKNOWN"
 
-            # 统计每个节点作为 subject 的事实数
-            cnt_rows = conn.execute(
-                f"""SELECT f.subject_entity_id, COUNT(*) AS cnt FROM fact_atom f
-                    WHERE {where_base} AND f.subject_entity_id IN ({ph})
-                    GROUP BY f.subject_entity_id""",
-                base_params + list(all_entity_ids),
-            ).fetchall()
-            for r in cnt_rows:
-                if r["subject_entity_id"] in node_map:
-                    node_map[r["subject_entity_id"]]["fact_count"] = r["cnt"]
+        # ── 补全标准化实体的 canonical_name 和 entity_type（含 entity_relation 侧节点）——
+        # 先将 entity_relation 关系加入 edges，节点不足时按需插入 node_map
+        # ── entity_relation 表：手动/AI 确认的实体关系 ──
+        kb_rels = conn.execute(
+            """SELECT r.id, r.from_entity_id, r.to_entity_id, r.relation_type,
+                      ef.canonical_name AS from_name, ef.entity_type AS from_type,
+                      et.canonical_name AS to_name, et.entity_type AS to_type
+               FROM entity_relation r
+               LEFT JOIN entity ef ON r.from_entity_id = ef.id
+               LEFT JOIN entity et ON r.to_entity_id = et.id"""
+        ).fetchall()
 
-        # ── Step 4: 构建边列表 ──
-        edges = []
-        for r in edge_rows:
-            sid, oid = r["subject_entity_id"], r["object_entity_id"]
-            if sid not in node_map or oid not in node_map:
+        REL_TYPE_ZH = {
+            "SUBSIDIARY": "子公司", "SHAREHOLDER": "股东", "JV": "合资",
+            "BRAND": "品牌归属", "PARTNER": "合作方", "INVESTS_IN": "投资/持有",
+        }
+
+        for r in kb_rels:
+            fid = r["from_entity_id"]
+            tid = r["to_entity_id"]
+            if not fid or not tid:
                 continue
+            # 确保节点存在（若不在事实中出现也要加入）
+            for eid, ename, etype in (
+                (fid, r["from_name"], r["from_type"]),
+                (tid, r["to_name"], r["to_type"]),
+            ):
+                if eid not in node_map:
+                    node_map[eid] = {
+                        "id": eid,
+                        "name": ename or eid,
+                        "entity_type": etype or "UNKNOWN",
+                        "fact_count": 0,
+                        "is_text_node": False,
+                    }
+            label = REL_TYPE_ZH.get(r["relation_type"], r["relation_type"])
             edges.append({
-                "id": r["id"],
-                "source": sid,
-                "target": oid,
-                "fact_type": r["fact_type"],
-                "subject_text": r["subject_text"],
-                "predicate": r["predicate"],
-                "object_text": r["object_text"],
-                "value_num": r["value_num"],
-                "value_text": r["value_text"],
-                "unit": r["unit"],
-                "currency": r["currency"],
-                "time_expr": r["time_expr"],
-                "location_text": r["location_text"],
-                "confidence_score": r["confidence_score"],
-                "evidence_text": r["evidence_text"],
-                "document_title": r["document_title"],
+                "id": f"rel::{r['id']}",
+                "source": fid,
+                "target": tid,
+                "fact_type": "ENTITY_RELATION",
+                "subject_text": r["from_name"] or "",
+                "predicate": label,
+                "object_text": r["to_name"] or "",
+                "value_num": None,
+                "value_text": None,
+                "unit": None,
+                "currency": None,
+                "time_expr": None,
+                "location_text": None,
+                "confidence_score": 1.0,
+                "evidence_text": f"手动确认关系：{r['relation_type']}",
+                "document_title": None,
+                "is_kb_relation": True,
+                "relation_type": r["relation_type"],
             })
 
-        # ── Step 5: 统计信息 ──
+        # ── 统计信息 ──
         total_passed = conn.execute(
             f"SELECT COUNT(*) AS cnt FROM fact_atom f WHERE {where_base}",
             base_params,
         ).fetchone()["cnt"]
         relational_count = len(edges)
-        metric_count = conn.execute(
-            f"SELECT COUNT(*) AS cnt FROM fact_atom f WHERE {where_base} "
-            "AND f.subject_entity_id IS NOT NULL AND f.object_entity_id IS NULL",
-            base_params,
-        ).fetchone()["cnt"]
+        metric_count = total_passed - relational_count
 
         return {
             "nodes": list(node_map.values()),
@@ -764,7 +825,7 @@ def get_graph_data(fact_type: str = "", doc_id: str = "") -> dict:
                 "metric_facts": metric_count,
                 # 向后兼容旧字段名
                 "linked_facts": relational_count,
-                "unlinked_facts": total_passed - relational_count - metric_count,
+                "unlinked_facts": metric_count,
             },
         }
     finally:

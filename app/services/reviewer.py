@@ -135,9 +135,20 @@ def _map_verdict_to_status(
     if fact_type in force_human_types:
         return "HUMAN_REVIEW_REQUIRED"
 
-    # 检查是否包含需要强制审核的 qualifier（如 yoy/qoq）
-    for pred in force_human_preds:
-        if pred in qualifiers:
+    # 检查是否包含需要强制审核的 qualifier key（如 is_forecast、yoy/qoq）
+    for qual_key in force_human_preds:
+        if qual_key in qualifiers:
+            return "HUMAN_REVIEW_REQUIRED"
+
+    # predicate 白名单模糊校验：不匹配则降级，防止游离 predicate 被 AUTO_PASS
+    predicate_whitelist = cfg.get("predicate_whitelist", {}).get(fact_type, [])
+    if predicate_whitelist:
+        pred_val = fact_record.get("predicate", "")
+        if pred_val and not any(root in pred_val for root in predicate_whitelist):
+            logger.info(
+                "predicate '%s' 未匹配白名单，强制人工审核 (fact_type=%s)",
+                pred_val, fact_type,
+            )
             return "HUMAN_REVIEW_REQUIRED"
 
     # PASS 且分数足够高

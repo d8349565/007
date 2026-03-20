@@ -222,6 +222,8 @@ def merge_entities(primary_id: str, secondary_id: str) -> dict:
             "secondary_name": secondary["canonical_name"],
             "facts_relinked": 0,
             "aliases_moved": 0,
+            "relations_transferred": 0,
+            "relations_removed": 0,
         }
 
         # 1. 重新指向 fact_atom（仅更新实际存在的列）
@@ -277,7 +279,23 @@ def merge_entities(primary_id: str, secondary_id: str) -> dict:
             else:
                 conn.execute("DELETE FROM entity_alias WHERE id=?", (a["id"],))
 
-        # 4. 清理所有引用 secondary 的 merge task（避免外键约束失败）
+        # 4. 处理 entity_relation（secondary 作为 from_entity 时转移到 primary；作为 to_entity 时删除）
+        stats["relations_transferred"] = 0
+        stats["relations_removed"] = 0
+        # secondary 作为 from_entity → 改为 primary
+        result = conn.execute(
+            "UPDATE entity_relation SET from_entity_id=? WHERE from_entity_id=?",
+            (primary_id, secondary_id),
+        )
+        stats["relations_transferred"] += result.rowcount
+        # secondary 作为 to_entity → 删除整条关系（无法保留，因为 to_entity 代表的是被关联方）
+        result = conn.execute(
+            "DELETE FROM entity_relation WHERE to_entity_id=?",
+            (secondary_id,),
+        )
+        stats["relations_removed"] += result.rowcount
+
+        # 5. 清理所有引用 secondary 的 merge task（避免外键约束失败）
         #    以 secondary 为 secondary_id 的任务：直接删除（已无意义）
         conn.execute(
             "DELETE FROM entity_merge_task WHERE secondary_id=?", (secondary_id,)
@@ -288,14 +306,15 @@ def merge_entities(primary_id: str, secondary_id: str) -> dict:
             (primary_id, secondary_id),
         )
 
-        # 5. 删除 secondary 实体
+        # 6. 删除 secondary 实体
         conn.execute("DELETE FROM entity WHERE id=?", (secondary_id,))
         conn.commit()
 
         logger.info(
-            "实体合并: '%s'→'%s'，fact_atom 重指向 %d 条，alias %d 条",
+            "实体合并: '%s'→'%s'，fact_atom 重指向 %d 条，alias %d 条，relation 转移 %d / 删除 %d",
             secondary["canonical_name"], primary["canonical_name"],
             stats["facts_relinked"], stats["aliases_moved"],
+            stats["relations_transferred"], stats["relations_removed"],
         )
         return stats
 

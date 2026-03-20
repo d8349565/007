@@ -90,6 +90,68 @@
 
 /* 加载占位 */
 .task-loading { text-align:center; padding:40px; color:#6b6b6b; font-size:14px; }
+
+/* 关系画布 */
+.rel-canvas-wrap {
+  position:relative; border:1px solid #333; border-radius:0 0 8px 8px;
+  background:#0d0d0d; height:440px; overflow:hidden;
+}
+.rel-canvas-svg { position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1; }
+.rel-canvas-svg line { pointer-events:stroke;cursor:pointer; }
+.rel-card {
+  position:absolute;padding:8px 14px;background:#252525;border:2px solid #404040;
+  border-radius:8px;cursor:grab;font-size:13px;user-select:none;z-index:2;
+  min-width:50px;text-align:center;white-space:nowrap;transition:border-color .15s,box-shadow .15s;
+}
+.rel-card:active { cursor:grabbing; }
+.rel-card:hover { border-color:#555; }
+.rel-card.selected-from { border-color:#3b82f6; box-shadow:0 0 12px rgba(59,130,246,0.4); }
+.rel-card .card-close {
+  position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;
+  background:#dc2626;color:#fff;font-size:12px;line-height:18px;text-align:center;
+  cursor:pointer;display:none;z-index:3;
+}
+.rel-card:hover .card-close { display:block; }
+.rel-type-popup {
+  position:absolute;z-index:10;background:#2a2a2a;border:1px solid #505050;
+  border-radius:8px;padding:8px;box-shadow:0 4px 16px rgba(0,0,0,0.5);display:none;min-width:180px;
+}
+.rel-type-btn {
+  display:block;width:100%;text-align:left;padding:5px 10px;font-size:12px;
+  background:none;border:none;color:#e0e0e0;cursor:pointer;border-radius:4px;
+}
+.rel-type-btn:hover { background:#404060;color:#fff; }
+.canvas-search-dropdown {
+  position:absolute;top:100%;left:0;width:300px;max-height:280px;
+  background:#2a2a2a;border:1px solid #505050;border-radius:6px;z-index:5;display:none;
+  box-shadow:0 4px 12px rgba(0,0,0,0.4);overflow:hidden;flex-direction:column;
+}
+.canvas-search-list {
+  overflow-y:auto;max-height:210px;
+}
+.canvas-search-item {
+  display:flex;align-items:center;gap:7px;
+  padding:6px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #333;color:#e0e0e0;
+}
+.canvas-search-item:hover { background:#353550; }
+.canvas-search-item:last-child { border-bottom:none; }
+.canvas-search-item input[type=checkbox] { accent-color:#3b82f6;width:13px;height:13px;flex-shrink:0;cursor:pointer; }
+.canvas-search-footer {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:6px 10px;border-top:1px solid #3a3a3a;background:#232323;
+}
+/* 拖拽连线端口 */
+.card-port {
+  position:absolute;right:-7px;top:50%;transform:translateY(-50%);
+  width:14px;height:14px;border-radius:50%;
+  background:#3b82f6;border:2px solid #0d0d0d;
+  cursor:crosshair;z-index:4;opacity:0;transition:opacity .15s;
+}
+.rel-card:hover .card-port { opacity:1; }
+/* 橡皮筋连线 */
+.cvs-rubber-line {
+  stroke:#3b82f6;stroke-width:2;stroke-dasharray:6,3;pointer-events:none;
+}
 </style>
 {% endblock %}
 
@@ -107,6 +169,7 @@
   <div class="manage-tabs">
     <button class="manage-tab active" onclick="switchTab('articles', this)">文章管理</button>
     <button class="manage-tab" id="tab-entities" onclick="switchTab('entities', this)">实体合并审核</button>
+    <button class="manage-tab" id="tab-knowledge" onclick="switchTab('knowledge', this)">主体管理</button>
   </div>
 
   {# ========================= 文章管理面板 ========================= #}
@@ -238,8 +301,236 @@
       <div id="merge-tasks-container" style="padding:12px 16px;">
         <div class="task-loading">点击"运行 AI 分析"生成合并建议，或"刷新列表"查看已有任务。</div>
       </div>
+
+      {# ── 手动去重区块 ── #}
+      <div style="border-top:1px solid #262626;padding:14px 16px;">
+        <div style="font-size:13px;font-weight:600;color:#fafafa;margin-bottom:4px;">🔁 手动归一化</div>
+        <div style="font-size:12px;color:#6b6b6b;margin-bottom:10px;">
+          搜索事实中出现的主体名称 → 批量勾选属于同一实体的条目 → 统一为规范名称
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+          <input type="text" id="dedup-search-input" placeholder="输入关键词，如"佐敦""
+            style="flex:1;padding:6px 10px;background:#1a1a1a;border:1px solid #404040;border-radius:6px;color:#fafafa;font-size:13px;"
+            onkeydown="if(event.key==='Enter') runDedupSearch()" />
+          <button class="btn btn-sm btn-primary" onclick="runDedupSearch()">搜索</button>
+        </div>
+        <div id="dedup-results" style="display:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:12px;color:#6b6b6b;">
+            <span id="dedup-result-hint"></span>
+            <button class="btn btn-sm" style="background:#2a2a2a;color:#94a3b8;font-size:11px;" onclick="dedupSelectAll()">全选</button>
+          </div>
+          <div id="dedup-item-list" style="display:flex;flex-direction:column;gap:4px;max-height:280px;overflow-y:auto;margin-bottom:10px;"></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;">
+            <div style="flex:1;min-width:200px;">
+              <div style="font-size:11px;color:#6b6b6b;margin-bottom:4px;">统一规范名称</div>
+              <input type="text" id="dedup-canonical-name"
+                style="width:100%;padding:5px 8px;background:#262626;border:1px solid #404040;border-radius:5px;color:#fafafa;font-size:13px;" />
+            </div>
+            <div>
+              <div style="font-size:11px;color:#6b6b6b;margin-bottom:4px;">实体类型</div>
+              <select id="dedup-entity-type"
+                style="padding:5px 8px;background:#262626;border:1px solid #404040;border-radius:5px;color:#fff;font-size:12px;">
+                <option value="COMPANY">公司</option>
+                <option value="GROUP">集团</option>
+                <option value="PROJECT">项目</option>
+                <option value="UNKNOWN">未知</option>
+              </select>
+            </div>
+            <div style="align-self:flex-end;">
+              <button class="btn btn-sm btn-primary" id="dedup-apply-btn" onclick="applyDedupMerge()">批量归一化</button>
+            </div>
+          </div>
+          <div id="dedup-apply-result" style="margin-top:8px;font-size:12px;"></div>
+        </div>
+      </div>
     </div>
   </div>{# end pane-entities #}
+
+  {# ========================= 主体管理面板 ========================= #}
+  <div class="manage-pane" id="pane-knowledge">
+    <div class="card">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <span style="font-weight:600;">主体知识库</span>
+          <span style="font-size:12px;color:#94a3b8;margin-left:8px;">
+            管理实体、别名和关系 — 注入 Prompt 提升抽取准确度
+          </span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-sm btn-primary" onclick="openAddEntityModal()">+ 添加实体</button>
+          <button class="btn btn-sm btn-secondary" onclick="openAddRelationModal()">+ 添加关系</button>
+          <button class="btn btn-sm" style="background:#2563eb;color:#fff;" onclick="toggleAiSuggestPanel()">🤖 AI 分析关系</button>
+          <button class="btn btn-sm" style="background:#4b5563;color:#ccc;font-size:11px;" onclick="loadCandidateRelations()">规则发现</button>
+        </div>
+      </div>
+
+      {# 统计栏 #}
+      <div class="merge-stats-bar" id="kb-stats-bar">
+        <span class="merge-stat-item">实体 <b class="merge-stat-num" style="color:#3b82f6;" id="kb-entity-count">—</b></span>
+        <span style="color:#333;">|</span>
+        <span class="merge-stat-item">关系 <b class="merge-stat-num" style="color:#10b981;" id="kb-relation-count">—</b></span>
+        <span class="merge-stat-item">别名 <b class="merge-stat-num" style="color:#f59e0b;" id="kb-alias-count">—</b></span>
+      </div>
+
+      {# 关系画布 #}
+      <div style="padding:12px 16px;border-bottom:1px solid #262626;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:12px;font-weight:600;color:#6b6b6b;text-transform:uppercase;letter-spacing:0.4px;">关系画布</span>
+          <span style="font-size:11px;color:#505050;">点击两个实体卡片建立关系 · 拖动调整布局</span>
+          <span style="margin-left:auto;"></span>
+          <div style="position:relative;" id="canvas-search-wrap">
+            <input type="text" id="canvas-search-input" placeholder="搜索实体…"
+              style="width:180px;padding:4px 8px;background:#1a1a1a;border:1px solid #404040;border-radius:5px;color:#fafafa;font-size:12px;"
+              oninput="canvasSearchDebounced()" onkeydown="if(event.key==='Enter') canvasSearch()" />
+            <div id="canvas-search-dropdown" class="canvas-search-dropdown">
+              <div id="canvas-search-list" class="canvas-search-list"></div>
+              <div class="canvas-search-footer">
+                <span id="cvs-search-sel-label" style="font-size:11px;color:#6b6b6b;">已选 0</span>
+                <div style="display:flex;gap:6px;">
+                  <button class="btn btn-sm" style="font-size:11px;padding:2px 8px;background:#333;color:#ccc;" onclick="cvsSelectAll()">全选</button>
+                  <button class="btn btn-sm btn-primary" style="font-size:11px;padding:2px 10px;" onclick="cvsAddSelected()">添加到画布</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-sm btn-secondary" style="font-size:11px;" onclick="canvasLoadAll()">全部加载</button>
+          <button class="btn btn-sm" style="font-size:11px;background:#1a2a1a;color:#34d399;border:1px solid #2a4a2a;" onclick="canvasAutoLayout()">自动布局</button>
+          <button class="btn btn-sm" style="font-size:11px;background:#323232;color:#94a3b8;" onclick="canvasClear()">清空</button>
+        </div>
+        <div id="rel-canvas-wrap" class="rel-canvas-wrap">
+          <svg id="rel-canvas-svg" class="rel-canvas-svg"></svg>
+          <div id="rel-canvas-hint" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#333;font-size:14px;pointer-events:none;text-align:center;line-height:1.8;">
+            搜索并添加实体到画布<br>拖动卡片移动位置 · 从卡片右侧圆点拖向目标卡片建立关系
+          </div>
+          <div id="rel-type-popup" class="rel-type-popup">
+            <div style="font-size:12px;color:#94a3b8;margin-bottom:6px;font-weight:600;" id="popup-conn-title">选择关系类型</div>
+            <button class="rel-type-btn" onclick="canvasCreateRelation('SUBSIDIARY')">SUBSIDIARY (子公司)</button>
+            <button class="rel-type-btn" onclick="canvasCreateRelation('SHAREHOLDER')">SHAREHOLDER (股东)</button>
+            <button class="rel-type-btn" onclick="canvasCreateRelation('JV')">JV (合资)</button>
+            <button class="rel-type-btn" onclick="canvasCreateRelation('BRAND')">BRAND (品牌归属)</button>
+            <button class="rel-type-btn" onclick="canvasCreateRelation('PARTNER')">PARTNER (合作方)</button>
+            <button class="rel-type-btn" onclick="canvasCreateRelation('INVESTS_IN')">INVESTS_IN (投资/持有项目)</button>
+            <button class="rel-type-btn" style="color:#dc2626;margin-top:4px;border-top:1px solid #333;padding-top:6px;" onclick="canvasCancelConnect()">取消</button>
+          </div>
+        </div>
+      </div>
+
+      {# 关系列表 #}
+      <div style="padding:12px 16px;">
+        <div style="font-size:12px;font-weight:600;color:#6b6b6b;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.4px;">实体关系</div>
+        <div id="kb-relations-list"><div class="task-loading">点击 Tab 加载...</div></div>
+      </div>
+
+      {# 实体列表 #}
+      <div style="padding:12px 16px;border-top:1px solid #262626;">
+        <div style="font-size:12px;font-weight:600;color:#6b6b6b;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.4px;">所有实体</div>
+        <div id="kb-entities-list"><div class="task-loading">加载中...</div></div>
+      </div>
+
+      {# AI 分析关系面板 #}
+      <div style="padding:12px 16px;border-top:1px solid #262626;display:none;" id="kb-ai-section">
+        <div style="font-size:12px;font-weight:600;color:#3b82f6;margin-bottom:10px;">🤖 AI 分析实体关系</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+          <input type="text" id="ai-hint-input"
+            placeholder="可选：补充背景提示，如"佐敦集团旗下子公司""
+            style="flex:1;padding:6px 10px;background:#1a1a1a;border:1px solid #404040;border-radius:6px;color:#fafafa;font-size:13px;" />
+          <button class="btn btn-sm btn-primary" id="ai-analyze-btn" onclick="runAiAnalysis()">开始分析</button>
+        </div>
+        <div id="kb-ai-result"></div>
+      </div>
+
+      {# 候选关系（从事实发现） #}
+      <div style="padding:12px 16px;border-top:1px solid #262626;display:none;" id="kb-candidates-section">
+        <div style="font-size:12px;font-weight:600;color:#a855f7;margin-bottom:8px;">
+          🔍 从已通过事实中发现的候选关系
+        </div>
+        <div id="kb-candidates-list"></div>
+      </div>
+    </div>
+  </div>{# end pane-knowledge #}
+
+  {# ===== 添加实体弹窗 ===== #}
+  <div class="modal-overlay" id="add-entity-modal">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <div class="modal-title">添加实体</div>
+        <button class="modal-close" onclick="closeAddEntityModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="edit-grid">
+          <div class="edit-group full">
+            <label>实体名称 *</label>
+            <input type="text" id="new-entity-name" placeholder="如：佐敦涂料（中国）有限公司">
+          </div>
+          <div class="edit-group full">
+            <label>实体类型</label>
+            <select id="new-entity-type" style="width:100%;padding:6px 8px;border:1px solid #505050;border-radius:5px;font-size:13px;background:#2a2a2a;color:#fff;">
+              <option value="COMPANY">COMPANY (企业)</option>
+              <option value="GROUP">GROUP (群体/排名)</option>
+              <option value="PROJECT">PROJECT (项目)</option>
+              <option value="PRODUCT">PRODUCT (产品)</option>
+              <option value="PERSON">PERSON (人物)</option>
+              <option value="ORG">ORG (机构)</option>
+              <option value="UNKNOWN">UNKNOWN (未知)</option>
+            </select>
+          </div>
+          <div class="edit-group full">
+            <label>别名（逗号分隔，可选）</label>
+            <input type="text" id="new-entity-aliases" placeholder="如：佐敦, Jotun, 挪威佐敦">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeAddEntityModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveNewEntity()">添加</button>
+      </div>
+    </div>
+  </div>
+
+  {# ===== 添加关系弹窗 ===== #}
+  <div class="modal-overlay" id="add-relation-modal">
+    <div class="modal modal-md">
+      <div class="modal-header">
+        <div class="modal-title">添加实体关系</div>
+        <button class="modal-close" onclick="closeAddRelationModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="edit-grid">
+          <div class="edit-group full">
+            <label>源实体（如母公司）*</label>
+            <select id="rel-from-entity" style="width:100%;padding:6px 8px;border:1px solid #505050;border-radius:5px;font-size:13px;background:#2a2a2a;color:#fff;">
+              <option value="">-- 选择 --</option>
+            </select>
+          </div>
+          <div class="edit-group full">
+            <label>关系类型 *</label>
+            <select id="rel-type" style="width:100%;padding:6px 8px;border:1px solid #505050;border-radius:5px;font-size:13px;background:#2a2a2a;color:#fff;">
+              <option value="SUBSIDIARY">SUBSIDIARY (子公司)</option>
+              <option value="SHAREHOLDER">SHAREHOLDER (股东)</option>
+              <option value="JV">JV (合资)</option>
+              <option value="BRAND">BRAND (品牌归属)</option>
+              <option value="PARTNER">PARTNER (合作方)</option>
+              <option value="INVESTS_IN">INVESTS_IN (投资/持有项目)</option>
+            </select>
+          </div>
+          <div class="edit-group full">
+            <label>目标实体（如子公司）*</label>
+            <select id="rel-to-entity" style="width:100%;padding:6px 8px;border:1px solid #505050;border-radius:5px;font-size:13px;background:#2a2a2a;color:#fff;">
+              <option value="">-- 选择 --</option>
+            </select>
+          </div>
+          <div class="edit-group full">
+            <label>持股比例（可选，如 42.53）</label>
+            <input type="number" id="rel-share-pct" step="0.01" min="0" max="100" placeholder="仅 SHAREHOLDER 类型">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeAddRelationModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveNewRelation()">添加</button>
+      </div>
+    </div>
+  </div>
 
   {# ===== 编辑弹窗 ===== #}
   <div class="modal-overlay" id="edit-modal">
@@ -305,6 +596,7 @@ function switchTab(name, btn) {
   document.getElementById('pane-' + name).classList.add('active');
   btn.classList.add('active');
   if (name === 'entities') loadTasks();
+  if (name === 'knowledge') loadKnowledgeBase();
 }
 
 /* ===== 工具 ===== */
@@ -586,5 +878,822 @@ document.getElementById('edit-modal').addEventListener('click', function(e) {
 document.getElementById('delete-modal').addEventListener('click', function(e) {
   if (e.target === this) closeDelete();
 });
+document.getElementById('add-entity-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeAddEntityModal();
+});
+document.getElementById('add-relation-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeAddRelationModal();
+});
+
+/* ===== 主体知识库 ===== */
+const REL_TYPE_ZH = {
+  'SUBSIDIARY': '子公司', 'SHAREHOLDER': '股东', 'JV': '合资',
+  'BRAND': '品牌归属', 'PARTNER': '合作方', 'INVESTS_IN': '投资/持有',
+};
+let kbData = { entities: [], aliases: [], relations: [] };
+
+function loadKnowledgeBase() {
+  fetch('/api/entity/knowledge-base')
+    .then(r => r.json())
+    .then(data => {
+      kbData = data;
+      document.getElementById('kb-entity-count').textContent = data.entities.length;
+      document.getElementById('kb-relation-count').textContent = data.relations.length;
+      document.getElementById('kb-alias-count').textContent = data.aliases.length;
+      renderKbRelations(data.relations);
+      renderKbEntities(data.entities, data.aliases);
+      canvasDrawLines();
+    })
+    .catch(err => {
+      document.getElementById('kb-entities-list').innerHTML =
+        '<div class="task-loading" style="color:#dc2626;">加载失败: ' + err + '</div>';
+    });
+}
+
+function renderKbRelations(relations) {
+  const el = document.getElementById('kb-relations-list');
+  if (!relations.length) {
+    el.innerHTML = '<div style="color:#6b6b6b;font-size:13px;padding:8px 0;">暂无关系。点击"+ 添加关系"或"从事实发现关系"开始构建知识库。</div>';
+    return;
+  }
+  let html = '<div style="display:flex;flex-direction:column;gap:6px;">';
+  relations.forEach(r => {
+    let detail = '';
+    try {
+      const d = JSON.parse(r.detail_json || '{}');
+      if (d.share_pct) detail = ` (${d.share_pct}%)`;
+    } catch(e) {}
+    html += `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#2a2a2a;border:1px solid #404040;border-radius:6px;font-size:13px;">
+      <span style="color:#34d399;font-weight:600;">${escHtml(r.from_name)}</span>
+      <span style="color:#6b6b6b;font-size:11px;padding:1px 6px;background:#323232;border-radius:4px;">${REL_TYPE_ZH[r.relation_type] || r.relation_type}${escHtml(detail)}</span>
+      <span style="color:#6b6b6b;">→</span>
+      <span style="color:#60a5fa;font-weight:600;">${escHtml(r.to_name)}</span>
+      <span style="font-size:10px;color:#505050;margin-left:auto;">${r.source}</span>
+      <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:1px 6px;color:#dc2626;" onclick="removeRelation('${escHtml(r.id)}')">删除</button>
+    </div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function renderKbEntities(entities, aliases) {
+  const el = document.getElementById('kb-entities-list');
+  const aliasMap = {};
+  aliases.forEach(a => {
+    if (!aliasMap[a.entity_id]) aliasMap[a.entity_id] = [];
+    aliasMap[a.entity_id].push(a.alias_name);
+  });
+
+  if (!entities.length) {
+    el.innerHTML = '<div style="color:#6b6b6b;font-size:13px;">暂无实体。</div>';
+    return;
+  }
+
+  let html = '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+  entities.forEach(e => {
+    const aList = aliasMap[e.id] || [];
+    const aliasStr = aList.length ? ` (${aList.map(a => escHtml(a)).join(', ')})` : '';
+    const typeColor = e.entity_type === 'COMPANY' ? '#3b82f6' :
+                      e.entity_type === 'PROJECT' ? '#f472b6' :
+                      e.entity_type === 'GROUP' ? '#f59e0b' : '#a78bfa';
+    const linked = e.linked_fact_count || 0;
+    const textMatch = e.text_fact_count || 0;
+    const factTip = linked > 0
+      ? `${linked}条已链接`
+      : textMatch > 0
+        ? `~${textMatch}条文本匹配`
+        : '0条';
+    const factColor = linked > 0 ? '#34d399' : textMatch > 0 ? '#fbbf24' : '#505050';
+    html += `
+    <div style="padding:4px 10px;background:#2a2a2a;border:1px solid #404040;border-radius:6px;font-size:12px;display:flex;align-items:center;gap:4px;flex-shrink:0;" title="ID: ${e.id}">
+      <span style="color:${typeColor};font-weight:600;">${escHtml(e.canonical_name)}</span>
+      <span style="font-size:10px;color:#6b6b6b;">[${e.entity_type}]</span>
+      <span style="font-size:10px;color:#505050;">${escHtml(aliasStr)}</span>
+      <span style="font-size:10px;color:${factColor};">${factTip}</span>
+    </div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+/* 添加实体 */
+function openAddEntityModal() {
+  document.getElementById('new-entity-name').value = '';
+  document.getElementById('new-entity-aliases').value = '';
+  document.getElementById('new-entity-type').value = 'COMPANY';
+  document.getElementById('add-entity-modal').classList.add('show');
+}
+function closeAddEntityModal() {
+  document.getElementById('add-entity-modal').classList.remove('show');
+}
+function saveNewEntity() {
+  const name = document.getElementById('new-entity-name').value.trim();
+  const entityType = document.getElementById('new-entity-type').value;
+  const aliasStr = document.getElementById('new-entity-aliases').value.trim();
+  if (!name) { alert('实体名称不能为空'); return; }
+
+  fetch('/api/entity/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, entity_type: entityType })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { alert('失败: ' + data.error); return; }
+    const eid = data.entity_id;
+    // 添加别名
+    const aliases = aliasStr.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+    const promises = aliases.map(a =>
+      fetch(`/api/entity/${eid}/alias`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alias: a })
+      })
+    );
+    Promise.all(promises).then(() => {
+      closeAddEntityModal();
+      loadKnowledgeBase();
+    });
+  })
+  .catch(err => alert('请求失败: ' + err));
+}
+
+/* 添加关系 */
+function openAddRelationModal() {
+  // 填充实体下拉
+  const fromSel = document.getElementById('rel-from-entity');
+  const toSel = document.getElementById('rel-to-entity');
+  fromSel.innerHTML = '<option value="">-- 选择 --</option>';
+  toSel.innerHTML = '<option value="">-- 选择 --</option>';
+  kbData.entities.forEach(e => {
+    const opt = `<option value="${escHtml(e.id)}">${escHtml(e.canonical_name)} [${e.entity_type}]</option>`;
+    fromSel.innerHTML += opt;
+    toSel.innerHTML += opt;
+  });
+  document.getElementById('rel-share-pct').value = '';
+  document.getElementById('add-relation-modal').classList.add('show');
+}
+function closeAddRelationModal() {
+  document.getElementById('add-relation-modal').classList.remove('show');
+}
+function saveNewRelation() {
+  const fromId = document.getElementById('rel-from-entity').value;
+  const toId = document.getElementById('rel-to-entity').value;
+  const relType = document.getElementById('rel-type').value;
+  const sharePct = document.getElementById('rel-share-pct').value;
+  if (!fromId || !toId) { alert('请选择源和目标实体'); return; }
+  if (fromId === toId) { alert('源和目标实体不能相同'); return; }
+
+  const details = {};
+  if (sharePct) details.share_pct = parseFloat(sharePct);
+
+  fetch('/api/entity/relation/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from_entity_id: fromId, to_entity_id: toId, relation_type: relType, details })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { alert('失败: ' + data.error); return; }
+    closeAddRelationModal();
+    loadKnowledgeBase();
+  })
+  .catch(err => alert('请求失败: ' + err));
+}
+
+/* 删除关系 */
+function removeRelation(relId) {
+  if (!confirm('确认删除此关系？')) return;
+  fetch(`/api/entity/relation/${relId}/remove`, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) alert('失败: ' + data.error);
+      else loadKnowledgeBase();
+    })
+    .catch(err => alert('请求失败: ' + err));
+}
+
+/* 从事实发现候选关系 */
+function loadCandidateRelations() {
+  const section = document.getElementById('kb-candidates-section');
+  const list = document.getElementById('kb-candidates-list');
+  section.style.display = 'block';
+  list.innerHTML = '<div class="task-loading">扫描已通过事实中...</div>';
+
+  fetch('/api/entity/candidate-relations')
+    .then(r => r.json())
+    .then(data => {
+      const candidates = data.candidates || [];
+      if (!candidates.length) {
+        list.innerHTML = '<div style="color:#6b6b6b;font-size:13px;">暂未发现新的候选关系（已有关系已排除）。</div>';
+        return;
+      }
+      let html = '<div style="display:flex;flex-direction:column;gap:6px;">';
+      candidates.forEach(c => {
+        html += `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#2a2a2a;border:1px solid #505050;border-radius:6px;font-size:13px;">
+          <span style="color:#34d399;font-weight:600;">${escHtml(c.from_name)}</span>
+          <span style="color:#6b6b6b;">→</span>
+          <span style="color:#60a5fa;font-weight:600;">${escHtml(c.to_name)}</span>
+          <span style="font-size:11px;color:#a855f7;padding:1px 6px;background:rgba(168,85,247,0.15);border-radius:4px;">${REL_TYPE_ZH[c.suggested_type] || c.suggested_type}</span>
+          <span style="font-size:11px;color:#6b6b6b;">${c.evidence_count}条事实 · ${escHtml(c.sample_predicates.join(', '))}</span>
+          <button class="btn btn-sm btn-primary" style="margin-left:auto;font-size:11px;padding:2px 8px;"
+            onclick="acceptCandidate('${escHtml(c.from_id)}','${escHtml(c.to_id)}','${escHtml(c.suggested_type)}')">采纳</button>
+        </div>`;
+      });
+      html += '</div>';
+      list.innerHTML = html;
+    })
+    .catch(err => {
+      list.innerHTML = '<div class="task-loading" style="color:#dc2626;">加载失败: ' + err + '</div>';
+    });
+}
+
+function acceptCandidate(fromId, toId, suggestedType) {
+  fetch('/api/entity/relation/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from_entity_id: fromId, to_entity_id: toId, relation_type: suggestedType, details: {} })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { alert('失败: ' + data.error); return; }
+    loadKnowledgeBase();
+    loadCandidateRelations();
+  })
+  .catch(err => alert('请求失败: ' + err));
+}
+
+/* ===== AI 分析关系 ===== */
+function toggleAiSuggestPanel() {
+  const section = document.getElementById('kb-ai-section');
+  section.style.display = section.style.display === 'none' ? 'block' : 'none';
+}
+
+function runAiAnalysis() {
+  const btn = document.getElementById('ai-analyze-btn');
+  const hint = (document.getElementById('ai-hint-input').value || '').trim();
+  const result = document.getElementById('kb-ai-result');
+
+  btn.disabled = true;
+  btn.textContent = '分析中…';
+  result.innerHTML = '<div class="task-loading">正在调用 AI 分析实体关系，请稍候（通常 5~15 秒）…</div>';
+
+  fetch('/api/entity/ai-suggest-relations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hint })
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.textContent = '开始分析';
+    if (data.error) {
+      result.innerHTML = '<div class="task-loading" style="color:#dc2626;">分析失败: ' + escHtml(data.error) + '</div>';
+      return;
+    }
+    renderAiSuggestions(data.suggestions || []);
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.textContent = '开始分析';
+    result.innerHTML = '<div class="task-loading" style="color:#dc2626;">请求失败: ' + err + '</div>';
+  });
+}
+
+let _aiSuggestions = [];
+
+function renderAiSuggestions(suggestions) {
+  _aiSuggestions = suggestions;
+  const result = document.getElementById('kb-ai-result');
+  if (!suggestions.length) {
+    result.innerHTML = '<div style="color:#6b6b6b;font-size:13px;padding:6px 0;">AI 未发现可信度较高的新关系建议。</div>';
+    return;
+  }
+  let html = `<div style="font-size:12px;color:#6b6b6b;margin-bottom:8px;">共 ${suggestions.length} 条建议（按可信度排序）</div><div style="display:flex;flex-direction:column;gap:6px;">`;
+  suggestions.forEach((s, i) => {
+    const confColor = s.confidence >= 0.8 ? '#34d399' : s.confidence >= 0.65 ? '#fbbf24' : '#94a3b8';
+    html += `
+    <div id="ai-suggest-${i}" style="padding:8px 12px;background:#1e1e2e;border:1px solid #404060;border-radius:6px;font-size:13px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="color:#34d399;font-weight:600;">${escHtml(s.from_name)}</span>
+        <span style="color:#6b6b6b;font-size:11px;">→</span>
+        <span style="color:#60a5fa;font-weight:600;">${escHtml(s.to_name)}</span>
+        <span style="font-size:11px;color:#a855f7;padding:1px 6px;background:rgba(168,85,247,0.15);border-radius:4px;">${REL_TYPE_ZH[s.relation_type] || s.relation_type}</span>
+        <span style="font-size:11px;color:${confColor};margin-left:auto;">可信度 ${Math.round(s.confidence*100)}%</span>
+      </div>
+      ${s.reason ? `<div style="font-size:11px;color:#94a3b8;margin-top:4px;">💡 ${escHtml(s.reason)}</div>` : ''}
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="btn btn-sm btn-primary" style="font-size:11px;padding:2px 10px;"
+          onclick="acceptAiSuggestion(${i})">采纳</button>
+        <button class="btn btn-sm" style="font-size:11px;padding:2px 8px;background:#2a2a2a;color:#94a3b8;"
+          onclick="dismissAiSuggestion(${i})">忽略</button>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  result.innerHTML = html;
+}
+
+function acceptAiSuggestion(index) {
+  const s = _aiSuggestions[index];
+  if (!s) return;
+  fetch('/api/entity/relation/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from_entity_id: s.from_id, to_entity_id: s.to_id, relation_type: s.relation_type, details: { ai_reason: s.reason, confidence: s.confidence } })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { alert('失败: ' + data.error); return; }
+    const el = document.getElementById('ai-suggest-' + index);
+    if (el) el.style.opacity = '0.4';
+    loadKnowledgeBase();
+  })
+  .catch(err => alert('请求失败: ' + err));
+}
+
+function dismissAiSuggestion(index) {
+  const el = document.getElementById('ai-suggest-' + index);
+  if (el) el.remove();
+}
+
+/* ===== 手动去重归一化 ===== */
+let _dedupItems = [];
+
+function runDedupSearch() {
+  const q = (document.getElementById('dedup-search-input').value || '').trim();
+  if (!q) return;
+  const resultBox = document.getElementById('dedup-results');
+  const list = document.getElementById('dedup-item-list');
+  resultBox.style.display = 'block';
+  list.innerHTML = '<div class="task-loading">搜索中…</div>';
+  document.getElementById('dedup-canonical-name').value = q;
+
+  fetch('/api/dedup/search?q=' + encodeURIComponent(q))
+    .then(r => r.json())
+    .then(data => {
+      _dedupItems = data.items || [];
+      document.getElementById('dedup-result-hint').textContent =
+        `找到 ${_dedupItems.length} 个匹配项（勾选要合并的条目）`;
+      if (!_dedupItems.length) {
+        list.innerHTML = '<div style="color:#6b6b6b;font-size:13px;">未找到匹配项。</div>';
+        return;
+      }
+      list.innerHTML = _dedupItems.map((item, i) => {
+        const srcLabel = item.source === 'entity'
+          ? `<span style="font-size:10px;padding:1px 5px;background:#1e3a5f;color:#60a5fa;border-radius:3px;">已标准化</span>`
+          : `<span style="font-size:10px;padding:1px 5px;background:#2a1a0a;color:#fbbf24;border-radius:3px;">文本</span>`;
+        const typeLabel = item.entity_type ? `<span style="font-size:10px;color:#6b6b6b;">[${item.entity_type}]</span>` : '';
+        return `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#1e1e1e;border:1px solid #333;border-radius:5px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" class="dedup-check" data-idx="${i}" style="accent-color:#3b82f6;width:14px;height:14px;" />
+          <span style="flex:1;color:#fafafa;">${escHtml(item.text)}</span>
+          ${typeLabel} ${srcLabel}
+          <span style="font-size:11px;color:#6b6b6b;margin-left:auto;">${item.fact_count}条</span>
+        </label>`;
+      }).join('');
+    })
+    .catch(err => {
+      list.innerHTML = '<div class="task-loading" style="color:#dc2626;">搜索失败: ' + err + '</div>';
+    });
+}
+
+function dedupSelectAll() {
+  document.querySelectorAll('.dedup-check').forEach(cb => cb.checked = !cb.checked);
+}
+
+function applyDedupMerge() {
+  const checked = [...document.querySelectorAll('.dedup-check:checked')];
+  if (!checked.length) { alert('请先勾选要合并的条目'); return; }
+  const canonical = (document.getElementById('dedup-canonical-name').value || '').trim();
+  if (!canonical) { alert('请输入统一规范名称'); return; }
+  const entityType = document.getElementById('dedup-entity-type').value;
+  const texts = checked.map(cb => _dedupItems[parseInt(cb.dataset.idx)].text);
+  // 找是否有已标准化实体
+  const entityItem = checked.map(cb => _dedupItems[parseInt(cb.dataset.idx)]).find(i => i.entity_id);
+  const entityId = entityItem ? entityItem.entity_id : '';
+
+  const btn = document.getElementById('dedup-apply-btn');
+  btn.disabled = true; btn.textContent = '处理中…';
+  const resEl = document.getElementById('dedup-apply-result');
+  resEl.innerHTML = '';
+
+  fetch('/api/dedup/batch-rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ texts, canonical_name: canonical, entity_type: entityType, entity_id: entityId })
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false; btn.textContent = '批量归一化';
+    if (data.error) {
+      resEl.innerHTML = `<span style="color:#dc2626;">失败: ${escHtml(data.error)}</span>`;
+      return;
+    }
+    resEl.innerHTML = `<span style="color:#34d399;">✓ 完成：更新 ${data.updated_facts} 条事实，添加 ${data.added_aliases} 个别名</span>`;
+    // 已处理的条目变灰
+    checked.forEach(cb => {
+      const el = cb.closest('label');
+      if (el) { el.style.opacity = '0.4'; el.style.textDecoration = 'line-through'; }
+    });
+  })
+  .catch(err => {
+    btn.disabled = false; btn.textContent = '批量归一化';
+    resEl.innerHTML = `<span style="color:#dc2626;">请求失败: ${err}</span>`;
+  });
+}
+
+/* ===== 关系画布 ===== */
+const cvs = {
+  cards: {},
+  selectedFrom: null,
+  pendingTo: null,
+  drag: null,
+  connecting: null,
+  nextCol: 0,
+};
+let _cvsSearchTimer = null;
+
+function canvasSearchDebounced() {
+  clearTimeout(_cvsSearchTimer);
+  _cvsSearchTimer = setTimeout(canvasSearch, 250);
+}
+
+function canvasSearch() {
+  const q = (document.getElementById('canvas-search-input').value || '').trim();
+  const dd = document.getElementById('canvas-search-dropdown');
+  if (!q) { dd.style.display = 'none'; return; }
+  const lower = q.toLowerCase();
+  const aliasMap = {};
+  (kbData.aliases || []).forEach(a => {
+    if (!aliasMap[a.entity_id]) aliasMap[a.entity_id] = [];
+    aliasMap[a.entity_id].push(a.alias_name);
+  });
+  const SKIP_TYPES = new Set(['REGION', 'COUNTRY']);
+  const hits = (kbData.entities || []).filter(e => {
+    if (SKIP_TYPES.has(e.entity_type)) return false;
+    if (e.canonical_name.toLowerCase().includes(lower)) return true;
+    return (aliasMap[e.id] || []).some(a => a.toLowerCase().includes(lower));
+  });
+  const list = document.getElementById('canvas-search-list');
+  const selLabel = document.getElementById('cvs-search-sel-label');
+  if (!hits.length) {
+    list.innerHTML = '<div class="canvas-search-item" style="color:#6b6b6b;">无匹配实体</div>';
+    dd.style.display = 'flex';
+    selLabel.textContent = '已选 0';
+    return;
+  }
+  const TC = {COMPANY:'#3b82f6',PROJECT:'#f472b6',GROUP:'#f59e0b',REGION:'#94a3b8',COUNTRY:'#a78bfa',UNKNOWN:'#60a5fa'};
+  list.innerHTML = hits.map(e => {
+    const alreadyOn = !!cvs.cards[e.id];
+    const clr = TC[e.entity_type] || '#60a5fa';
+    return '<label class="canvas-search-item">'
+      + '<input type="checkbox" class="cvs-chk" data-eid="' + e.id + '"' + (alreadyOn ? ' disabled checked' : '') + ' onchange="cvsUpdateSelLabel()">'
+      + '<span style="color:' + clr + ';font-weight:600;flex:1;">' + escHtml(e.canonical_name) + '</span>'
+      + '<span style="color:#6b6b6b;font-size:10px;">[' + (TYPE_ZH[e.entity_type]||e.entity_type) + ']</span>'
+      + (alreadyOn ? '<span style="font-size:10px;color:#505050;">已在</span>' : '')
+      + '</label>';
+  }).join('');
+  selLabel.textContent = '已选 0';
+  dd.style.display = 'flex';
+}
+
+function cvsUpdateSelLabel() {
+  const cnt = document.querySelectorAll('.cvs-chk:checked:not(:disabled)').length;
+  const el = document.getElementById('cvs-search-sel-label');
+  if (el) el.textContent = '已选 ' + cnt;
+}
+
+function cvsSelectAll() {
+  document.querySelectorAll('.cvs-chk:not(:disabled)').forEach(cb => { cb.checked = !cb.checked; });
+  cvsUpdateSelLabel();
+}
+
+function cvsAddSelected() {
+  const checked = [...document.querySelectorAll('.cvs-chk:checked:not(:disabled)')];
+  checked.forEach(cb => canvasAddEntity(cb.dataset.eid));
+  document.getElementById('canvas-search-dropdown').style.display = 'none';
+  document.getElementById('canvas-search-input').value = '';
+}
+
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('canvas-search-wrap');
+  const dd = document.getElementById('canvas-search-dropdown');
+  if (wrap && dd && !wrap.contains(e.target)) dd.style.display = 'none';
+});
+
+function canvasAddEntity(entityId) {
+  if (cvs.cards[entityId]) return;
+  const entity = (kbData.entities || []).find(e => e.id === entityId);
+  if (!entity) return;
+  const wrap = document.getElementById('rel-canvas-wrap');
+  const card = document.createElement('div');
+  card.className = 'rel-card';
+  card.dataset.eid = entityId;
+  const TC = {COMPANY:'#3b82f6',PROJECT:'#f472b6',GROUP:'#f59e0b',REGION:'#94a3b8',COUNTRY:'#a78bfa',UNKNOWN:'#60a5fa'};
+  const clr = TC[entity.entity_type] || '#60a5fa';
+  card.innerHTML =
+    '<div style="color:' + clr + ';font-weight:600;">' + escHtml(entity.canonical_name) + '</div>'
+    + '<div style="font-size:10px;color:#6b6b6b;margin-top:2px;">' + (TYPE_ZH[entity.entity_type]||entity.entity_type) + '</div>'
+    + '<div class="card-close" onmousedown="event.stopPropagation();" onclick="event.stopPropagation();canvasRemoveCard(\'' + entityId + '\')">×</div>'
+    + '<div class="card-port" title="从此处拖向目标卡片建立关系"></div>';
+
+  const colW = 155, rowH = 68, padX = 20, padY = 16;
+  const maxCols = Math.max(1, Math.floor((wrap.clientWidth - padX * 2) / colW));
+  const cx = padX + (cvs.nextCol % maxCols) * colW;
+  const cy = padY + Math.floor(cvs.nextCol / maxCols) * rowH;
+  cvs.nextCol++;
+  card.style.left = cx + 'px';
+  card.style.top = cy + 'px';
+
+  card.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    cvs.drag = {
+      entityId: entityId,
+      smx: e.clientX, smy: e.clientY,
+      sx: parseInt(card.style.left), sy: parseInt(card.style.top),
+      moved: false
+    };
+    card.style.zIndex = '10';
+  });
+
+  wrap.appendChild(card);
+  // 端口拖拽连线
+  const port = card.querySelector('.card-port');
+  if (port) {
+    port.addEventListener('mousedown', function(e) {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      e.preventDefault();
+      cvs.drag = null;
+      cvs.connecting = { fromId: entityId };
+    });
+  }
+  cvs.cards[entityId] = { el: card, entity: entity };
+  document.getElementById('rel-canvas-hint').style.display = 'none';
+  canvasDrawLines();
+}
+
+document.addEventListener('mousemove', function(e) {
+  if (cvs.drag) {
+    const dx = e.clientX - cvs.drag.smx;
+    const dy = e.clientY - cvs.drag.smy;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) cvs.drag.moved = true;
+    const c = cvs.cards[cvs.drag.entityId];
+    if (c) {
+      c.el.style.left = Math.max(0, cvs.drag.sx + dx) + 'px';
+      c.el.style.top = Math.max(0, cvs.drag.sy + dy) + 'px';
+      canvasDrawLines();
+    }
+  }
+  if (cvs.connecting) {
+    const fc = cvs.cards[cvs.connecting.fromId];
+    if (!fc) return;
+    const wrap = document.getElementById('rel-canvas-wrap');
+    const rect = wrap.getBoundingClientRect();
+    const ex = e.clientX - rect.left;
+    const ey = e.clientY - rect.top;
+    const startX = parseInt(fc.el.style.left) + fc.el.offsetWidth;
+    const startY = parseInt(fc.el.style.top) + fc.el.offsetHeight / 2;
+    const svg = document.getElementById('rel-canvas-svg');
+    let rl = svg.querySelector('.cvs-rubber-line');
+    if (!rl) {
+      rl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      rl.setAttribute('class', 'cvs-rubber-line');
+      svg.appendChild(rl);
+    }
+    rl.setAttribute('x1', startX); rl.setAttribute('y1', startY);
+    rl.setAttribute('x2', ex);     rl.setAttribute('y2', ey);
+  }
+});
+
+document.addEventListener('mouseup', function(e) {
+  if (cvs.drag) {
+    const d = cvs.drag;
+    cvs.drag = null;
+    const c = cvs.cards[d.entityId];
+    if (c) c.el.style.zIndex = '2';
+  }
+  if (cvs.connecting) {
+    const fromId = cvs.connecting.fromId;
+    cvs.connecting = null;
+    // 移除橡皮筋线
+    const svg = document.getElementById('rel-canvas-svg');
+    const rl = svg.querySelector('.cvs-rubber-line');
+    if (rl) rl.remove();
+    // 检查鼠标是否释放在某张卡片上
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const targetCard = el ? el.closest('.rel-card') : null;
+    if (targetCard) {
+      const toId = targetCard.dataset.eid;
+      if (toId && toId !== fromId && cvs.cards[fromId] && cvs.cards[toId]) {
+        cvs.selectedFrom = fromId;
+        cvs.pendingTo = toId;
+        const fn = cvs.cards[fromId].entity.canonical_name;
+        const tn = cvs.cards[toId].entity.canonical_name;
+        document.getElementById('popup-conn-title').textContent = fn + ' → ' + tn;
+        const popup = document.getElementById('rel-type-popup');
+        const wrap = document.getElementById('rel-canvas-wrap');
+        const wRect = wrap.getBoundingClientRect();
+        let px = e.clientX - wRect.left + 10;
+        let py = e.clientY - wRect.top;
+        if (px + 210 > wrap.clientWidth) px = (e.clientX - wRect.left) - 215;
+        if (py + 250 > wrap.clientHeight) py = wrap.clientHeight - 250;
+        popup.style.left = Math.max(0, px) + 'px';
+        popup.style.top = Math.max(0, py) + 'px';
+        popup.style.display = 'block';
+      }
+    }
+  }
+});
+
+function canvasCardClick(entityId) {
+  const popup = document.getElementById('rel-type-popup');
+  if (cvs.selectedFrom === entityId) {
+    cvs.selectedFrom = null;
+    cvs.cards[entityId].el.classList.remove('selected-from');
+    popup.style.display = 'none';
+    return;
+  }
+  if (!cvs.selectedFrom) {
+    cvs.selectedFrom = entityId;
+    cvs.cards[entityId].el.classList.add('selected-from');
+  } else {
+    cvs.pendingTo = entityId;
+    const fn = cvs.cards[cvs.selectedFrom].entity.canonical_name;
+    const tn = cvs.cards[entityId].entity.canonical_name;
+    document.getElementById('popup-conn-title').textContent = fn + ' → ' + tn;
+    const tc = cvs.cards[entityId].el;
+    const wrap = document.getElementById('rel-canvas-wrap');
+    let px = parseInt(tc.style.left) + tc.offsetWidth + 8;
+    let py = parseInt(tc.style.top);
+    if (px + 200 > wrap.clientWidth) px = parseInt(tc.style.left) - 200;
+    if (py + 220 > wrap.clientHeight) py = wrap.clientHeight - 220;
+    popup.style.left = Math.max(0, px) + 'px';
+    popup.style.top = Math.max(0, py) + 'px';
+    popup.style.display = 'block';
+  }
+}
+
+function canvasCreateRelation(relType) {
+  const fid = cvs.selectedFrom, tid = cvs.pendingTo;
+  if (!fid || !tid) return;
+  document.getElementById('rel-type-popup').style.display = 'none';
+  if (cvs.cards[fid]) cvs.cards[fid].el.classList.remove('selected-from');
+  cvs.selectedFrom = null;
+  cvs.pendingTo = null;
+  fetch('/api/entity/relation/add', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({from_entity_id:fid, to_entity_id:tid, relation_type:relType, details:{}})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { alert('创建关系失败: ' + data.error); return; }
+    loadKnowledgeBase();
+  })
+  .catch(err => alert('请求失败: ' + err));
+}
+
+function canvasCancelConnect() {
+  if (cvs.selectedFrom && cvs.cards[cvs.selectedFrom]) {
+    cvs.cards[cvs.selectedFrom].el.classList.remove('selected-from');
+  }
+  cvs.selectedFrom = null;
+  cvs.pendingTo = null;
+  cvs.connecting = null;
+  const rl = document.getElementById('rel-canvas-svg').querySelector('.cvs-rubber-line');
+  if (rl) rl.remove();
+  document.getElementById('rel-type-popup').style.display = 'none';
+}
+
+function canvasDrawLines() {
+  const svg = document.getElementById('rel-canvas-svg');
+  if (!svg) return;
+  svg.innerHTML = '';
+  (kbData.relations || []).forEach(function(r) {
+    const fc = cvs.cards[r.from_entity_id], tc = cvs.cards[r.to_entity_id];
+    if (!fc || !tc) return;
+    const x1 = parseInt(fc.el.style.left) + fc.el.offsetWidth / 2;
+    const y1 = parseInt(fc.el.style.top) + fc.el.offsetHeight / 2;
+    const x2 = parseInt(tc.el.style.left) + tc.el.offsetWidth / 2;
+    const y2 = parseInt(tc.el.style.top) + tc.el.offsetHeight / 2;
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',x1); line.setAttribute('y1',y1);
+    line.setAttribute('x2',x2); line.setAttribute('y2',y2);
+    line.setAttribute('stroke','#505050'); line.setAttribute('stroke-width','2');
+    line.style.pointerEvents = 'stroke'; line.style.cursor = 'pointer';
+    line.addEventListener('click', function() {
+      if (confirm('删除关系: ' + r.from_name + ' → ' + r.to_name + ' [' + (REL_TYPE_ZH[r.relation_type]||r.relation_type) + ']？')) {
+        fetch('/api/entity/relation/' + r.id + '/remove', {method:'POST'})
+          .then(function(res){return res.json();})
+          .then(function(d){if(!d.error)loadKnowledgeBase();else alert('删除失败: '+d.error);});
+      }
+    });
+    line.addEventListener('mouseenter', function(){ line.setAttribute('stroke','#f59e0b'); line.setAttribute('stroke-width','3'); });
+    line.addEventListener('mouseleave', function(){ line.setAttribute('stroke','#505050'); line.setAttribute('stroke-width','2'); });
+    svg.appendChild(line);
+    const mx = (x1+x2)/2, my = (y1+y2)/2;
+    const angle = Math.atan2(y2-y1, x2-x1);
+    const as = 7;
+    const poly = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+    poly.setAttribute('points',
+      (mx+Math.cos(angle)*as)+','+(my+Math.sin(angle)*as)+' '
+      +(mx+Math.cos(angle+2.4)*as)+','+(my+Math.sin(angle+2.4)*as)+' '
+      +(mx+Math.cos(angle-2.4)*as)+','+(my+Math.sin(angle-2.4)*as));
+    poly.setAttribute('fill','#505050');
+    svg.appendChild(poly);
+    const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    txt.setAttribute('x', mx); txt.setAttribute('y', my - 8);
+    txt.setAttribute('text-anchor','middle');
+    txt.setAttribute('fill','#6b6b6b'); txt.setAttribute('font-size','10');
+    txt.textContent = REL_TYPE_ZH[r.relation_type] || r.relation_type;
+    svg.appendChild(txt);
+  });
+}
+
+function canvasLoadAll() {
+  const SKIP_TYPES = new Set(['REGION', 'COUNTRY']);
+  (kbData.entities || []).filter(function(e) { return !SKIP_TYPES.has(e.entity_type); })
+    .forEach(function(e) { canvasAddEntity(e.id); });
+}
+
+function canvasClear() {
+  Object.keys(cvs.cards).forEach(function(id) { canvasRemoveCard(id); });
+  cvs.nextCol = 0;
+  canvasCancelConnect();
+  document.getElementById('rel-canvas-hint').style.display = 'block';
+}
+
+function canvasRemoveCard(entityId) {
+  const c = cvs.cards[entityId];
+  if (!c) return;
+  c.el.remove();
+  delete cvs.cards[entityId];
+  if (cvs.selectedFrom === entityId) cvs.selectedFrom = null;
+  if (cvs.pendingTo === entityId) canvasCancelConnect();
+  if (cvs.connecting && cvs.connecting.fromId === entityId) canvasCancelConnect();
+  canvasDrawLines();
+}
+
+/* 自动层级布局：股东/母公司在上，子公司/项目在下 */
+function canvasAutoLayout() {
+  const HIER_RELS = new Set(['SHAREHOLDER', 'SUBSIDIARY', 'BRAND', 'INVESTS_IN']);
+  const entityIds = Object.keys(cvs.cards);
+  if (!entityIds.length) return;
+
+  // 计算各节点层级：from 节点比 to 节点高一层
+  const levels = {};
+  entityIds.forEach(function(id) { levels[id] = 0; });
+
+  const edges = (kbData.relations || []).filter(function(r) {
+    return HIER_RELS.has(r.relation_type) && cvs.cards[r.from_entity_id] && cvs.cards[r.to_entity_id];
+  });
+
+  // 迭代传播层级（BFS 替代，防止环）
+  let changed = true;
+  let iter = 0;
+  while (changed && iter < 30) {
+    changed = false;
+    iter++;
+    edges.forEach(function(r) {
+      const newLv = (levels[r.from_entity_id] || 0) + 1;
+      if (newLv > (levels[r.to_entity_id] || 0)) {
+        levels[r.to_entity_id] = newLv;
+        changed = true;
+      }
+    });
+  }
+
+  // 以 level 0（无依赖）为顶行，level n 为底行
+  const maxLv = Math.max.apply(null, Object.values(levels));
+  const groupByLv = {};
+  entityIds.forEach(function(id) {
+    const lv = maxLv - (levels[id] || 0); // 翻转：0=顶部
+    if (!groupByLv[lv]) groupByLv[lv] = [];
+    groupByLv[lv].push(id);
+  });
+
+  const wrap = document.getElementById('rel-canvas-wrap');
+  const wrapW = wrap.clientWidth;
+  const CARD_W = 160, CARD_H = 64, COL_GAP = 18, ROW_GAP = 58;
+  const PAD_X = 20, PAD_Y = 24;
+
+  const sortedLvs = Object.keys(groupByLv).map(Number).sort(function(a,b){return a-b;});
+  sortedLvs.forEach(function(lv, rowIdx) {
+    const ids = groupByLv[lv];
+    const totalW = ids.length * (CARD_W + COL_GAP) - COL_GAP;
+    const startX = Math.max(PAD_X, (wrapW - totalW) / 2);
+    ids.forEach(function(id, colIdx) {
+      const c = cvs.cards[id];
+      if (!c) return;
+      c.el.style.left = (startX + colIdx * (CARD_W + COL_GAP)) + 'px';
+      c.el.style.top = (PAD_Y + rowIdx * (CARD_H + ROW_GAP)) + 'px';
+    });
+  });
+  canvasDrawLines();
+}
 </script>
 {% endblock %}

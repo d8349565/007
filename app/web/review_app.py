@@ -101,6 +101,7 @@ def create_app() -> Flask:
         fact_type = request.args.get("fact_type", "")
         doc_id = request.args.get("doc_id", "")
         pass_type = request.args.get("pass_type", "")  # '' | 'AUTO_PASS' | 'HUMAN_PASS'
+        subject_q = request.args.get("subject_q", "").strip()
         page = int(request.args.get("page", 1))
         per_page = 30
 
@@ -113,10 +114,12 @@ def create_app() -> Flask:
         # 若无单一状态筛选，分两次查询合并
         if not pass_type:
             facts_auto = query_facts(
+                subject=subject_q,
                 fact_type=fact_type, review_status="AUTO_PASS",
                 document_id=doc_id, limit=per_page * 10,
             )
             facts_human = query_facts(
+                subject=subject_q,
                 fact_type=fact_type, review_status="HUMAN_PASS",
                 document_id=doc_id, limit=per_page * 10,
             )
@@ -124,6 +127,7 @@ def create_app() -> Flask:
             all_facts.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         else:
             all_facts = query_facts(
+                subject=subject_q,
                 fact_type=fact_type, review_status=status_filter,
                 document_id=doc_id, limit=per_page * 10,
             )
@@ -155,6 +159,7 @@ def create_app() -> Flask:
             current_type=fact_type,
             current_doc=doc_id,
             current_pass_type=pass_type,
+            current_subject_q=subject_q,
             page=page,
             has_more=has_more,
             total_count=stats_data["total"],
@@ -621,6 +626,121 @@ def create_app() -> Flask:
 
     # ─────────────────────── 知识图谱 & 时间轴 ───────────────────────
 
+    # ─────────── 主体知识库管理 API ───────────
+
+    @app.route("/api/entity/knowledge-base")
+    def api_knowledge_base():
+        """返回所有实体、别名、关系（主体管理 Tab 使用）"""
+        conn = get_connection()
+        try:
+            entities = conn.execute(
+                """SELECT e.id, e.canonical_name, e.entity_type,
+                          COUNT(DISTINCT f_linked.id) AS linked_fact_count,
+                          COUNT(DISTINCT f_text.id)   AS text_fact_count
+                   FROM entity e
+                   LEFT JOIN fact_atom f_linked
+                     ON f_linked.subject_entity_id = e.id
+                     AND f_linked.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                   LEFT JOIN entity_alias ea ON ea.entity_id = e.id
+                   LEFT JOIN fact_atom f_text
+                     ON f_text.subject_entity_id IS NULL
+                     AND f_text.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                     AND (f_text.subject_text = e.canonical_name
+                          OR f_text.subject_text = ea.alias_name)
+                   GROUP BY e.id
+                   ORDER BY e.canonical_name"""
+            ).fetchall()
+            aliases = conn.execute(
+                "SELECT id, entity_id, alias_name FROM entity_alias"
+            ).fetchall()
+            relations = conn.execute(
+                """SELECT r.id, r.from_entity_id, ef.canonical_name AS from_name,
+                          r.to_entity_id, et.canonical_name AS to_name,
+                          r.relation_type, r.detail_json, r.source
+                   FROM entity_relation r
+                   JOIN entity ef ON r.from_entity_id = ef.id
+                   JOIN entity et ON r.to_entity_id = et.id
+                   ORDER BY r.created_at DESC"""
+            ).fetchall()
+            return jsonify({
+                "entities": [dict(e) for e in entities],
+                "aliases": [dict(a) for a in aliases],
+                "relations": [dict(r) for r in relations],
+            })
+        finally:
+            conn.close()
+
+    @app.route("/api/entity/add", methods=["POST"])
+    def api_entity_add():
+        """手动添加实体"""
+        from app.services.entity_linker import add_entity
+        data = request.get_json(silent=True) or {}
+        name = data.get("name", "").strip()
+        entity_type = data.get("entity_type", "COMPANY").strip()
+        if not name:
+            return jsonify({"error": "实体名称不能为空"}), 400
+        eid = add_entity(name, entity_type)
+        return jsonify({"success": True, "entity_id": eid})
+
+    @app.route("/api/entity/<entity_id>/alias", methods=["POST"])
+    def api_entity_add_alias(entity_id):
+        """为实体添加别名"""
+        from app.services.entity_linker import add_alias
+        data = request.get_json(silent=True) or {}
+        alias = data.get("alias", "").strip()
+        if not alias:
+            return jsonify({"error": "别名不能为空"}), 400
+        try:
+            add_alias(entity_id, alias)
+            return jsonify({"success": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+    @app.route("/api/entity/relation/add", methods=["POST"])
+    def api_entity_relation_add():
+        """添加实体关系"""
+        from app.services.entity_linker import add_entity_relation
+        data = request.get_json(silent=True) or {}
+        from_id = data.get("from_entity_id", "").strip()
+        to_id = data.get("to_entity_id", "").strip()
+        rel_type = data.get("relation_type", "").strip()
+        detail_json = json.dumps(data.get("details", {}), ensure_ascii=False)
+        if not from_id or not to_id or not rel_type:
+            return jsonify({"error": "from_entity_id, to_entity_id, relation_type 均为必填"}), 400
+        try:
+            rel_id = add_entity_relation(from_id, to_id, rel_type, detail_json)
+            return jsonify({"success": True, "relation_id": rel_id})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+
+    @app.route("/api/entity/relation/<rel_id>/remove", methods=["POST"])
+    def api_entity_relation_remove(rel_id):
+        """删除实体关系"""
+        from app.services.entity_linker import remove_entity_relation
+        ok = remove_entity_relation(rel_id)
+        if not ok:
+            return jsonify({"error": "关系不存在"}), 404
+        return jsonify({"success": True})
+
+    @app.route("/api/entity/candidate-relations")
+    def api_candidate_relations():
+        """从已通过事实反向提取候选关系"""
+        from app.services.entity_linker import get_candidate_relations_from_facts
+        candidates = get_candidate_relations_from_facts()
+        return jsonify({"candidates": candidates})
+
+    @app.route("/api/entity/ai-suggest-relations", methods=["POST"])
+    def api_ai_suggest_relations():
+        """调用 AI 分析所有实体，给出关系建议"""
+        from app.services.entity_linker import ai_suggest_relations
+        data = request.get_json(silent=True) or {}
+        hint = str(data.get("hint", "")).strip()
+        try:
+            suggestions = ai_suggest_relations(hint=hint)
+            return jsonify({"suggestions": suggestions})
+        except Exception as exc:
+            return jsonify({"error": str(exc), "suggestions": []}), 500
+
     @app.route("/graph")
     def graph_page():
         """知识图谱可视化页面"""
@@ -642,6 +762,198 @@ def create_app() -> Flask:
         entity_type = request.args.get("entity_type", "")
         entities = get_entity_list(search=search, entity_type=entity_type)
         return jsonify({"entities": entities})
+
+    @app.route("/api/dedup/search")
+    def api_dedup_search():
+        """
+        手动去重搜索：返回已通过事实中所有匹配关键词的 subject_text / object_text，
+        以及标准化实体表中匹配的实体。
+        """
+        kw = request.args.get("q", "").strip()
+        if not kw:
+            return jsonify({"items": []})
+        conn = get_connection()
+        try:
+            pattern = f"%{kw}%"
+            # 从事实的文本字段搜集候选
+            subj_rows = conn.execute(
+                """SELECT subject_text AS text_val, COUNT(*) AS cnt
+                   FROM fact_atom
+                   WHERE review_status IN ('AUTO_PASS','HUMAN_PASS')
+                     AND subject_text LIKE ? AND subject_text IS NOT NULL
+                   GROUP BY subject_text ORDER BY cnt DESC LIMIT 50""",
+                (pattern,),
+            ).fetchall()
+            obj_rows = conn.execute(
+                """SELECT object_text AS text_val, COUNT(*) AS cnt
+                   FROM fact_atom
+                   WHERE review_status IN ('AUTO_PASS','HUMAN_PASS')
+                     AND object_text LIKE ? AND object_text IS NOT NULL
+                   GROUP BY object_text ORDER BY cnt DESC LIMIT 30""",
+                (pattern,),
+            ).fetchall()
+            # 标准化实体
+            ent_rows = conn.execute(
+                """SELECT e.id AS entity_id, e.canonical_name AS text_val,
+                          e.entity_type,
+                          COUNT(DISTINCT f.id) AS cnt
+                   FROM entity e
+                   LEFT JOIN fact_atom f ON f.subject_entity_id = e.id
+                     AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                   WHERE e.canonical_name LIKE ?
+                   GROUP BY e.id ORDER BY cnt DESC LIMIT 20""",
+                (pattern,),
+            ).fetchall()
+
+            seen = set()
+            items = []
+            for r in ent_rows:
+                key = r["text_val"]
+                seen.add(key)
+                items.append({"text": r["text_val"], "fact_count": r["cnt"],
+                               "entity_id": r["entity_id"], "entity_type": r["entity_type"],
+                               "source": "entity"})
+            for r in subj_rows:
+                key = r["text_val"]
+                if key not in seen:
+                    seen.add(key)
+                    items.append({"text": r["text_val"], "fact_count": r["cnt"],
+                                  "entity_id": None, "entity_type": None,
+                                  "source": "subject_text"})
+            for r in obj_rows:
+                key = r["text_val"]
+                if key not in seen:
+                    seen.add(key)
+                    items.append({"text": r["text_val"], "fact_count": r["cnt"],
+                                  "entity_id": None, "entity_type": None,
+                                  "source": "object_text"})
+            return jsonify({"items": items})
+        finally:
+            conn.close()
+
+    @app.route("/api/dedup/batch-rename", methods=["POST"])
+    def api_dedup_batch_rename():
+        """
+        批量将所选的 subject_text / object_text 归一化到同一个标准名称，
+        并在 entity 表中创建（或匹配到已有）实体，更新 fact_atom 的 subject_entity_id。
+
+        请求体 JSON:
+          {
+            "texts": ["佐敦", "佐敦涂料", "JOTUN"],   // 要合并的文本列表
+            "canonical_name": "佐敦涂料（中国）有限公司",
+            "entity_type": "COMPANY",
+            "entity_id": "existing-uuid-or-empty"  // 可选，指定合并目标实体
+          }
+        """
+        from app.services.entity_linker import add_entity, add_alias, link_entity
+        data = request.get_json(silent=True) or {}
+        texts = [t.strip() for t in (data.get("texts") or []) if t.strip()]
+        canonical = data.get("canonical_name", "").strip()
+        entity_type = data.get("entity_type", "COMPANY").strip()
+        existing_eid = data.get("entity_id", "").strip()
+
+        if not texts:
+            return jsonify({"error": "texts 不能为空"}), 400
+        if not canonical:
+            return jsonify({"error": "canonical_name 不能为空"}), 400
+
+        conn = get_connection()
+        try:
+            # 1. 确定目标实体
+            if existing_eid:
+                row = conn.execute("SELECT id FROM entity WHERE id = ?", (existing_eid,)).fetchone()
+                eid = row["id"] if row else None
+            else:
+                eid = None
+
+            if not eid:
+                # 查找所有同名实体（可能有多个重复）
+                dup_rows = conn.execute(
+                    "SELECT id FROM entity WHERE canonical_name = ? ORDER BY rowid ASC",
+                    (canonical,),
+                ).fetchall()
+                if dup_rows:
+                    eid = dup_rows[0]["id"]
+                    # 自动合并多余的同名实体：将其事实/别名迁移到主实体后删除
+                    for dup in dup_rows[1:]:
+                        did = dup["id"]
+                        conn.execute("UPDATE fact_atom SET subject_entity_id = ? WHERE subject_entity_id = ?", (eid, did))
+                        conn.execute("UPDATE fact_atom SET object_entity_id = ? WHERE object_entity_id = ?", (eid, did))
+                        # 别名迁移（忽略冲突）
+                        conn.execute("UPDATE OR IGNORE entity_alias SET entity_id = ? WHERE entity_id = ?", (eid, did))
+                        # 关系迁移（忽略冲突）
+                        conn.execute("UPDATE OR IGNORE entity_relation SET from_entity_id = ? WHERE from_entity_id = ?", (eid, did))
+                        conn.execute("UPDATE OR IGNORE entity_relation SET to_entity_id = ? WHERE to_entity_id = ?", (eid, did))
+                        # 删除迁移失败（冲突跳过）的残留关系行，避免外键约束阻塞 DELETE entity
+                        conn.execute("DELETE FROM entity_relation WHERE from_entity_id = ? OR to_entity_id = ?", (did, did))
+                        conn.execute("DELETE FROM entity_alias WHERE entity_id = ?", (did,))
+                        conn.execute("DELETE FROM entity WHERE id = ?", (did,))
+                else:
+                    eid = add_entity(canonical, entity_type)
+            # 确保 canonical_name 与目标一致（type 统一更新）
+            conn.execute("UPDATE entity SET canonical_name = ?, entity_type = ? WHERE id = ?",
+                         (canonical, entity_type, eid))
+            conn.commit()
+
+            # 2. 将每个文本作为别名加入，更新 fact_atom
+            updated_facts = 0
+            added_aliases = 0
+            for text in texts:
+                if text == canonical:
+                    continue  # 主名本身不作别名
+                # 若该文本是另一个独立实体的 canonical_name，先将其合并进主实体
+                dup_ents = conn.execute(
+                    "SELECT id FROM entity WHERE canonical_name = ? AND id != ? ORDER BY rowid ASC",
+                    (text, eid),
+                ).fetchall()
+                for dup in dup_ents:
+                    did = dup["id"]
+                    conn.execute("UPDATE fact_atom SET subject_entity_id = ? WHERE subject_entity_id = ?", (eid, did))
+                    conn.execute("UPDATE fact_atom SET object_entity_id = ? WHERE object_entity_id = ?", (eid, did))
+                    conn.execute("UPDATE OR IGNORE entity_alias SET entity_id = ? WHERE entity_id = ?", (eid, did))
+                    conn.execute("UPDATE OR IGNORE entity_relation SET from_entity_id = ? WHERE from_entity_id = ?", (eid, did))
+                    conn.execute("UPDATE OR IGNORE entity_relation SET to_entity_id = ? WHERE to_entity_id = ?", (eid, did))
+                    # 删除迁移失败（冲突跳过）的残留关系行，避免外键约束阻塞 DELETE entity
+                    conn.execute("DELETE FROM entity_relation WHERE from_entity_id = ? OR to_entity_id = ?", (did, did))
+                    conn.execute("DELETE FROM entity_alias WHERE entity_id = ?", (did,))
+                    conn.execute("DELETE FROM entity WHERE id = ?", (did,))
+                # 添加别名（已存在则忽略）
+                try:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO entity_alias (id, entity_id, alias_name) VALUES (?,?,?)",
+                        (str(__import__('uuid').uuid4()), eid, text),
+                    )
+                    added_aliases += 1
+                except Exception:
+                    pass
+
+            # 3. 批量更新 fact_atom
+            #    - subject_text / object_text 统一为 canonical（归一化文本）
+            #    - 同时设置 entity_id（无论是否已设置，强制指向目标实体）
+            all_texts = list(set(texts + [canonical]))
+            ph = ",".join(["?"] * len(all_texts))
+            res = conn.execute(
+                f"UPDATE fact_atom SET subject_entity_id = ?, subject_text = ?"
+                f" WHERE subject_text IN ({ph})",
+                [eid, canonical] + all_texts,
+            )
+            updated_facts += res.rowcount
+            res2 = conn.execute(
+                f"UPDATE fact_atom SET object_entity_id = ?, object_text = ?"
+                f" WHERE object_text IN ({ph})",
+                [eid, canonical] + all_texts,
+            )
+            updated_facts += res2.rowcount
+            conn.commit()
+
+            return jsonify({"success": True, "entity_id": eid,
+                            "updated_facts": updated_facts, "added_aliases": added_aliases})
+        except Exception as exc:
+            conn.rollback()
+            logger.error("batch_rename failed: %s", exc, exc_info=True)
+            return jsonify({"error": str(exc)}), 500
+        finally:
+            conn.close()
 
     @app.route("/entity/<entity_id>")
     def entity_timeline_page(entity_id):

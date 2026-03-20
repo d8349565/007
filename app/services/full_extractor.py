@@ -15,6 +15,7 @@ from app.config import get_config
 from app.logger import get_logger
 from app.models.db import get_connection
 from app.services.llm_client import get_llm_client
+from app.services.entity_linker import get_known_entities_context
 
 logger = get_logger(__name__)
 
@@ -53,6 +54,11 @@ def _load_prompt() -> str:
     if rules_parts:
         base += "\n\n## Fact-type specific rules\n\n"
         base += "\n\n".join(rules_parts)
+
+    # 注入已知实体及关系上下文
+    entity_context = get_known_entities_context()
+    if entity_context:
+        base += "\n\n" + entity_context
 
     return base
 

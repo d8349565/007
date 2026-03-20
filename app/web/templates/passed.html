@@ -44,12 +44,16 @@
         <option value="AUTO_PASS" {% if current_pass_type == 'AUTO_PASS' %}selected{% endif %}>自动通过</option>
         <option value="HUMAN_PASS" {% if current_pass_type == 'HUMAN_PASS' %}selected{% endif %}>人工通过</option>
       </select>
+      <label>主体搜索</label>
+      <input type="text" name="subject_q" value="{{ current_subject_q or '' }}"
+        placeholder="输入主体关键词…" style="width:130px;"
+        onkeydown="if(event.key==='Enter')this.form.submit()" />
     </form>
     <span class="filter-spacer"></span>
     {# 翻页嵌在筛选栏右侧 #}
     <div class="pager">
       {% if page > 1 %}
-      <a class="pager-btn" href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&page={{ page - 1 }}">&#8592;</a>
+      <a class="pager-btn" href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&subject_q={{ current_subject_q|urlencode }}&page={{ page - 1 }}">&#8592;</a>
       {% else %}
       <span class="pager-btn pager-disabled">&#8592;</span>
       {% endif %}
@@ -58,7 +62,7 @@
         {{ page }} / {{ total_pages }}
       </span>
       {% if has_more %}
-      <a class="pager-btn" href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&page={{ page + 1 }}">&#8594;</a>
+      <a class="pager-btn" href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&subject_q={{ current_subject_q|urlencode }}&page={{ page + 1 }}">&#8594;</a>
       {% else %}
       <span class="pager-btn pager-disabled">&#8594;</span>
       {% endif %}
@@ -179,10 +183,18 @@
             </td>
             <td>
               {% if f.document_title %}
+              {% if f.document_source_type == 'url' and f.document_url %}
+              <a href="{{ f.document_url }}" target="_blank" rel="noopener"
+                class="truncate-inner text-xs" style="max-width:120px;color:#60a5fa;text-decoration:none;"
+                data-tip="{{ f.document_url|e }}">
+                {{ f.document_title[:18] }}{% if f.document_title|length > 18 %}…{% endif %}
+              </a>
+              {% else %}
               <span class="truncate-inner text-xs text-muted" style="max-width:120px;"
                 data-tip="{{ f.document_title|e }}">
                 {{ f.document_title[:18] }}{% if f.document_title|length > 18 %}…{% endif %}
               </span>
+              {% endif %}
               {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
           </tr>
@@ -195,7 +207,7 @@
   {# 底部翻页 #}
   <div class="pager pager-bottom">
     {% if page > 1 %}
-    <a class="pager-btn" href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&page={{ page - 1 }}">&#8592; 上一页</a>
+    <a class="pager-btn" href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&subject_q={{ current_subject_q|urlencode }}&page={{ page - 1 }}">&#8592; 上一页</a>
     {% else %}
     <span class="pager-btn pager-disabled">&#8592; 上一页</span>
     {% endif %}
@@ -204,7 +216,7 @@
       第 <strong>{{ page }}</strong> 页 · 共 <strong>{{ total_pages }}</strong> 页 · {{ total_count }} 条
     </span>
     {% if has_more %}
-    <a class="pager-btn" href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&page={{ page + 1 }}">下一页 &#8594;</a>
+    <a class="pager-btn" href="/passed?fact_type={{ current_type }}&doc_id={{ current_doc }}&pass_type={{ current_pass_type }}&subject_q={{ current_subject_q|urlencode }}&page={{ page + 1 }}">下一页 &#8594;</a>
     {% else %}
     <span class="pager-btn pager-disabled">下一页 &#8594;</span>
     {% endif %}

@@ -105,8 +105,9 @@ CREATE TABLE IF NOT EXISTS entity (
     id               TEXT PRIMARY KEY,
     canonical_name   TEXT NOT NULL,
     normalized_name  TEXT NOT NULL,
-    entity_type      TEXT NOT NULL DEFAULT 'ORG'
-    -- ORG | PERSON | PLACE | PRODUCT | OTHER
+    entity_type      TEXT NOT NULL DEFAULT 'UNKNOWN',
+    -- COMPANY | GROUP | PROJECT | REGION | COUNTRY | UNKNOWN
+    UNIQUE(canonical_name, entity_type)
 );
 
 CREATE INDEX IF NOT EXISTS idx_entity_canonical
@@ -118,6 +119,24 @@ CREATE TABLE IF NOT EXISTS entity_alias (
     entity_id   TEXT NOT NULL REFERENCES entity(id),
     alias_name  TEXT NOT NULL UNIQUE
 );
+
+-- 实体关系表（股权、母子公司、合资、品牌归属等）
+CREATE TABLE IF NOT EXISTS entity_relation (
+    id               TEXT PRIMARY KEY,
+    from_entity_id   TEXT NOT NULL REFERENCES entity(id),
+    to_entity_id     TEXT NOT NULL REFERENCES entity(id),
+    relation_type    TEXT NOT NULL,
+    -- SUBSIDIARY(子公司) | SHAREHOLDER(股东) | JV(合资) | BRAND(品牌归属) | PARTNER(合作方) | INVESTS_IN(投资/持有项目)
+    detail_json      TEXT DEFAULT '{}',  -- 扩展信息，如 {"share_pct": 42.53}
+    source           TEXT NOT NULL DEFAULT 'manual',  -- manual | auto_extracted
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(from_entity_id, to_entity_id, relation_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_entity_relation_from
+    ON entity_relation(from_entity_id);
+CREATE INDEX IF NOT EXISTS idx_entity_relation_to
+    ON entity_relation(to_entity_id);
 
 -- 审核操作日志
 CREATE TABLE IF NOT EXISTS review_log (
