@@ -17,11 +17,32 @@ You must follow these rules:
 12. subject MUST be a non-empty string explicitly mentioned in the evidence text. If the subject entity cannot be found in the evidence text itself, DO NOT output this record at all. subject is NEVER null.
 13. subject MUST be a concrete entity name (company, organization, product, brand, person, project), NOT a measurement term, statistical concept, or business description. Examples of INVALID subjects: "全国造船完工量" (measurement), "手持订单量" (measurement), "中国船舶涂料市场" (market region), "公司船舶涂料业务" (business description), "公告" (document type), "销售额" (metric name). If the sentence describes a metric without a clear entity subject, use the entity that owns/reports that metric as subject. Example: "2024年销售额280.56亿元" in an article about 东方雨虹 → subject should be "东方雨虹", not "销售额".
 14. subject should NOT end with generic suffixes like "业务", "市场", "行业", "领域" unless it refers to a named entity. Prefer the specific company/organization name.
-15. time_expr: If the evidence mentions any time reference (年份、季度、月份、"今年"、"去年"、"截至X月底" etc.), extract it as time_expr. Do NOT leave time_expr null when a time expression exists in the evidence.
+15. time_expr FORMAT RULES:
+    a. If the evidence mentions any time reference (年份、季度、月份、"今年"、"去年"、"截至X月底" etc.), extract it as time_expr. Do NOT leave time_expr null when a time expression exists in the evidence.
+    b. REQUIRED formats (Chinese characters only):
+       - Single point: "YYYY年" / "YYYY年MM月" / "YYYY年MM月DD日"
+       - Range: "YYYY年MM月-YYYY年MM月" / "YYYY年-YYYY年"
+    c. Convert vague expressions using document context:
+       - "今年" → infer the year; "去年" → year minus 1; "至今"/"目前" → infer year/month
+       - "前三季度" → "YYYY年01月-YYYY年09月"
+       - "上半年" → "YYYY年01月-YYYY年06月"; "下半年" → "YYYY年07月-YYYY年12月"
+       - "一季度" → "YYYY年01月-YYYY年03月" (similarly for Q2/Q3/Q4)
+    d. For future/projected time, infer a date and add {"is_forecast": true} to qualifiers.
 16. currency: For monetary values, always specify the currency code. Infer from context: "亿元" / "万元" / "元" → CNY; "亿日元" → JPY; "亿美元" → USD; "亿港元" → HKD. Only leave null if the value is non-monetary.
-17. location: If the evidence mentions a geographic scope (全国、中国、全球、华东、某省市 etc.), extract it as location. Do NOT leave location null when a geographic reference exists in the evidence.
+17. location FORMAT RULES:
+    a. If the evidence mentions a geographic scope (全国、中国、全球、华东、某省市 etc.), extract it as location. Do NOT leave location null when a geographic reference exists in the evidence.
+    b. Use hierarchical format: "国家/省/市/区" — include only known levels.
+       - "全国" / "国内" → "中国"; "全球" → "全球"
+       - Province: "广东" → "中国/广东省"
+       - City: "深圳" → "中国/广东省/深圳市"
+       - District: "浦东新区" → "中国/上海市/上海市/浦东新区"
+    c. Auto-complete parent levels when only a district or city is mentioned.
 18. Multi-currency deduplication: When the same transaction/amount is expressed in multiple currencies (e.g. "1.6410亿港元（约合1.4476亿人民币）"), output ONLY ONE record. Use the primary currency (the transaction currency, usually first mentioned) for value_num/unit/currency. Put the converted equivalent in qualifiers (e.g. equivalent_cny, equivalent_cny_unit). NEVER create separate records for each currency expression of the same fact.
 19. object field usage: For INVESTMENT/COOPERATION types, object MUST be the target entity (the company being acquired, the partner, the project), NOT the monetary amount. Monetary amounts always go in value_num/value_text/unit/currency.
+20. value_num scale preservation: Keep value_num as the EXACT numeric value written in the source text. Do NOT convert to minimum/base units.
+    - "5亿元" → value_num = 5, unit = "亿元", currency = CNY. NOT value_num = 500000000
+    - "3000万吨" → value_num = 3000, unit = "万吨". NOT value_num = 30000000
+    - value_text must match the original expression including scale word (e.g. value_text = "5亿元")
 
 Use this fixed schema for each record:
 {

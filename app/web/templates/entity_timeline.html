@@ -27,6 +27,32 @@
 .tl-filter label { font-size: 12px; color: #a0a0a0; white-space: nowrap; font-weight: 500; }
 .tl-filter select { padding: 6px 10px; border: 1px solid #505050; border-radius: 4px; font-size: 13px; color: #ffffff; background: #323232; }
 
+/* Qualifier tags in card */
+.tl-qual-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+.tl-qual-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; padding: 2px 7px; border-radius: 10px;
+  background: rgba(59,130,246,0.12); color: #93c5fd; border: 1px solid rgba(59,130,246,0.2);
+}
+.tl-qual-tag .qual-key { color: #6b7280; }
+
+/* Qualifier filter section */
+.tl-qual-filter {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  padding: 8px 0;
+}
+.tl-qual-filter select {
+  padding: 5px 8px; border: 1px solid #505050; border-radius: 4px;
+  font-size: 12px; color: #ffffff; background: #323232; max-width: 180px;
+}
+.tl-qual-filter label { font-size: 11px; color: #6b7280; white-space: nowrap; }
+.tl-filter-reset {
+  font-size: 11px; color: #3b82f6; cursor: pointer; background: none; border: none;
+  padding: 4px 8px;
+}
+.tl-filter-reset:hover { text-decoration: underline; }
+.tl-filter-count { font-size: 11px; color: #6b7280; margin-left: auto; }
+
 /* Timeline layout */
 .timeline {
   position: relative; padding-left: 140px; padding-bottom: 40px;
@@ -142,6 +168,50 @@
       <option value="{{ ft }}" {% if ft == current_type %}selected{% endif %}>{{ FACT_TYPE_NAMES.get(ft, ft) }}</option>
       {% endfor %}
     </select>
+    {% if qualifier_options %}
+    <span style="width:1px;height:20px;background:#404040;"></span>
+    <div class="tl-qual-filter">
+      {% set QUAL_KEY_ZH = {
+        'metric_name': '指标',
+        'segment': '细分领域',
+        'yoy': '同比',
+        'qoq': '环比',
+        'report_scope': '报告范围',
+        'product_type': '产品类型',
+        'project_name': '项目名称',
+        'investment_type': '投资类型',
+        'market_scope': '市场范围',
+        'ranking_name': '排名名称',
+        'ranking_scope': '排名范围',
+        'cooperation_type': '合作类型',
+        'product_name': '产品名称',
+        'price_type': '价格类型',
+        'stage': '阶段',
+        'scope': '范围',
+        'purpose': '目的',
+        'phase': '期次',
+        'duration': '期限',
+        'reason': '原因',
+        'is_forecast': '预测',
+        'is_approximate': '近似值',
+        'rank': '排名',
+        'ranking_year': '排名年份',
+      } %}
+      {% for key, values in qualifier_options.items() %}
+      {% if key not in ('is_forecast', 'is_approximate', 'equivalent_usd', 'equivalent_rmb', 'equivalent_cny', 'equivalent_cny_unit', 'equivalent_weight', 'change_amount', 'change_from_previous_year', 'change_pct', 'stake_percentage', 'capacity_related', 'investment_related') %}
+      <label>{{ QUAL_KEY_ZH.get(key, key) }}</label>
+      <select class="qual-filter-select" data-qual-key="{{ key }}" onchange="applyQualFilter()">
+        <option value="">全部</option>
+        {% for v in values %}
+        <option value="{{ v }}">{{ v }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
+      {% endfor %}
+      <button class="tl-filter-reset" onclick="resetQualFilters()">重置筛选</button>
+    </div>
+    {% endif %}
+    <span class="tl-filter-count" id="filter-count"></span>
     <span style="flex:1;"></span>
     <span style="font-size:12px;color:#94a3b8;">双击图谱中的节点跳转到此页面 · 时间轴按时间倒序排列</span>
   </div>
@@ -157,7 +227,7 @@
         {% set ns.current_group = time_group %}
       {% endif %}
 
-      <div class="tl-item">
+      <div class="tl-item" data-qualifiers='{{ fact.qualifiers_display | tojson }}'>
         {# Time label #}
         <span class="tl-time-label">{% if show_group %}{{ time_group }}{% endif %}</span>
 
@@ -168,9 +238,15 @@
         <div class="tl-card type-{{ fact.fact_type }}">
           <div class="tl-card-head">
             <span class="badge badge-{{ fact.fact_type }} tl-card-type">{{ FACT_TYPE_NAMES.get(fact.fact_type, fact.fact_type) }}</span>
+            {% if fact.qualifiers_display.get('metric_name') %}
+            <span style="font-size:12px;color:#93c5fd;font-weight:600;">{{ fact.qualifiers_display['metric_name'] }}</span>
+            {% endif %}
             <span class="tl-card-predicate">{{ fact.predicate or '' }}</span>
             {% if fact.object_text %}
             <span class="tl-card-object">→ {{ fact.object_text }}</span>
+            {% endif %}
+            {% if fact.qualifiers_display.get('segment') %}
+            <span style="font-size:11px;color:#a78bfa;background:rgba(139,92,246,0.12);padding:1px 7px;border-radius:10px;">{{ fact.qualifiers_display['segment'] }}</span>
             {% endif %}
           </div>
 
@@ -192,6 +268,9 @@
 
           {# Meta #}
           <div class="tl-card-meta">
+            {% if fact.qualifiers_display.get('is_forecast') %}
+            <span style="color:#f59e0b;">⚠ 推测</span>
+            {% endif %}
             {% if fact.location_text %}
             <span>📍 {{ fact.location_text }}</span>
             {% endif %}
@@ -207,6 +286,22 @@
             <span class="badge badge-info" style="font-size:10px;">人工✓</span>
             {% endif %}
           </div>
+
+          {# Qualifier tags (exclude already shown and internal fields) #}
+          {% set skip_keys = ('metric_name', 'segment', 'is_forecast', 'is_approximate', 'equivalent_usd', 'equivalent_rmb', 'equivalent_cny', 'equivalent_cny_unit', 'equivalent_weight') %}
+          {% set shown_quals = [] %}
+          {% for k, v in fact.qualifiers_display.items() if k not in skip_keys and v is not none and v != '' and v is not mapping and v is not iterable or v is string %}
+          {% if shown_quals.append(1) %}{% endif %}
+          {% endfor %}
+          {% if shown_quals %}
+          <div class="tl-qual-tags">
+            {% for k, v in fact.qualifiers_display.items() if k not in skip_keys and v is not none and v != '' %}
+            {% if v is not mapping and (v is not iterable or v is string) %}
+            <span class="tl-qual-tag"><span class="qual-key">{{ k }}:</span> {{ v }}</span>
+            {% endif %}
+            {% endfor %}
+          </div>
+          {% endif %}
 
           {# Evidence #}
           {% if fact.evidence_text %}
@@ -237,6 +332,48 @@ function filterTimeline(type) {
     url.searchParams.delete('fact_type');
   }
   window.location.href = url.toString();
+}
+
+/* ===== Qualifier 客户端筛选 ===== */
+function applyQualFilter() {
+  const selects = document.querySelectorAll('.qual-filter-select');
+  const filters = {};
+  selects.forEach(sel => {
+    if (sel.value) {
+      filters[sel.dataset.qualKey] = sel.value;
+    }
+  });
+
+  const items = document.querySelectorAll('.tl-item');
+  let shown = 0;
+  let total = items.length;
+
+  items.forEach(item => {
+    const qualData = JSON.parse(item.dataset.qualifiers || '{}');
+    let match = true;
+    for (const [key, val] of Object.entries(filters)) {
+      if (String(qualData[key] || '') !== val) {
+        match = false;
+        break;
+      }
+    }
+    item.style.display = match ? '' : 'none';
+    if (match) shown++;
+  });
+
+  // 更新计数
+  const countEl = document.getElementById('filter-count');
+  if (Object.keys(filters).length > 0) {
+    countEl.textContent = '显示 ' + shown + ' / ' + total + ' 条';
+  } else {
+    countEl.textContent = '';
+  }
+}
+
+function resetQualFilters() {
+  document.querySelectorAll('.qual-filter-select').forEach(sel => { sel.value = ''; });
+  document.querySelectorAll('.tl-item').forEach(item => { item.style.display = ''; });
+  document.getElementById('filter-count').textContent = '';
 }
 </script>
 {% endblock %}

@@ -650,6 +650,24 @@ def create_app() -> Flask:
         data = get_entity_timeline(entity_id=entity_id, fact_type=fact_type)
         if not data["facts"] and not data["entity_info"].get("name"):
             return "Entity not found", 404
+
+        # 解析 qualifier_json 并收集筛选选项
+        qualifier_options = {}  # {key: sorted set of values}
+        for f in data["facts"]:
+            qd = {}
+            if f.get("qualifier_json"):
+                try:
+                    qd = json.loads(f["qualifier_json"])
+                except (json.JSONDecodeError, TypeError):
+                    qd = {}
+            f["qualifiers_display"] = qd
+            for k, v in qd.items():
+                if v is not None and v != "" and not isinstance(v, (dict, list, bool)):
+                    qualifier_options.setdefault(k, set()).add(str(v))
+
+        # 转为排序列表
+        qualifier_options = {k: sorted(v) for k, v in qualifier_options.items() if len(v) >= 1}
+
         valid_types = cfg.get("fact_types", [])
         return render_template(
             "entity_timeline.html",
@@ -659,6 +677,7 @@ def create_app() -> Flask:
             total_count=data["total_count"],
             current_type=fact_type,
             fact_types=valid_types,
+            qualifier_options=qualifier_options,
         )
 
     @app.route("/api/entity/<entity_id>/timeline")
@@ -676,6 +695,23 @@ def create_app() -> Flask:
         if not subject:
             return redirect(url_for("graph_page"))
         data = get_entity_timeline(subject_text=subject, fact_type=fact_type)
+
+        # 解析 qualifier_json 并收集筛选选项
+        qualifier_options = {}
+        for f in data["facts"]:
+            qd = {}
+            if f.get("qualifier_json"):
+                try:
+                    qd = json.loads(f["qualifier_json"])
+                except (json.JSONDecodeError, TypeError):
+                    qd = {}
+            f["qualifiers_display"] = qd
+            for k, v in qd.items():
+                if v is not None and v != "" and not isinstance(v, (dict, list, bool)):
+                    qualifier_options.setdefault(k, set()).add(str(v))
+
+        qualifier_options = {k: sorted(v) for k, v in qualifier_options.items() if len(v) >= 1}
+
         valid_types = cfg.get("fact_types", [])
         return render_template(
             "entity_timeline.html",
@@ -685,6 +721,7 @@ def create_app() -> Flask:
             total_count=data["total_count"],
             current_type=fact_type,
             fact_types=valid_types,
+            qualifier_options=qualifier_options,
         )
 
     def _start_background_process(doc_ids: list[str]):

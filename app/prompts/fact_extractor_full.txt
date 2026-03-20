@@ -59,11 +59,40 @@ No other keys, no explanation, no markdown wrapper. Output ONLY the JSON array.
    - INVALID: pronouns ("该公司", "其"), bare metric names ("销售额"), document references ("公告")
    - When the article uses a collective term as subject (e.g. "本土品牌销售收入为8.39亿元"), first check whether the article identifies the specific constituent entities of this group. If YES and the data can be attributed to individuals, extract records for individual entities. If the data is an aggregate figure for the whole group, keep the collective term as subject.
 10. subject should refer to WHO owns/does/reports the metric. Example: "全国造船完工量为4818万载重吨" → subject should be a meaningful entity like "中国" or "我国", NOT "全国造船完工量".
-11. time_expr: If the article mentions any time reference (年份、季度、月份、"今年"、"去年"、"截至X月底"), extract it. Do NOT leave null when a time reference exists.
+11. time_expr FORMAT RULES:
+    a. If the article mentions any time reference, extract it. Do NOT leave null when a time reference exists.
+    b. REQUIRED formats (Chinese characters only):
+       - Single point: "YYYY年" / "YYYY年MM月" / "YYYY年MM月DD日"
+       - Range: "YYYY年MM月-YYYY年MM月" / "YYYY年-YYYY年"
+    c. Convert vague expressions using document_publish_time as reference:
+       - "今年" → the year from document_publish_time (e.g. "2025年")
+       - "去年" → year minus 1
+       - "至今" / "目前" → the year/month from document_publish_time
+       - "前三季度" → "YYYY年01月-YYYY年09月"
+       - "上半年" → "YYYY年01月-YYYY年06月"
+       - "下半年" → "YYYY年07月-YYYY年12月"
+       - "一季度" → "YYYY年01月-YYYY年03月" (similarly for Q2/Q3/Q4)
+    d. For future/projected time (e.g. "项目建成后", "预计2026年底"), infer a reasonable date based on context and document_publish_time. Add {"is_forecast": true} to qualifiers to mark it as speculative.
+    e. Examples: "2025年前三季度" → "2025年01月-2025年09月"; "截至2024年底" → "2024年12月"
 12. currency: For monetary values, specify the currency code. "亿元"/"万元" → CNY; "亿日元" → JPY; "亿美元" → USD; "亿港元" → HKD.
-13. location: If a geographic scope is mentioned (全国、中国、全球、某省市), extract it.
+13. location FORMAT RULES:
+    a. If a geographic scope is mentioned, extract it. Do NOT leave null when a geographic reference exists.
+    b. Use hierarchical format: "国家/省/市/区" — include only the levels that are known.
+       - "全国" / "国内" / "中国市场" → "中国"
+       - "全球" / "全球市场" → "全球"
+       - Province level: "广东" → "中国/广东省"
+       - City level: "深圳" → "中国/广东省/深圳市"
+       - District level: "浦东新区" → "中国/上海市/上海市/浦东新区"
+       - Foreign: "美国得克萨斯州" → "美国/得克萨斯州"
+    c. When only a district or city is mentioned, auto-complete the parent levels (country/province/city).
+    d. For country-level data described as "全国"/"国内", use the country name (typically "中国"). If the article discusses another country's domestic data, use that country's name.
 14. Multi-currency deduplication: When the same transaction is expressed in multiple currencies (e.g. "1.6410亿港元（约合1.4476亿人民币）"), output ONLY ONE record. Use the primary (transaction) currency. Put equivalents in qualifiers (equivalent_cny, equivalent_cny_unit).
 15. For INVESTMENT/COOPERATION, object [3] MUST be the target entity (company acquired, partner), NOT the monetary amount. Amounts go in value_num/value_text/unit/currency.
 16. evidence_text [12]: Copy the minimal sentence(s) from the article that directly support this fact. Keep it short but complete enough to verify the fact independently.
+17. value_num scale preservation: Keep value_num as the EXACT numeric value written in the source text. Do NOT convert to minimum/base units.
+    - "具5亿元" → value_num = 5, unit = "亿元", currency = CNY. NOT value_num = 500000000
+    - "3000万吸" → value_num = 3000, unit = "万吨". NOT value_num = 30000000
+    - "1.5亿美元" → value_num = 1.5, unit = "亿美元", currency = USD
+    - value_text must match the original expression and always include the scale word (e.g. value_text = "5亿元", NOT "500000000元")
 
 If no extractable fact is found, return an empty array: []

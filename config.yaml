@@ -177,12 +177,14 @@ qualifier_whitelist:
     - change_from_previous_year
     - equivalent_weight
     - is_approximate
+    - is_forecast
   CAPACITY:
     - product_type
     - segment
     - is_planned
     - phase
     - equivalent_weight
+    - is_forecast
   INVESTMENT:
     - project_name
     - investment_type
@@ -195,12 +197,14 @@ qualifier_whitelist:
     - equivalent_cny
     - equivalent_cny_unit
     - is_approximate
+    - is_forecast
   EXPANSION:
     - project_name
     - segment
     - stage
     - capacity_related
     - investment_related
+    - is_forecast
   MARKET_SHARE:
     - market_scope
     - segment

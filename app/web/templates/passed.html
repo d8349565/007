@@ -109,6 +109,16 @@
             </td>
             <td>
               <div class="cell-stack" style="max-width:160px;">
+                {% if f.qualifiers_display.get('metric_name') or f.qualifiers_display.get('segment') %}
+                <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:2px;align-items:center;">
+                  {% if f.qualifiers_display.get('metric_name') %}
+                  <span style="font-size:11px;color:#93c5fd;font-weight:600;white-space:nowrap;">{{ f.qualifiers_display['metric_name'] }}</span>
+                  {% endif %}
+                  {% if f.qualifiers_display.get('segment') %}
+                  <span style="font-size:10px;color:#a78bfa;background:rgba(139,92,246,0.12);padding:1px 6px;border-radius:10px;white-space:nowrap;">{{ f.qualifiers_display['segment'] }}</span>
+                  {% endif %}
+                </div>
+                {% endif %}
                 <span class="truncate-inner text-sm"
                   {% if f.predicate and f.predicate|length > 18 %}data-tip="{{ f.predicate|e }}"{% endif %}>
                   {{ f.predicate or '—' }}

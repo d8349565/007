@@ -898,7 +898,11 @@ def get_entity_overview(top_n: int = 10) -> dict:
     """
     conn = get_connection()
     try:
-        entity_count = conn.execute("SELECT COUNT(*) FROM entity").fetchone()[0]
+        # 只统计有已通过事实关联的实体（与 linked_fact_count 逻辑一致）
+        entity_count = conn.execute(
+            "SELECT COUNT(DISTINCT subject_entity_id) FROM fact_atom "
+            "WHERE review_status IN ('AUTO_PASS','HUMAN_PASS') AND subject_entity_id IS NOT NULL"
+        ).fetchone()[0]
         linked_facts = conn.execute(
             "SELECT COUNT(*) FROM fact_atom "
             "WHERE review_status IN ('AUTO_PASS','HUMAN_PASS') AND subject_entity_id IS NOT NULL"
@@ -917,9 +921,13 @@ def get_entity_overview(top_n: int = 10) -> dict:
                LIMIT ?""",
             (top_n,),
         ).fetchall()
-        # Entity type distribution
+        # 只统计有已通过事实的实体类型分布
         type_dist = conn.execute(
-            "SELECT entity_type, COUNT(*) AS cnt FROM entity GROUP BY entity_type ORDER BY cnt DESC"
+            """SELECT e.entity_type, COUNT(DISTINCT e.id) AS cnt
+               FROM entity e
+               JOIN fact_atom f ON f.subject_entity_id = e.id
+               WHERE f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+               GROUP BY e.entity_type ORDER BY cnt DESC"""
         ).fetchall()
         return {
             "entity_count": entity_count,
