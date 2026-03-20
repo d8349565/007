@@ -5,6 +5,16 @@
 
 {% block head %}
 <style>
+/* Entity View Tabs */
+.entity-view-tabs { display:flex;gap:0;padding:0 16px;background:#1e1e1e;border-bottom:1px solid #333;height:44px;align-items:center; }
+.ev-tab { outline: none; }
+.ev-tab.active { color: #fafafa; border-bottom-color: #3b82f6; }
+.ev-tab:hover:not(.active) { color: #a1a1a1; }
+
+/* 两个视图画布的显示切换 */
+.view-panel { display: none; }
+.view-panel.active { display: flex; }
+
 /* Graph page full-screen layout */
 .graph-page { display: flex; height: calc(100vh - 52px); overflow: hidden; position: relative; }
 .graph-canvas-wrap {
@@ -100,7 +110,19 @@
 {% endblock %}
 
 {% block content %}
-<div class="graph-page">
+<!-- Entity View Tabs -->
+<div class="entity-view-tabs">
+  <button class="ev-tab active" data-view="hierarchy" onclick="switchEntityView('hierarchy')" style="background:none;border:none;color:#a1a1a1;font-size:13px;font-weight:500;padding:8px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;">层级视图</button>
+  <button class="ev-tab" data-view="graph" onclick="switchEntityView('graph')" style="background:none;border:none;color:#6b6b6b;font-size:13px;font-weight:500;padding:8px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;">关系图谱</button>
+</div>
+
+<!-- Hierarchy view panel -->
+<div class="view-panel active" id="hierarchyViewPanel" style="flex-direction: column; height: calc(100vh - 52px - 44px);">
+  <iframe src="/hierarchy" style="flex:1; border:none; width:100%; height:100%;" id="hierarchyFrame"></iframe>
+</div>
+
+<!-- Graph view panel -->
+<div class="view-panel" id="graphViewPanel">
   <div class="graph-canvas-wrap">
     <svg id="graphSvg"></svg>
 
@@ -146,6 +168,19 @@
     </div>
   </div>
 </div>
+</div>
+
+<script>
+function switchEntityView(view) {
+  document.querySelectorAll('.ev-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === view);
+    btn.style.color = btn.dataset.view === view ? '#fafafa' : '#6b6b6b';
+    btn.style.borderBottomColor = btn.dataset.view === view ? '#3b82f6' : 'transparent';
+  });
+  document.getElementById('graphViewPanel').classList.toggle('active', view === 'graph');
+  document.getElementById('hierarchyViewPanel').classList.toggle('active', view === 'hierarchy');
+}
+</script>
 {% endblock %}
 
 {% block scripts %}

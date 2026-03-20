@@ -748,6 +748,11 @@ def create_app() -> Flask:
         valid_types = cfg.get("fact_types", [])
         return render_template("graph.html", fact_types=valid_types)
 
+    @app.route("/hierarchy")
+    def hierarchy_page():
+        """实体层级视图页面"""
+        return render_template("hierarchy.html")
+
     @app.route("/api/graph")
     def api_graph():
         """图谱数据 API"""

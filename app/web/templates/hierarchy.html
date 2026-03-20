@@ -1,0 +1,317 @@
+{% extends "_base.html" %}
+{% set active = 'graph' %}
+{% block title %}层级视图 — 资讯颗粒化{% endblock %}
+{% block container_class %}container-fluid{% endblock %}
+
+{% block head %}
+<style>
+.hierarchy-page { display: flex; height: calc(100vh - 52px); overflow: hidden; position: relative; }
+.hierarchy-canvas-wrap {
+  flex: 1; position: relative;
+  background-color: #1a1a1a;
+  background-image: radial-gradient(#333 1.2px, transparent 1.2px);
+  background-size: 24px 24px;
+  overflow: hidden;
+}
+.hierarchy-canvas-wrap svg { width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; }
+
+/* Node styles */
+.node-group { cursor: pointer; }
+.node-rect {
+  rx: 8; ry: 8;
+  stroke-width: 2.5;
+  transition: stroke 0.15s, stroke-width 0.15s;
+}
+.node-rect:hover { stroke: #fafafa !important; stroke-width: 3.5; }
+.node-label { font-size: 12px; fill: #a1a1a1; font-family: system-ui, sans-serif; pointer-events: none; }
+.node-sublabel { font-size: 10px; fill: #6b6b6b; font-family: system-ui, sans-serif; pointer-events: none; }
+
+/* Edge styles */
+.link { fill: none; stroke-width: 1.5; }
+.link-SUBSIDIARY { stroke: #444; stroke-dasharray: none; }
+.link-SHAREHOLDER { stroke: #444; stroke-dasharray: 5,3; }
+.link-JV { stroke: #444; stroke-dasharray: 2,3; }
+.link-label { font-size: 10px; fill: #6b6b6b; font-family: system-ui, sans-serif; }
+
+/* Empty state */
+.hierarchy-empty {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  text-align: center; color: #6b6b6b;
+}
+.hierarchy-empty p { font-size: 15px; margin-bottom: 6px; }
+.hierarchy-empty a { color: #3b82f6; font-size: 13px; }
+
+/* Tooltip */
+.hierarchy-tooltip {
+  position: absolute; background: rgba(40,40,40,0.96); border: 1px solid #404040;
+  border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #a1a1a1;
+  pointer-events: none; z-index: 100; max-width: 240px; display: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.hierarchy-tooltip .tip-name { font-weight: 600; color: #fafafa; font-size: 13px; margin-bottom: 4px; }
+.hierarchy-tooltip .tip-type { color: #6b6b6b; font-size: 11px; }
+.hierarchy-tooltip .tip-fact-count { color: #3b82f6; font-size: 11px; margin-top: 4px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hierarchy-page">
+  <div class="hierarchy-canvas-wrap">
+    <svg id="hierarchySvg"></svg>
+    <div class="hierarchy-empty" id="hierarchyEmpty" style="display:none;">
+      <p>暂无层级结构数据</p>
+      <p style="font-size:12px;color:#94a3b8;">需要在实体管理中添加公司层级关系</p>
+      <a href="/manage">前往实体管理 →</a>
+    </div>
+    <div class="hierarchy-tooltip" id="hierarchyTooltip">
+      <div class="tip-name" id="tipName"></div>
+      <div class="tip-type" id="tipType"></div>
+      <div class="tip-fact-count" id="tipFactCount"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script>
+const TYPE_COLORS = {
+  'COMPANY': '#3b82f6',
+  'PROJECT': '#f472b6',
+  'GROUP': '#f59e0b',
+  'REGION': '#94a3b8',
+  'COUNTRY': '#a78bfa',
+  'UNKNOWN': '#60a5fa',
+};
+
+const TYPE_ZH = {
+  'COMPANY': '企业', 'PROJECT': '项目', 'GROUP': '群体/排名',
+  'REGION': '地区', 'COUNTRY': '国家', 'UNKNOWN': '未知'
+};
+
+let hierarchyData = null;
+let expandedNodeIds = new Set();
+
+// Initialize expanded state: expand all first-level children
+function initExpandedState() {
+  expandedNodeIds.clear();
+  if (hierarchyData && hierarchyData.roots) {
+    hierarchyData.roots.forEach(root => {
+      if (root.children && root.children.length > 0) {
+        expandedNodeIds.add(root.id);
+      }
+    });
+  }
+}
+
+async function loadHierarchy() {
+  try {
+    const resp = await fetch('/api/entity/hierarchy');
+    hierarchyData = await resp.json();
+    initExpandedState();
+    renderHierarchy();
+  } catch (e) {
+    console.error('Failed to load hierarchy:', e);
+  }
+}
+
+// Filter children based on expanded state
+function filterChildren(node) {
+  if (!node.children) return node;
+  const visibleChildren = node.children.filter(c => expandedNodeIds.has(c.id));
+  return {...node, children: visibleChildren.map(filterChildren)};
+}
+
+function renderHierarchyWithState() {
+  if (!hierarchyData || !hierarchyData.roots) return;
+
+  // Clone and filter hierarchy data based on expanded state
+  const filteredRoots = hierarchyData.roots.map(filterChildren);
+  const virtualRoot = {id: 'virtual-root', children: filteredRoots};
+
+  renderHierarchy(virtualRoot);
+}
+
+function renderHierarchy(rootData) {
+  const svg = d3.select('#hierarchySvg');
+  svg.selectAll('*').remove();
+
+  const container = svg.node().parentElement;
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+
+  if (!rootData || !rootData.children || rootData.children.length === 0) {
+    document.getElementById('hierarchyEmpty').style.display = 'block';
+    return;
+  }
+  document.getElementById('hierarchyEmpty').style.display = 'none';
+
+  svg.attr('width', width).attr('height', height).attr('viewBox', `0 0 ${width} ${height}`);
+
+  const NODE_WIDTH = 160;
+  const NODE_HEIGHT = 60;
+  const HORIZ_SPACING = 40;
+  const VERT_SPACING = 80;
+
+  // Build d3 hierarchy from the filtered roots structure
+  const rootNode = d3.hierarchy(rootData, d => d.children);
+  rootNode.x0 = width / 2;
+  rootNode.y0 = 60;
+
+  const treeLayout = d3.tree()
+    .nodeSize([NODE_WIDTH + HORIZ_SPACING, NODE_HEIGHT + VERT_SPACING])
+    .separation((a, b) => a.parent === b.parent ? 1 : 1.2);
+
+  treeLayout(rootNode);
+
+  const g = svg.append('g');
+  svg.call(d3.zoom().scaleExtent([0.1, 3]).on('zoom', e => g.attr('transform', e.transform)));
+
+  // Links
+  const linkGroup = g.append('g');
+  rootNode.links().forEach(link => {
+    const relType = link.target.data.relation_type || '';
+    const dashClass = relType === 'SHAREHOLDER' ? 'link-SHAREHOLDER' :
+                      relType === 'JV' ? 'link-JV' : 'link-SUBSIDIARY';
+    linkGroup.append('path')
+      .attr('class', `link ${dashClass}`)
+      .attr('d', `M${link.source.x},${link.source.y + NODE_HEIGHT / 2} V${(link.source.y + link.target.y) / 2} H${link.target.x} V${link.target.y - NODE_HEIGHT / 2}`)
+      .attr('stroke', '#444');
+    // Edge label
+    if (relType) {
+      const midX = (link.source.x + link.target.x) / 2;
+      const midY = (link.source.y + link.target.y) / 2;
+      linkGroup.append('text')
+        .attr('class', 'link-label')
+        .attr('x', midX)
+        .attr('y', midY)
+        .attr('text-anchor', 'middle')
+        .text(relType);
+    }
+  });
+
+  // Nodes
+  const nodeGroup = g.append('g');
+  const tooltip = document.getElementById('hierarchyTooltip');
+  const tipName = document.getElementById('tipName');
+  const tipType = document.getElementById('tipType');
+  const tipFactCount = document.getElementById('tipFactCount');
+
+  function renderNodes(node) {
+    if (!node.children || node.depth === 0) return; // skip virtual root and leaf nodes
+
+    const color = TYPE_COLORS[node.data.entity_type] || TYPE_COLORS['UNKNOWN'];
+    const isExpanded = expandedNodeIds.has(node.data.id);
+    const hasChildren = node.data.children && node.data.children.length > 0;
+
+    const nodeEl = nodeGroup.append('g')
+      .attr('class', 'node-group')
+      .attr('transform', `translate(${node.x - NODE_WIDTH / 2},${node.y - NODE_HEIGHT / 2})`)
+      .call(d3.drag()
+        .on('start', (ev) => { node.fx = node.x; node.fy = node.y; node._drag = false; })
+        .on('drag', (ev) => {
+          if (!node._drag && Math.sqrt((ev.x - node.x) ** 2 + (ev.y - node.y) ** 2) > 3) {
+            node._drag = true;
+          }
+          if (node._drag) { node.fx = ev.x; node.fy = ev.y; }
+        })
+        .on('end', () => { node.fx = null; node.fy = null; node._drag = false; })
+      )
+      .on('click', (ev) => {
+        ev.stopPropagation();
+        const nid = node.data.id;
+        // Check if this node has children in the original data
+        const originalNode = findOriginalNode(nid);
+        if (originalNode && originalNode.children && originalNode.children.length > 0) {
+          if (expandedNodeIds.has(nid)) {
+            expandedNodeIds.delete(nid);
+          } else {
+            expandedNodeIds.add(nid);
+          }
+          renderHierarchyWithState();
+        }
+      })
+      .on('dblclick', () => {
+        if (!node.data.is_text_node) {
+          window.location.href = '/entity/' + node.data.id;
+        }
+      })
+      .on('mouseenter', (ev) => {
+        tipName.textContent = node.data.name;
+        tipType.textContent = TYPE_ZH[node.data.entity_type] || node.data.entity_type || '未知';
+        tipFactCount.textContent = (node.data.fact_count || 0) + ' 条关联事实';
+        tooltip.style.display = 'block';
+        tooltip.style.left = (node.x + NODE_WIDTH / 2 + 10) + 'px';
+        tooltip.style.top = (node.y - NODE_HEIGHT / 2) + 'px';
+      })
+      .on('mouseleave', () => {
+        tooltip.style.display = 'none';
+      });
+
+    nodeEl.append('rect')
+      .attr('class', 'node-rect')
+      .attr('width', NODE_WIDTH)
+      .attr('height', NODE_HEIGHT)
+      .attr('fill', color + '22')
+      .attr('stroke', color)
+      .attr('stroke-width', 2.5);
+
+    // Label
+    const label = node.data.name.length > 10 ? node.data.name.substring(0, 10) + '…' : node.data.name;
+    nodeEl.append('text')
+      .attr('class', 'node-label')
+      .attr('x', NODE_WIDTH / 2)
+      .attr('y', NODE_HEIGHT / 2 - 4)
+      .attr('text-anchor', 'middle')
+      .text(label);
+
+    // Relation type sublabel
+    if (node.data.relation_type) {
+      nodeEl.append('text')
+        .attr('class', 'node-sublabel')
+        .attr('x', NODE_WIDTH / 2)
+        .attr('y', NODE_HEIGHT / 2 + 12)
+        .attr('text-anchor', 'middle')
+        .text(node.data.relation_type);
+    }
+
+    // Expand/collapse indicator
+    if (hasChildren) {
+      const expandIconX = NODE_WIDTH - 20;
+      const expandIconY = NODE_HEIGHT / 2;
+      nodeEl.append('text')
+        .attr('class', 'node-expand-icon')
+        .attr('x', expandIconX)
+        .attr('y', expandIconY)
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'middle')
+        .attr('font-size', '14px')
+        .attr('fill', '#6b6b6b')
+        .attr('cursor', 'pointer')
+        .text(isExpanded ? '▼' : '▶');
+    }
+  }
+
+  // Helper to find original node in hierarchyData
+  function findOriginalNode(nodeId) {
+    function search(nodes) {
+      for (const n of nodes) {
+        if (n.id === nodeId) return n;
+        if (n.children) {
+          const found = search(n.children);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+    return search(hierarchyData.roots);
+  }
+
+  rootNode.descendants().forEach(renderNodes);
+}
+
+// Init
+loadHierarchy();
+window.addEventListener('resize', () => { if (hierarchyData) renderHierarchyWithState(); });
+</script>
+{% endblock %}
