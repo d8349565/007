@@ -5,7 +5,10 @@
 
 {% block head %}
 <style>
-.hierarchy-page { display: flex; height: calc(100vh - 52px); overflow: hidden; position: relative; }
+/* 在 iframe 中隐藏顶部导航栏 */
+body > nav.top-nav { display: none !important; }
+body > main { margin-top: 0 !important; }
+.hierarchy-page { display: flex; height: 100vh; overflow: hidden; position: relative; }
 .hierarchy-canvas-wrap {
   flex: 1; position: relative;
   background-color: #1a1a1a;
