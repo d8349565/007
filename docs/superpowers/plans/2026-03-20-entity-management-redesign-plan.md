@@ -40,9 +40,8 @@ app/
 def get_entity_hierarchy() -> dict:
     """
     从 entity_relation 构建层级树数据。
-    返回 {roots: [...], nodes: [...]}。
-    roots: 顶层实体（无 parent 的）
-    nodes: 所有实体的扁平列表（含 parent_id 和 relation_type）
+    返回 {roots: [...]}。
+    roots: 嵌套 children 结构的顶层实体列表（无 parent 的为根，含直接子节点）
     """
     conn = get_connection()
     try:
@@ -73,11 +72,30 @@ def get_entity_hierarchy() -> dict:
                 "name": r["to_name"],
                 "entity_type": r["to_type"],
                 "relation_type": r["relation_type"],
+                "fact_count": 0,
             })
 
         # 找出根节点（出现在 from_entity_id 从未出现在 to_entity_id 的）
         to_ids = {r["to_entity_id"] for r in rows}
         root_ids = [eid for eid in all_entity_ids if eid not in to_ids]
+
+        # 获取每个实体的关联事实数
+        entity_fact_count: dict = {}
+        if all_entity_ids:
+            counts = conn.execute(
+                f"""SELECT subject_entity_id, COUNT(*) as cnt FROM fact_atom
+                    WHERE subject_entity_id IN ({','.join('?' * len(all_entity_ids))})
+                    AND review_status IN ('AUTO_PASS','HUMAN_PASS')
+                    GROUP BY subject_entity_id""",
+                list(all_entity_ids),
+            ).fetchall()
+            for row in counts:
+                entity_fact_count[row["subject_entity_id"]] = row["cnt"]
+
+        # 为 children 补充 fact_count
+        for parent_id in children_map:
+            for child in children_map[parent_id]:
+                child["fact_count"] = entity_fact_count.get(child["id"], 0)
 
         # 构建 roots 树（只取两层：root + direct children）
         roots = []
@@ -88,6 +106,7 @@ def get_entity_hierarchy() -> dict:
                 "id": eid,
                 "name": info["name"],
                 "entity_type": info["type"],
+                "fact_count": entity_fact_count.get(eid, 0),
                 "relation_type": None,
                 "children": children,
             })
@@ -113,7 +132,7 @@ def api_entity_hierarchy():
 
 Run: `cd "d:/Work/1、企划部/Python程序/2026年/资讯颗粒化收集" && python -c "from app.services.query import get_entity_hierarchy; import json; print(json.dumps(get_entity_hierarchy(), ensure_ascii=False, indent=2))"`
 
-Expected: 输出包含 roots 和 nodes 的 JSON
+Expected: 输出包含 `{"roots": [...]}` 的 JSON（无 nodes 键）
 
 - [ ] **Step 4: Commit**
 
@@ -186,6 +205,7 @@ git commit -m "feat(api): 添加 /api/entity/hierarchy 层级数据接口"
 }
 .hierarchy-tooltip .tip-name { font-weight: 600; color: #fafafa; font-size: 13px; margin-bottom: 4px; }
 .hierarchy-tooltip .tip-type { color: #6b6b6b; font-size: 11px; }
+.hierarchy-tooltip .tip-fact-count { color: #3b82f6; font-size: 11px; margin-top: 4px; }
 </style>
 {% endblock %}
 
@@ -201,6 +221,7 @@ git commit -m "feat(api): 添加 /api/entity/hierarchy 层级数据接口"
     <div class="hierarchy-tooltip" id="hierarchyTooltip">
       <div class="tip-name" id="tipName"></div>
       <div class="tip-type" id="tipType"></div>
+      <div class="tip-fact-count" id="tipFactCount"></div>
     </div>
   </div>
 </div>
@@ -235,11 +256,6 @@ async function loadHierarchy() {
   }
 }
 
-function buildTree(roots) {
-  // roots 已经是嵌套 children 的结构，直接返回
-  return roots;
-}
-
 function renderHierarchy() {
   const svg = d3.select('#hierarchySvg');
   svg.selectAll('*').remove();
@@ -261,43 +277,7 @@ function renderHierarchy() {
   const HORIZ_SPACING = 40;
   const VERT_SPACING = 80;
 
-  // D3 tree layout
-  const stratify = d3.stratify()
-    .id(d => d.id)
-    .parentId(d => null); // roots have no parent
-
-  // Build hierarchy from flat children list
-  function buildHierarchyData(nodes) {
-    if (!nodes || nodes.length === 0) return [];
-    const nodeMap = {};
-    const roots = [];
-    nodes.forEach(n => { nodeMap[n.id] = {...n, children: []}; });
-    nodes.forEach(n => {
-      if (!n.parent_id) {
-        roots.push(nodeMap[n.id]);
-      } else if (nodeMap[n.parent_id]) {
-        nodeMap[n.parent_id].children.push(nodeMap[n.id]);
-      }
-    });
-    return roots;
-  }
-
-  // Flatten roots + children into nodes for d3.hierarchy
-  function flatten(nodes, parentId = null) {
-    let result = [];
-    for (const n of nodes) {
-      result.push({...n, parent_id: parentId});
-      if (n.children && n.children.length > 0) {
-        result = result.concat(flatten(n.children, n.id));
-      }
-    }
-    return result;
-  }
-
-  const flatData = hierarchyData.roots.map(r => ({...r, parent_id: null}));
-  const flatNodes = flatten(hierarchyData.roots);
-
-  // Build d3 hierarchy
+  // Build d3 hierarchy from the nested roots structure
   const rootNode = d3.hierarchy({id: 'virtual-root', children: hierarchyData.roots, parent_id: null}, d => d.children);
   rootNode.x0 = width / 2;
   rootNode.y0 = 60;
@@ -339,6 +319,7 @@ function renderHierarchy() {
   const tooltip = document.getElementById('hierarchyTooltip');
   const tipName = document.getElementById('tipName');
   const tipType = document.getElementById('tipType');
+  const tipFactCount = document.getElementById('tipFactCount');
 
   function renderNodes(node) {
     if (!node.children || node.depth === 0) return; // skip virtual root and leaf nodes
@@ -348,6 +329,16 @@ function renderHierarchy() {
     const nodeEl = nodeGroup.append('g')
       .attr('class', 'node-group')
       .attr('transform', `translate(${node.x - NODE_WIDTH / 2},${node.y - NODE_HEIGHT / 2})`)
+      .call(d3.drag()
+        .on('start', (ev) => { node.fx = node.x; node.fy = node.y; node._drag = false; })
+        .on('drag', (ev) => {
+          if (!node._drag && Math.sqrt((ev.x - node.x) ** 2 + (ev.y - node.y) ** 2) > 3) {
+            node._drag = true;
+          }
+          if (node._drag) { node.fx = ev.x; node.fy = ev.y; }
+        })
+        .on('end', () => { node.fx = null; node.fy = null; node._drag = false; })
+      )
       .on('dblclick', () => {
         if (!node.data.is_text_node) {
           window.location.href = '/entity/' + node.data.id;
@@ -356,6 +347,7 @@ function renderHierarchy() {
       .on('mouseenter', (ev) => {
         tipName.textContent = node.data.name;
         tipType.textContent = TYPE_ZH[node.data.entity_type] || node.data.entity_type || '未知';
+        tipFactCount.textContent = (node.data.fact_count || 0) + ' 条关联事实';
         tooltip.style.display = 'block';
         tooltip.style.left = (node.x + NODE_WIDTH / 2 + 10) + 'px';
         tooltip.style.top = (node.y - NODE_HEIGHT / 2) + 'px';
@@ -514,7 +506,7 @@ git commit -m "feat(web): 改造 graph.html 添加层级视图/关系图谱 Tab 
 
 **数据预处理**：在调用 `d3.tree()` 之前，克隆 hierarchyData，将所有非根节点的 children 置为空（表示收起状态），只保留根节点的一级子节点可见。
 
-**expanded 集合**：维护一个 `Set<string>` `expandedNodeIds`，初始时包含所有根节点 ID。
+**expanded 集合**：维护一个 `Set<string>` `expandedNodeIds`。初始时预填充所有 depth-1 节点（一级子节点）的 ID，使首次渲染显示完整的根→子两层结构。收起操作时从集合中移除 ID，展开操作时加入 ID。
 
 **点击处理**：在节点 click handler 中，toggle 该节点 ID 是否在 `expandedNodeIds` 中：
 ```javascript
