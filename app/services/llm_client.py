@@ -1,4 +1,6 @@
-"""DeepSeek API 客户端封装：统一调用 + token 计数 + 重试"""
+"""LLM 客户端封装：支持 DeepSeek / Kimi 多 provider 切换 + token 计数 + 重试"""
+
+# 切换方式：在 config.yaml 中修改 llm.provider = "deepseek" 或 "kimi"
 
 import json
 import time
@@ -13,7 +15,13 @@ logger = get_logger(__name__)
 
 
 class LLMClient:
-    """DeepSeek LLM 客户端（OpenAI 兼容接口）"""
+    """LLM 客户端（OpenAI 兼容接口，支持多 provider）
+
+    通过 config.yaml 中的 llm.provider 切换模型：
+      - provider: "deepseek"  → deepseek-chat
+      - provider: "kimi"       → kimi-k2.5
+      - provider: "minimax"   → MiniMax-M2.7-highspeed
+    """
 
     def __init__(self, cfg: dict | None = None):
         if cfg is None:

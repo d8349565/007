@@ -6,11 +6,30 @@
 database:
   path: "data/mvp.db"
 
-# --- LLM / DeepSeek ---
+# --- LLM 提供商切换（修改此处即可切换模型）---
+# 可选值：deepseek / kimi / minimax
 llm:
   provider: "deepseek"
-  base_url: "https://api.deepseek.com"
-  model: "deepseek-chat"
+
+  # --- DeepSeek 配置 ---
+  deepseek:
+    base_url: "https://api.deepseek.com"
+    model: "deepseek-chat"
+    api_key_env: "DEEPSEEK_API_KEY"  # 从 .env 读取
+
+  # --- 阿里云 DashScope / Kimi 配置 ---
+  kimi:
+    base_url: "https://coding.dashscope.aliyuncs.com/v1"
+    model: "kimi-k2.5"
+    api_key_env: "KIMI_API_KEY"  # 从 .env 读取
+
+  # --- MiniMax 配置 ---
+  minimax:
+    base_url: "https://api.minimaxi.com/v1"
+    model: "MiniMax-M2.7-highspeed"
+    api_key_env: "MINIMAX_API_KEY"  # 从 .env 读取
+
+  # --- 通用参数 ---
   temperature: 0.1
   max_tokens: 8192
   timeout: 120          # 秒
@@ -23,6 +42,9 @@ model_pricing:
     input_cached: 0.2    # 缓存命中
     input_uncached: 2.0  # 缓存未命中
     output: 3.0          # 输出
+  kimi-k2.5:
+    input: 0.0           # 待补全
+    output: 0.0          # 待补全
 
 # --- 文本切分 ---
 splitter:

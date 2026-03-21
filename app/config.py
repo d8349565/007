@@ -37,8 +37,13 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
     with open(config_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
-    # 将 API Key 注入配置
-    cfg["llm"]["api_key"] = os.getenv("DEEPSEEK_API_KEY", "")
+    # 根据 provider 注入对应的配置（base_url / model / api_key）
+    provider = cfg["llm"].get("provider", "deepseek")
+    provider_cfg = cfg["llm"].get(provider, {})
+    api_key_env = provider_cfg.get("api_key_env", "DEEPSEEK_API_KEY")
+    cfg["llm"]["base_url"] = provider_cfg.get("base_url", "https://api.deepseek.com")
+    cfg["llm"]["model"] = provider_cfg.get("model", "deepseek-chat")
+    cfg["llm"]["api_key"] = os.getenv(api_key_env, "")
 
     # 解析数据库路径为绝对路径
     db_path = cfg.get("database", {}).get("path", "data/mvp.db")
