@@ -246,6 +246,12 @@ review:
   force_human_review_types:
     - COMPETITIVE_RANKING
   force_human_review_predicates: []
+  # 特定 fact_type 必须在 qualifiers 中含有以下字段之一，否则即使 PASS 也不允许 AUTO_PASS
+  # 规则：qualifiers 中至少一个 key 有非空值（OR 关系）
+  # COMPETITIVE_RANKING 已在 force_human_review_types 中，此处只补充其他类型
+  require_qualifier_any:
+    FINANCIAL_METRIC:
+      - metric_name
 
 # --- 日志 ---
 logging:

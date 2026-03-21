@@ -29,6 +29,12 @@ Do NOT judge content accuracy or factual correctness. Focus solely on format, fi
    - PASS: "东方雨虹 收购股权 世界五金 约1.64亿港元" → coherent ✓
    - REJECT: "浙江钰烯 年产4.1万吨项目 将于2025年底建成" → predicate contains project description, object contains time ✗
 
+8. **Qualifier completeness** (by fact_type — check that context-defining qualifiers are present when evidence implies them):
+   - COMPETITIVE_RANKING: qualifiers SHOULD include at least one of ranking_name, ranking_scope, or segment. If all three are absent/null yet the evidence clearly describes a specific ranking context (mentions a leaderboard, geographic scope, or product segment), verdict = UNCERTAIN with issue field="qualifiers", issue="COMPETITIVE_RANKING 缺少上下文限定词（榜单/范围/赛道），无法确定该排名的成立条件".
+   - FINANCIAL_METRIC: if predicate is generic (e.g. "指标为", "财务数据为") AND qualifiers.metric_name is absent/null → verdict = UNCERTAIN, issue="FINANCIAL_METRIC 谓词未体现指标名，且 qualifiers.metric_name 缺失".
+   - CAPACITY: if evidence explicitly mentions a product type or project phase but qualifiers.product_type and qualifiers.phase are both null → flag as UNCERTAIN with issue="evidence 中有产品线/阶段信息但 qualifiers 未捕获".
+   - General rule: score should be reduced by 0.10~0.15 when qualifiers is empty {} but evidence contains clear scope/context markers (e.g. geographic qualifier, product segment, report caliber). Do NOT reject solely for missing qualifiers; prefer UNCERTAIN.
+
 ## What NOT to check
 
 - Factual accuracy (do not verify numbers against external knowledge)

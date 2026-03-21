@@ -151,6 +151,18 @@ def _map_verdict_to_status(
             )
             return "HUMAN_REVIEW_REQUIRED"
 
+    # 关键限定词存在性守门：特定 fact_type 若缺少上下文限定词则不允许 AUTO_PASS
+    # 配置格式: review.require_qualifier_any: {FACT_TYPE: [key1, key2, ...]}
+    # 含义：qualifiers 中至少有一个 key 有非空值，否则降级到人工审核
+    require_qualifier_any = review_cfg.get("require_qualifier_any", {})
+    required_any = require_qualifier_any.get(fact_type, [])
+    if required_any and not any(qualifiers.get(k) for k in required_any):
+        logger.info(
+            "fact_type=%s qualifiers 缺少上下文限定词 (需要其中之一: %s)，强制人工审核",
+            fact_type, required_any,
+        )
+        return "HUMAN_REVIEW_REQUIRED"
+
     # PASS 且分数足够高
     if verdict == "PASS" and score >= auto_pass_threshold:
         return "AUTO_PASS"

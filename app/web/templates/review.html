@@ -103,6 +103,42 @@
                   → {{ f.object_text }}
                 </span>
                 {% endif %}
+                {# 限定词辅助行：按 fact_type 类型化渲染 #}
+                {% set q = f.qualifiers_display %}
+                {% if f.fact_type == 'COMPETITIVE_RANKING' and (q.get('ranking_name') or q.get('ranking_scope') or q.get('segment')) %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  {% if q.get('ranking_name') %}<span style="font-size:10px;color:#94a3b8;background:rgba(148,163,184,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;" title="榜单">{{ q['ranking_name'][:14] }}</span>{% endif %}
+                  {% if q.get('ranking_scope') %}<span style="font-size:10px;color:#94a3b8;background:rgba(148,163,184,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;" title="范围">{{ q['ranking_scope'][:10] }}</span>{% endif %}
+                  {% if q.get('segment') %}<span style="font-size:10px;color:#a78bfa;background:rgba(167,139,250,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;" title="赛道">{{ q['segment'][:10] }}</span>{% endif %}
+                </div>
+                {% elif f.fact_type == 'FINANCIAL_METRIC' %}
+                {# metric_name 已含在谓词中时不重复展示 #}
+                {% set show_metric = q.get('metric_name') and q['metric_name'] not in (f.predicate or '') %}
+                {% set show_scope = q.get('report_scope') %}
+                {% if show_metric or show_scope %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  {% if show_metric %}<span style="font-size:10px;color:#93c5fd;background:rgba(147,197,253,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;" title="指标名">{{ q['metric_name'][:14] }}</span>{% endif %}
+                  {% if show_scope %}<span style="font-size:10px;color:#94a3b8;background:rgba(148,163,184,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;" title="口径">{{ QUALIFIER_VALUE_ZH.get(q['report_scope'], q['report_scope'])[:12] }}</span>{% endif %}
+                </div>
+                {% endif %}
+                {% elif f.fact_type == 'CAPACITY' and (q.get('product_type') or q.get('phase')) %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  {% if q.get('product_type') %}<span style="font-size:10px;color:#94a3b8;background:rgba(148,163,184,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;" title="产品类型">{{ q['product_type'][:12] }}</span>{% endif %}
+                  {% if q.get('phase') %}<span style="font-size:10px;color:#86efac;background:rgba(134,239,172,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;" title="阶段">{{ QUALIFIER_VALUE_ZH.get(q['phase'], q['phase'])[:10] }}</span>{% endif %}
+                </div>
+                {% elif f.fact_type == 'COOPERATION' and q.get('cooperation_type') %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  <span style="font-size:10px;color:#86efac;background:rgba(134,239,172,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;" title="合作类型">{{ QUALIFIER_VALUE_ZH.get(q['cooperation_type'], q['cooperation_type'])[:14] }}</span>
+                </div>
+                {% elif f.fact_type in ['MARKET_SHARE', 'SALES_VOLUME'] and q.get('segment') %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  <span style="font-size:10px;color:#a78bfa;background:rgba(167,139,250,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;" title="细分赛道">{{ q['segment'][:12] }}</span>
+                </div>
+                {% elif f.fact_type == 'EXPANSION' and q.get('phase') %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  <span style="font-size:10px;color:#86efac;background:rgba(134,239,172,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;" title="阶段">{{ QUALIFIER_VALUE_ZH.get(q['phase'], q['phase'])[:10] }}</span>
+                </div>
+                {% endif %}
               </div>
             </td>
             <td style="white-space:nowrap;">

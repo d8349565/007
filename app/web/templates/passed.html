@@ -113,14 +113,40 @@
             </td>
             <td>
               <div class="cell-stack" style="max-width:160px;">
-                {% if f.qualifiers_display.get('metric_name') or f.qualifiers_display.get('segment') %}
+                {# 限定词辅助行：按 fact_type 类型化渲染，与审核页保持一致 #}
+                {% set q = f.qualifiers_display %}
+                {% if f.fact_type == 'COMPETITIVE_RANKING' and (q.get('ranking_name') or q.get('ranking_scope') or q.get('segment')) %}
                 <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:2px;align-items:center;">
-                  {% if f.qualifiers_display.get('metric_name') %}
-                  <span style="font-size:11px;color:#93c5fd;font-weight:600;white-space:nowrap;">{{ f.qualifiers_display['metric_name'] }}</span>
-                  {% endif %}
-                  {% if f.qualifiers_display.get('segment') %}
-                  <span style="font-size:10px;color:#a78bfa;background:rgba(139,92,246,0.12);padding:1px 6px;border-radius:10px;white-space:nowrap;">{{ f.qualifiers_display['segment'] }}</span>
-                  {% endif %}
+                  {% if q.get('ranking_name') %}<span style="font-size:10px;color:#94a3b8;background:rgba(148,163,184,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;">{{ q['ranking_name'][:16] }}</span>{% endif %}
+                  {% if q.get('ranking_scope') %}<span style="font-size:10px;color:#94a3b8;background:rgba(148,163,184,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;">{{ q['ranking_scope'][:12] }}</span>{% endif %}
+                  {% if q.get('segment') %}<span style="font-size:10px;color:#a78bfa;background:rgba(167,139,250,0.12);padding:1px 6px;border-radius:10px;white-space:nowrap;">{{ q['segment'][:12] }}</span>{% endif %}
+                </div>
+                {% elif f.fact_type == 'FINANCIAL_METRIC' %}
+                {# metric_name 已含在谓词中时不重复展示 #}
+                {% set show_metric = q.get('metric_name') and q['metric_name'] not in (f.predicate or '') %}
+                {% set show_scope = q.get('report_scope') %}
+                {% if show_metric or show_scope %}
+                <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:2px;align-items:center;">
+                  {% if show_metric %}<span style="font-size:11px;color:#93c5fd;font-weight:600;white-space:nowrap;">{{ q['metric_name'][:16] }}</span>{% endif %}
+                  {% if show_scope %}<span style="font-size:10px;color:#94a3b8;background:rgba(148,163,184,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;">{{ QUALIFIER_VALUE_ZH.get(q['report_scope'], q['report_scope'])[:12] }}</span>{% endif %}
+                </div>
+                {% endif %}
+                {% elif f.fact_type == 'CAPACITY' and (q.get('product_type') or q.get('phase')) %}
+                <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:2px;align-items:center;">
+                  {% if q.get('product_type') %}<span style="font-size:10px;color:#94a3b8;background:rgba(148,163,184,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;">{{ q['product_type'][:14] }}</span>{% endif %}
+                  {% if q.get('phase') %}<span style="font-size:10px;color:#86efac;background:rgba(134,239,172,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;">{{ QUALIFIER_VALUE_ZH.get(q['phase'], q['phase'])[:10] }}</span>{% endif %}
+                </div>
+                {% elif f.fact_type == 'COOPERATION' and q.get('cooperation_type') %}
+                <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:2px;align-items:center;">
+                  <span style="font-size:10px;color:#86efac;background:rgba(134,239,172,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;">{{ QUALIFIER_VALUE_ZH.get(q['cooperation_type'], q['cooperation_type'])[:16] }}</span>
+                </div>
+                {% elif f.fact_type in ['MARKET_SHARE', 'SALES_VOLUME'] and q.get('segment') %}
+                <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:2px;align-items:center;">
+                  <span style="font-size:10px;color:#a78bfa;background:rgba(167,139,250,0.12);padding:1px 6px;border-radius:10px;white-space:nowrap;">{{ q['segment'][:14] }}</span>
+                </div>
+                {% elif f.fact_type == 'EXPANSION' and q.get('phase') %}
+                <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:2px;align-items:center;">
+                  <span style="font-size:10px;color:#86efac;background:rgba(134,239,172,0.12);padding:1px 6px;border-radius:9px;white-space:nowrap;">{{ QUALIFIER_VALUE_ZH.get(q['phase'], q['phase'])[:10] }}</span>
                 </div>
                 {% endif %}
                 <span class="truncate-inner text-sm"

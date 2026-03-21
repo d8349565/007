@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS fact_atom (
     review_note         TEXT,
     subject_entity_id   TEXT REFERENCES entity(id),
     object_entity_id    TEXT REFERENCES entity(id),
+    location_entity_id  TEXT REFERENCES entity(id),
     created_at          TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );

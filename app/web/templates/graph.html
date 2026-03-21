@@ -112,17 +112,17 @@
 {% block content %}
 <!-- Entity View Tabs -->
 <div class="entity-view-tabs">
-  <button class="ev-tab active" data-view="hierarchy" onclick="switchEntityView('hierarchy')" style="background:none;border:none;color:#a1a1a1;font-size:13px;font-weight:500;padding:8px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;">层级视图</button>
-  <button class="ev-tab" data-view="graph" onclick="switchEntityView('graph')" style="background:none;border:none;color:#6b6b6b;font-size:13px;font-weight:500;padding:8px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;">关系图谱</button>
+  <button class="ev-tab" data-view="hierarchy" onclick="switchEntityView('hierarchy')" style="background:none;border:none;color:#6b6b6b;font-size:13px;font-weight:500;padding:8px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;">层级视图</button>
+  <button class="ev-tab active" data-view="graph" onclick="switchEntityView('graph')" style="background:none;border:none;color:#fafafa;font-size:13px;font-weight:500;padding:8px 16px;cursor:pointer;border-bottom:2px solid #3b82f6;transition:all 0.15s;">关系图谱</button>
 </div>
 
 <!-- Hierarchy view panel -->
-<div class="view-panel active" id="hierarchyViewPanel" style="flex-direction: column; height: calc(100vh - 52px - 44px);">
+<div class="view-panel" id="hierarchyViewPanel" style="flex-direction: column; height: calc(100vh - 52px - 44px);">
   <iframe src="/hierarchy" style="flex:1; border:none; width:100%; height:100%;" id="hierarchyFrame"></iframe>
 </div>
 
 <!-- Graph view panel -->
-<div class="view-panel" id="graphViewPanel">
+<div class="view-panel active" id="graphViewPanel" style="height: calc(100vh - 52px - 44px);">
   <div class="graph-canvas-wrap">
     <svg id="graphSvg"></svg>
 
@@ -168,7 +168,6 @@
     </div>
   </div>
 </div>
-</div>
 
 <script>
 function switchEntityView(view) {
@@ -179,6 +178,11 @@ function switchEntityView(view) {
   });
   document.getElementById('graphViewPanel').classList.toggle('active', view === 'graph');
   document.getElementById('hierarchyViewPanel').classList.toggle('active', view === 'hierarchy');
+  // 切换到图谱视图时重新渲染（初始渲染时面板可能是隐藏状态导致尺寸为0）
+  if (view === 'graph') {
+    if (graphData) renderGraph();
+    else loadGraph();
+  }
 }
 </script>
 {% endblock %}

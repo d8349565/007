@@ -32,6 +32,59 @@ FACT_TYPE_NAMES = {
     "COOPERATION": "合作",
 }
 
+# qualifier 字段值的中文映射（LLM 可能输出英文 key）
+QUALIFIER_VALUE_ZH = {
+    # cooperation_type
+    "strategic_cooperation": "战略合作",
+    "strategic_coop": "战略合作",
+    "joint_venture": "合资合作",
+    "jv": "合资合作",
+    "research_cooperation": "科研合作",
+    "research_coop": "科研合作",
+    "research_partnership": "科研合作",
+    "technical_cooperation": "技术合作",
+    "tech_cooperation": "技术合作",
+    "tech_coop": "技术合作",
+    "supply_partnership": "供应合作",
+    "supply_agreement": "供应合作",
+    "co_development": "联合开发",
+    "joint_development": "联合开发",
+    "equity_investment": "股权投资",
+    "equity": "股权合作",
+    "distribution": "销售合作",
+    "sales_coop": "销售合作",
+    "licensing": "许可授权",
+    "franchise": "特许经营",
+    "investment": "投资合作",
+    "partnership": "合作共建",
+    # phase（阶段）
+    "planned": "规划中",
+    "under_construction": "在建",
+    "construction": "在建",
+    "completed": "竣工",
+    "completion": "竣工",
+    "commissioned": "投产",
+    "operation": "运营中",
+    "phase_1": "一期",
+    "phase1": "一期",
+    "first_phase": "一期",
+    "phase_2": "二期",
+    "phase2": "二期",
+    "second_phase": "二期",
+    "phase_3": "三期",
+    "phase3": "三期",
+    # report_scope（统计口径）
+    "consolidated": "合并口径",
+    "parent_only": "母公司口径",
+    "standalone": "独立口径",
+    "group": "集团口径",
+    # price_type
+    "factory": "出厂价",
+    "retail": "零售价",
+    "wholesale": "批发价",
+    "market": "市场价",
+}
+
 
 def create_app() -> Flask:
     cfg = get_config()
@@ -53,7 +106,11 @@ def create_app() -> Flask:
 
     @app.context_processor
     def inject_globals():
-        return dict(FACT_TYPE_NAMES=FACT_TYPE_NAMES, ENTITY_TYPE_ZH=ENTITY_TYPE_ZH)
+        return dict(
+            FACT_TYPE_NAMES=FACT_TYPE_NAMES,
+            ENTITY_TYPE_ZH=ENTITY_TYPE_ZH,
+            QUALIFIER_VALUE_ZH=QUALIFIER_VALUE_ZH,
+        )
 
     @app.route("/")
     def index():
