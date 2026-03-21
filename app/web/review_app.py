@@ -682,6 +682,135 @@ def create_app() -> Flask:
             logger.error("交换合并任务失败 %s: %s", task_id[:8], e)
             return jsonify({"error": "合并失败，请查看日志"}), 500
 
+    # ─────────────── 实体关联分析 API ───────────────
+
+    @app.route("/api/entity/analyze", methods=["POST"])
+    def api_entity_analyze():
+        """分析单个实体，生成关联建议（写入 entity_relation_suggestion 表）"""
+        from app.services.entity_analyzer import analyze_entity
+        from app.services.llm_client import LLMClient
+        data = request.get_json(silent=True) or {}
+        entity_id = str(data.get("entity_id", "")).strip()
+        if not entity_id:
+            return jsonify({"error": "entity_id 不能为空"}), 400
+        use_llm = bool(data.get("use_llm", True))
+        try:
+            llm = LLMClient(cfg) if use_llm else None
+            result = analyze_entity(entity_id, llm_client=llm)
+            return jsonify({"success": True, **result})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error("实体分析失败 %s: %s", entity_id, e)
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/entity/analyze-with-search", methods=["POST"])
+    def api_entity_analyze_with_search():
+        """分析单个实体 + 网络搜索（置信度达标时自动入库）"""
+        from app.services.entity_analyzer import analyze_entity
+        from app.services.llm_client import LLMClient
+        data = request.get_json(silent=True) or {}
+        entity_id = str(data.get("entity_id", "")).strip()
+        if not entity_id:
+            return jsonify({"error": "entity_id 不能为空"}), 400
+        use_llm = bool(data.get("use_llm", True))
+        try:
+            llm = LLMClient(cfg) if use_llm else None
+            result = analyze_entity(entity_id, llm_client=llm, use_web_search=True)
+            return jsonify({"success": True, **result})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error("实体网络搜索分析失败 %s: %s", entity_id, e)
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/entity/search-cache")
+    def api_entity_search_cache():
+        """返回网络搜索缓存统计 + 最近 20 条记录"""
+        from app.services.web_searcher import get_cache_stats
+        from app.models.db import get_connection as _gc
+        conn = _gc()
+        try:
+            stats = get_cache_stats(conn)
+            rows = conn.execute(
+                """SELECT entity_name, query, search_source, summary_text,
+                          SUBSTR(created_at, 1, 16) AS created_at
+                   FROM entity_search_cache
+                   ORDER BY created_at DESC LIMIT 20"""
+            ).fetchall()
+            entries = [dict(r) for r in rows]
+        finally:
+            conn.close()
+        return jsonify({"stats": stats, "recent": entries})
+
+    @app.route("/api/entity/analyze-batch", methods=["POST"])
+    def api_entity_analyze_batch():
+        """批量分析多个实体（按事实数量降序取 top N）"""
+        from app.services.entity_analyzer import analyze_entity
+        from app.services.llm_client import LLMClient
+        from app.models.db import get_connection as _gc
+        data = request.get_json(silent=True) or {}
+        limit = min(int(data.get("limit", 10)), 30)   # 安全上限 30
+        use_llm = bool(data.get("use_llm", False))     # 批量默认不调 LLM，避免费用过高
+        conn = _gc()
+        try:
+            rows = conn.execute(
+                """SELECT e.id
+                   FROM entity e
+                   LEFT JOIN fact_atom f ON f.subject_entity_id = e.id
+                     AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                   GROUP BY e.id
+                   ORDER BY COUNT(f.id) DESC
+                   LIMIT ?""",
+                (limit,),
+            ).fetchall()
+            entity_ids = [r["id"] for r in rows]
+        finally:
+            conn.close()
+
+        llm = LLMClient(cfg) if use_llm else None
+        results = []
+        for eid in entity_ids:
+            try:
+                r = analyze_entity(eid, llm_client=llm)
+                results.append(r)
+            except Exception as exc:
+                logger.warning("批量分析跳过 %s: %s", eid, exc)
+        return jsonify({"success": True, "analyzed": len(results), "results": results})
+
+    @app.route("/api/entity/relation-suggestions")
+    def api_relation_suggestions():
+        """查询实体关联建议列表"""
+        from app.services.entity_analyzer import get_suggestions
+        entity_id = request.args.get("entity_id", "") or None
+        status = request.args.get("status", "pending")
+        limit = min(int(request.args.get("limit", 100)), 500)
+        suggestions = get_suggestions(entity_id=entity_id, status=status, limit=limit)
+        return jsonify({"suggestions": suggestions})
+
+    @app.route("/api/entity/relation-suggestion/<suggestion_id>/confirm", methods=["POST"])
+    def api_relation_suggestion_confirm(suggestion_id: str):
+        """确认建议：建立关系 / 别名 / 发起合并任务"""
+        from app.services.entity_analyzer import confirm_suggestion
+        try:
+            result = confirm_suggestion(suggestion_id)
+            return jsonify({"success": True, **result})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error("确认建议失败 %s: %s", suggestion_id, e)
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/entity/relation-suggestion/<suggestion_id>/reject", methods=["POST"])
+    def api_relation_suggestion_reject(suggestion_id: str):
+        """拒绝建议"""
+        from app.services.entity_analyzer import reject_suggestion
+        try:
+            reject_suggestion(suggestion_id)
+            return jsonify({"success": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     # ─────────────────────── 知识图谱 & 时间轴 ───────────────────────
 
     # ─────────── 主体知识库管理 API ───────────

@@ -157,47 +157,58 @@ Test-Path .venv
 3. 潜在风险
 4. 如何验证
 
-
 ---
 
-## 快速参考
+## 服务模块速查
 
-### 常用命令（PowerShell / Windows）
+| 模块 | 核心职责 | 关键公共函数 |
+|------|---------|------------|
+| `pipeline.py` | 处理链路编排入口 | `process_document(doc_id)` |
+| `full_extractor.py` | 全文抽取（Agent1+2合并） | `extract_facts_full_text(cleaned_text, doc_id, chunk_id, ...)` |
+| `reviewer.py` | 事实审核验证（Agent3） | `review_document_facts(doc_id)` |
+| `entity_linker.py` | 实体标准化与链接 | `link_entity(raw_text, entity_type)` / `batch_link_fact_atoms(doc_id)` |
+| `entity_merger.py` | 实体合并三层流水线 | `generate_merge_tasks()` / `merge_entities(primary_id, secondary_id)` |
+| `entity_analyzer.py` | 实体关系发现 | `analyze_entity(entity_id)` / `confirm_suggestion(suggestion_id)` |
+| `cleaner.py` | 文本清洗（去噪/去HTML） | `clean_text(raw_text, cfg=None)` |
+| `importer.py` | 文档导入 | `import_file(path)` / `import_url(url)` / `import_batch(directory)` |
+| `llm_client.py` | DeepSeek API 封装 | `LLMClient.chat(system_prompt, user_prompt)` / `chat_json(...)` |
+| `query.py` | 查询与统计 | `query_facts(subject, fact_type, ...)` / `get_stats()` |
 
-```powershell
-# 初始化数据库（首次必须）
-python -m app.main init
+## Web 路由速查（`review_app.py`）
 
-# 导入并处理文件
-python -m app.main import-file <path> --process
+| 路由 | 说明 |
+|-----|------|
+| `GET /` | 统计首页 |
+| `GET /documents` | 文档列表 |
+| `GET /documents/<doc_id>` | 文档详情 |
+| `GET /review` | 待人工审核列表（HUMAN_REVIEW_REQUIRED） |
+| `POST /review/<fact_id>/action` | 审核操作（PASS / REJECT） |
+| `POST /review/<fact_id>/edit` | 人工编辑事实字段 |
+| `GET /passed` | 已通过事实列表 |
+| `GET /manage` | 实体合并任务管理（三层审核入口） |
+| `GET /graph` | 实体关系图谱可视化 |
+| `GET /entity/<entity_id>` | 实体详情 / timeline / hierarchy |
+| `POST /import/paste\|file\|url` | 各类文档导入 |
+| `GET /api/entity/merge-suggestions` | 合并建议 API |
+| `POST /api/entity/merge` | 执行合并 API |
+| `GET /export` | CSV 导出 |
 
-# 处理所有待处理文档
-python -m app.main process --all
+## 完整数据表速查
 
-# 查看统计
-python -m app.main stats
+| 表 | 说明 |
+|---|---|
+| `source_document` | 原始文档（含 `content_hash` 去重键） |
+| `document_chunk` | 文本块（全文模式下为单块，`chunk_index=0`） |
+| `evidence_span` | 证据片段（Agent1 输出，含自动去重索引） |
+| `fact_atom` | 事实原子（13 字段，`review_status` 六态） |
+| `entity` / `entity_alias` | 标准实体 + 别名 |
+| `entity_relation` | 实体关系（`relation_type`: SUBSIDIARY/SHAREHOLDER/JV/BRAND/PARTNER/INVESTS_IN） |
+| `entity_relation_suggestion` | 实体关系候选（`status`: pending/confirmed/rejected，支持 `auto_confirmed`） |
+| `extraction_task` | LLM 调用记录（token 统计，`task_type`: evidence_finder/fact_extractor/reviewer） |
+| `entity_merge_task` | 实体合并任务（`llm_verdict`: merge/keep/uncertain，`status`: pending/approved/rejected/executed/skipped） |
+| `review_log` | 审核操作日志 |
 
-# 启动审核 Web 界面
-python -m app.main web
-
-# 运行所有测试
-pytest tests/
-
-# 单模块测试
-pytest tests/test_pipeline.py
-pytest tests/test_cleaner.py
-pytest tests/test_splitter.py
-```
-
-### 虚拟环境
-
-```powershell
-# 检测虚拟环境是否存在
-Test-Path .venv
-
-# 激活
-.\.venv\Scripts\Activate.ps1
-```
+`fact_atom.review_status` 六种状态：`PENDING` → `AUTO_PASS` / `HUMAN_REVIEW_REQUIRED` → `HUMAN_PASS` / `REJECTED` / `UNCERTAIN`
 
 ---
 

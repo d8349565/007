@@ -196,3 +196,42 @@ CREATE TABLE IF NOT EXISTS entity_merge_task (
 
 CREATE INDEX IF NOT EXISTS idx_entity_merge_task_status
     ON entity_merge_task(status);
+
+-- 实体关联分析建议表（事实驱动 + 名称相似 + 游离文本三类候选）
+CREATE TABLE IF NOT EXISTS entity_relation_suggestion (
+    id                TEXT PRIMARY KEY,
+    entity_id         TEXT NOT NULL REFERENCES entity(id),
+    target_name       TEXT NOT NULL,
+    target_entity_id  TEXT REFERENCES entity(id),
+    suggestion_type   TEXT NOT NULL,  -- 'merge' | 'relation' | 'alias'
+    relation_type     TEXT,           -- 仅 suggestion_type='relation' 时填写
+    evidence          TEXT,           -- 证据原文摘录
+    evidence_fact_id  TEXT REFERENCES fact_atom(id),
+    confidence        REAL NOT NULL DEFAULT 0.5,
+    llm_reason        TEXT,
+    search_evidence   TEXT,           -- 网络搜索/LLM知识查询得到的佐证文本
+    auto_confirmed    INTEGER NOT NULL DEFAULT 0,  -- 1=高置信度自动入库，0=等待人工审核
+    status            TEXT NOT NULL DEFAULT 'pending',
+    -- pending(待审核) | confirmed(已确认) | rejected(已拒绝)
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    confirmed_at      TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_entity_relation_suggestion_entity
+    ON entity_relation_suggestion(entity_id);
+CREATE INDEX IF NOT EXISTS idx_entity_relation_suggestion_status
+    ON entity_relation_suggestion(status);
+
+-- 实体背景搜索缓存表（避免重复调用网络/LLM，同一实体查询结果长期有效）
+CREATE TABLE IF NOT EXISTS entity_search_cache (
+    id           TEXT PRIMARY KEY,
+    entity_name  TEXT NOT NULL,         -- 被搜索的实体名称
+    query        TEXT NOT NULL UNIQUE,  -- 实际查询词（entity_name 或 "entity_a||entity_b"）
+    search_source TEXT NOT NULL DEFAULT 'llm',  -- 'duckduckgo' | 'llm_knowledge' | 'combined'
+    raw_results  TEXT,                  -- 原始返回内容 JSON
+    summary_text TEXT,                  -- 提炼后摘要（直接喂给 prompt）
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_entity_search_cache_entity
+    ON entity_search_cache(entity_name);

@@ -152,6 +152,43 @@
 .cvs-rubber-line {
   stroke:#3b82f6;stroke-width:2;stroke-dasharray:6,3;pointer-events:none;
 }
+/* 子 Tab（实体合并/关联分析） */
+.sub-tabs {
+  display:flex; gap:2px; padding:8px 16px 0; border-bottom:1px solid #303030;
+}
+.sub-tab {
+  padding:6px 14px; font-size:12px; font-weight:500; cursor:pointer;
+  border-bottom:2px solid transparent; margin-bottom:-1px; color:#6b6b6b;
+  background:none; border-top:none; border-left:none; border-right:none;
+  transition: color .15s, border-color .15s;
+}
+.sub-tab.active { color:#3b82f6; border-bottom-color:#3b82f6; }
+.sub-pane { display:none; }
+.sub-pane.active { display:block; }
+/* 关联建议卡片 */
+.sugg-card {
+  background:#252525; border:1px solid #404040; border-radius:8px;
+  padding:10px 14px; display:grid;
+  grid-template-columns:1fr auto; gap:8px; align-items:start;
+  margin-bottom:8px;
+}
+.sugg-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.35); }
+.sugg-card.type-merge   { border-left:3px solid #a78bfa; }
+.sugg-card.type-relation{ border-left:3px solid #3b82f6; }
+.sugg-card.type-alias   { border-left:3px solid #f59e0b; }
+.sugg-card.status-confirmed{ opacity:.55; }
+.sugg-card.status-rejected { opacity:.4; background:#2a2020; }
+.sugg-type-badge {
+  display:inline-block; font-size:10px; padding:1px 6px; border-radius:3px;
+  font-weight:600; margin-right:4px;
+}
+.sugg-type-badge.merge    { background:rgba(167,139,250,0.15); color:#a78bfa; }
+.sugg-type-badge.relation { background:rgba(59,130,246,0.15);  color:#60a5fa; }
+.sugg-type-badge.alias    { background:rgba(245,158,11,0.15);  color:#fbbf24; }
+.sugg-target { font-size:13px; font-weight:600; color:#e0e0e0; }
+.sugg-evidence { font-size:12px; color:#6b6b6b; margin-top:3px; line-height:1.4; }
+.sugg-reason   { font-size:12px; color:#94a3b8; margin-top:4px; font-style:italic; }
+.sugg-actions  { display:flex; flex-direction:column; gap:5px; min-width:80px; align-items:flex-end; }
 </style>
 {% endblock %}
 
@@ -253,15 +290,27 @@
   {# ========================= 实体合并审核面板 ========================= #}
   <div class="manage-pane" id="pane-entities">
     <div class="card">
-      {# 顶部说明 + 操作栏 #}
-      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      {# 顶部说明 + 子Tab导航 #}
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding-bottom:0;">
         <div>
-          <span style="font-weight:600;">实体合并审核</span>
+          <span style="font-weight:600;">实体智能管理</span>
           <span style="font-size:12px;color:#94a3b8;margin-left:8px;">
-            规则层筛选候选对 → DeepSeek AI 判断 → 人工批准/拒绝
+            名称相似合并 + 事实驱动关系发现
           </span>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;">
+      </div>
+
+      {# 子 Tab 导航 #}
+      <div class="sub-tabs" id="entity-sub-tabs">
+        <button class="sub-tab active" onclick="switchEntitySubTab('merge', this)">⚡ 合并审核</button>
+        <button class="sub-tab" onclick="switchEntitySubTab('analyze', this)">🔍 实体关联分析</button>
+      </div>
+
+      {# ─────── 子 Tab: 合并审核 ─────── #}
+      <div class="sub-pane active" id="sub-pane-merge">
+
+        {# 操作栏 #}
+        <div style="display:flex;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid #262626;flex-wrap:wrap;">
           <select id="gen-max-llm" style="font-size:12px;padding:4px 8px;border:1px solid #505050;border-radius:6px;background:#323232;color:#ffffff;">
             <option value="10">LLM 分析 10 对</option>
             <option value="20" selected>LLM 分析 20 对</option>
@@ -271,78 +320,126 @@
           <button class="btn btn-sm btn-primary" id="btn-generate" onclick="generateTasks()">运行 AI 分析</button>
           <button class="btn btn-sm btn-secondary" id="btn-reload-tasks" onclick="loadTasks()">刷新列表</button>
         </div>
-      </div>
 
-      {# 警告提示 #}
-      <div style="padding:8px 18px;background:rgba(245,158,11,0.1);border-bottom:1px solid rgba(245,158,11,0.3);font-size:12px;color:#fbbf24;">
-        ⚠️ 合并后不可撤销：副实体名称降级为主实体别名，所有关联事实自动重指向主实体。
-      </div>
-
-      {# 统计栏 #}
-      <div class="merge-stats-bar" id="merge-stats-bar">
-        <span class="merge-stat-item">待审核 <b class="merge-stat-num pending" id="cnt-pending">—</b></span>
-        <span style="color:#333;">|</span>
-        <span class="merge-stat-item">已执行 <b class="merge-stat-num executed" id="cnt-executed">—</b></span>
-        <span class="merge-stat-item">已拒绝 <b class="merge-stat-num rejected" id="cnt-rejected">—</b></span>
-        <span class="merge-stat-item" style="color:#6b6b6b;font-size:12px;">共 <b id="cnt-total">—</b> 条</span>
-      </div>
-
-      {# 过滤栏 #}
-      <div class="merge-filter-bar">
-        <span style="font-size:12px;color:#6b6b6b;">显示：</span>
-        <button class="filter-tab active" onclick="setFilter('pending', this)">待审核</button>
-        <button class="filter-tab" onclick="setFilter('all', this)">全部</button>
-        <button class="filter-tab" onclick="setFilter('executed', this)">已执行</button>
-        <button class="filter-tab" onclick="setFilter('rejected', this)">已拒绝</button>
-        <span style="margin-left:auto;font-size:12px;color:#6b6b6b;" id="task-count-label"></span>
-      </div>
-
-      {# 任务列表 #}
-      <div id="merge-tasks-container" style="padding:12px 16px;">
-        <div class="task-loading">点击"运行 AI 分析"生成合并建议，或"刷新列表"查看已有任务。</div>
-      </div>
-
-      {# ── 手动去重区块 ── #}
-      <div style="border-top:1px solid #262626;padding:14px 16px;">
-        <div style="font-size:13px;font-weight:600;color:#fafafa;margin-bottom:4px;">🔁 手动归一化</div>
-        <div style="font-size:12px;color:#6b6b6b;margin-bottom:10px;">
-          搜索事实中出现的主体名称 → 批量勾选属于同一实体的条目 → 统一为规范名称
+        {# 警告提示 #}
+        <div style="padding:8px 18px;background:rgba(245,158,11,0.1);border-bottom:1px solid rgba(245,158,11,0.3);font-size:12px;color:#fbbf24;">
+          ⚠️ 合并后不可撤销：副实体名称降级为主实体别名，所有关联事实自动重指向主实体。
         </div>
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-          <input type="text" id="dedup-search-input" placeholder="输入关键词，如"佐敦""
-            style="flex:1;padding:6px 10px;background:#1a1a1a;border:1px solid #404040;border-radius:6px;color:#fafafa;font-size:13px;"
-            onkeydown="if(event.key==='Enter') runDedupSearch()" />
-          <button class="btn btn-sm btn-primary" onclick="runDedupSearch()">搜索</button>
+
+        {# 统计栏 #}
+        <div class="merge-stats-bar" id="merge-stats-bar">
+          <span class="merge-stat-item">待审核 <b class="merge-stat-num pending" id="cnt-pending">—</b></span>
+          <span style="color:#333;">|</span>
+          <span class="merge-stat-item">已执行 <b class="merge-stat-num executed" id="cnt-executed">—</b></span>
+          <span class="merge-stat-item">已拒绝 <b class="merge-stat-num rejected" id="cnt-rejected">—</b></span>
+          <span class="merge-stat-item" style="color:#6b6b6b;font-size:12px;">共 <b id="cnt-total">—</b> 条</span>
         </div>
-        <div id="dedup-results" style="display:none;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:12px;color:#6b6b6b;">
-            <span id="dedup-result-hint"></span>
-            <button class="btn btn-sm" style="background:#2a2a2a;color:#94a3b8;font-size:11px;" onclick="dedupSelectAll()">全选</button>
+
+        {# 过滤栏 #}
+        <div class="merge-filter-bar">
+          <span style="font-size:12px;color:#6b6b6b;">显示：</span>
+          <button class="filter-tab active" onclick="setFilter('pending', this)">待审核</button>
+          <button class="filter-tab" onclick="setFilter('all', this)">全部</button>
+          <button class="filter-tab" onclick="setFilter('executed', this)">已执行</button>
+          <button class="filter-tab" onclick="setFilter('rejected', this)">已拒绝</button>
+          <span style="margin-left:auto;font-size:12px;color:#6b6b6b;" id="task-count-label"></span>
+        </div>
+
+        {# 任务列表 #}
+        <div id="merge-tasks-container" style="padding:12px 16px;">
+          <div class="task-loading">点击"运行 AI 分析"生成合并建议，或"刷新列表"查看已有任务。</div>
+        </div>
+
+        {# ── 手动去重区块 ── #}
+        <div style="border-top:1px solid #262626;padding:14px 16px;">
+          <div style="font-size:13px;font-weight:600;color:#fafafa;margin-bottom:4px;">🔁 手动归一化</div>
+          <div style="font-size:12px;color:#6b6b6b;margin-bottom:10px;">
+            搜索事实中出现的主体名称 → 批量勾选属于同一实体的条目 → 统一为规范名称
           </div>
-          <div id="dedup-item-list" style="display:flex;flex-direction:column;gap:4px;max-height:280px;overflow-y:auto;margin-bottom:10px;"></div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;">
-            <div style="flex:1;min-width:200px;">
-              <div style="font-size:11px;color:#6b6b6b;margin-bottom:4px;">统一规范名称</div>
-              <input type="text" id="dedup-canonical-name"
-                style="width:100%;padding:5px 8px;background:#262626;border:1px solid #404040;border-radius:5px;color:#fafafa;font-size:13px;" />
-            </div>
-            <div>
-              <div style="font-size:11px;color:#6b6b6b;margin-bottom:4px;">实体类型</div>
-              <select id="dedup-entity-type"
-                style="padding:5px 8px;background:#262626;border:1px solid #404040;border-radius:5px;color:#fff;font-size:12px;">
-                <option value="COMPANY">公司</option>
-                <option value="GROUP">集团</option>
-                <option value="PROJECT">项目</option>
-                <option value="UNKNOWN">未知</option>
-              </select>
-            </div>
-            <div style="align-self:flex-end;">
-              <button class="btn btn-sm btn-primary" id="dedup-apply-btn" onclick="applyDedupMerge()">批量归一化</button>
-            </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+            <input type="text" id="dedup-search-input" placeholder="输入关键词，如"佐敦""
+              style="flex:1;padding:6px 10px;background:#1a1a1a;border:1px solid #404040;border-radius:6px;color:#fafafa;font-size:13px;"
+              onkeydown="if(event.key==='Enter') runDedupSearch()" />
+            <button class="btn btn-sm btn-primary" onclick="runDedupSearch()">搜索</button>
           </div>
-          <div id="dedup-apply-result" style="margin-top:8px;font-size:12px;"></div>
+          <div id="dedup-results" style="display:none;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:12px;color:#6b6b6b;">
+              <span id="dedup-result-hint"></span>
+              <button class="btn btn-sm" style="background:#2a2a2a;color:#94a3b8;font-size:11px;" onclick="dedupSelectAll()">全选</button>
+            </div>
+            <div id="dedup-item-list" style="display:flex;flex-direction:column;gap:4px;max-height:280px;overflow-y:auto;margin-bottom:10px;"></div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;">
+              <div style="flex:1;min-width:200px;">
+                <div style="font-size:11px;color:#6b6b6b;margin-bottom:4px;">统一规范名称</div>
+                <input type="text" id="dedup-canonical-name"
+                  style="width:100%;padding:5px 8px;background:#262626;border:1px solid #404040;border-radius:5px;color:#fafafa;font-size:13px;" />
+              </div>
+              <div>
+                <div style="font-size:11px;color:#6b6b6b;margin-bottom:4px;">实体类型</div>
+                <select id="dedup-entity-type"
+                  style="padding:5px 8px;background:#262626;border:1px solid #404040;border-radius:5px;color:#fff;font-size:12px;">
+                  <option value="COMPANY">公司</option>
+                  <option value="GROUP">集团</option>
+                  <option value="PROJECT">项目</option>
+                  <option value="UNKNOWN">未知</option>
+                </select>
+              </div>
+              <div style="align-self:flex-end;">
+                <button class="btn btn-sm btn-primary" id="dedup-apply-btn" onclick="applyDedupMerge()">批量归一化</button>
+              </div>
+            </div>
+            <div id="dedup-apply-result" style="margin-top:8px;font-size:12px;"></div>
+          </div>
         </div>
-      </div>
+      </div>{# end sub-pane-merge #}
+
+      {# ─────── 子 Tab: 实体关联分析 ─────── #}
+      <div class="sub-pane" id="sub-pane-analyze">
+
+        {# 搜索实体 + 操作栏 #}
+        <div style="padding:12px 16px;border-bottom:1px solid #262626;">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+            <div style="position:relative;flex:1;min-width:200px;">
+              <input type="text" id="analyze-entity-input"
+                placeholder="搜索实体名称进行分析…"
+                style="width:100%;padding:6px 10px;background:#1a1a1a;border:1px solid #404040;border-radius:6px;color:#fafafa;font-size:13px;box-sizing:border-box;"
+                oninput="analyzeEntitySearchDebounced()" autocomplete="off" />
+              <div id="analyze-entity-dropdown" style="position:absolute;top:100%;left:0;right:0;max-height:220px;overflow-y:auto;background:#2a2a2a;border:1px solid #505050;border-radius:6px;z-index:10;display:none;margin-top:2px;box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
+            </div>
+            <button class="btn btn-sm btn-primary" id="btn-analyze-one" onclick="analyzeSelectedEntity(true)" disabled>🤖 AI 分析</button>
+            <button class="btn btn-sm" style="background:#1a2a3a;color:#38bdf8;border:1px solid #2a4a6a;" id="btn-analyze-web" onclick="analyzeWithSearch()" disabled title="AI 分析 + 网络搜索，置信度达 85% 自动入库">🌐 AI+网搜</button>
+            <button class="btn btn-sm btn-secondary" id="btn-analyze-one-norule" onclick="analyzeSelectedEntity(false)" disabled>规则分析</button>
+            <span style="color:#404040;">|</span>
+            <select id="batch-analyze-limit" style="font-size:12px;padding:4px 8px;border:1px solid #505050;border-radius:6px;background:#323232;color:#fff;">
+              <option value="5">批量 5 个实体</option>
+              <option value="10" selected>批量 10 个实体</option>
+              <option value="20">批量 20 个实体（较慢）</option>
+            </select>
+            <button class="btn btn-sm" style="background:#1a3a5a;color:#60a5fa;border:1px solid #2a5a8a;" onclick="batchAnalyzeEntities()">全量扫描（规则）</button>
+          </div>
+          <div id="analyze-status-bar" style="font-size:12px;color:#6b6b6b;min-height:18px;"></div>
+        </div>
+
+        {# 建议过滤栏 #}
+        <div class="merge-filter-bar" style="gap:6px;">
+          <span style="font-size:12px;color:#6b6b6b;">建议类型：</span>
+          <button class="filter-tab active" onclick="setSuggFilter('all', this)">全部</button>
+          <button class="filter-tab" onclick="setSuggFilter('merge', this)">⚡ 合并</button>
+          <button class="filter-tab" onclick="setSuggFilter('relation', this)">🔗 关系</button>
+          <button class="filter-tab" onclick="setSuggFilter('alias', this)">🏷️ 别名</button>
+          <span style="color:#333;">|</span>
+          <button class="filter-tab active" id="sugg-status-pending" onclick="setSuggStatus('pending', this)">待审核</button>
+          <button class="filter-tab" onclick="setSuggStatus('all', this)">全部状态</button>
+          <button class="btn btn-sm" style="margin-left:auto;font-size:11px;background:#2a2a2a;color:#94a3b8;" onclick="loadSuggestions()">刷新</button>
+        </div>
+
+        {# 建议列表 #}
+        <div id="suggestion-list-container" style="padding:12px 16px;">
+          <div class="task-loading">搜索一个实体并点击"分析"，或"全量扫描"发现所有关联建议。</div>
+        </div>
+
+      </div>{# end sub-pane-analyze #}
+
     </div>
   </div>{# end pane-entities #}
 
@@ -599,7 +696,242 @@ function switchTab(name, btn) {
   if (name === 'knowledge') loadKnowledgeBase();
 }
 
-/* ===== 工具 ===== */
+function switchEntitySubTab(name, btn) {
+  document.querySelectorAll('#pane-entities .sub-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('#entity-sub-tabs .sub-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('sub-pane-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'analyze') loadSuggestions();
+}
+
+/* ===== 实体关联分析 ===== */
+let _analyzeEntityId = null;
+let _analyzeEntityName = '';
+let _suggFilter = 'all';
+let _suggStatus = 'pending';
+let _analyzeSearchTimer = null;
+
+function analyzeEntitySearchDebounced() {
+  clearTimeout(_analyzeSearchTimer);
+  _analyzeSearchTimer = setTimeout(analyzeEntitySearch, 280);
+}
+
+function analyzeEntitySearch() {
+  const q = document.getElementById('analyze-entity-input').value.trim();
+  const dd = document.getElementById('analyze-entity-dropdown');
+  if (!q) { dd.style.display = 'none'; return; }
+  fetch('/api/entities?search=' + encodeURIComponent(q) + '&limit=15')
+    .then(r => r.json())
+    .then(data => {
+      const list = data.entities || [];
+      if (!list.length) { dd.style.display = 'none'; return; }
+      dd.innerHTML = list.map(e => {
+        const typeZh = TYPE_ZH[e.entity_type] || e.entity_type;
+        return `<div class="canvas-search-item" onclick="selectAnalyzeEntity('${escHtml(e.id)}','${escHtml(e.canonical_name)}')">
+          <span style="flex:1;">${escHtml(e.canonical_name)}</span>
+          <span style="font-size:10px;color:#6b6b6b;">${typeZh}</span>
+        </div>`;
+      }).join('');
+      dd.style.display = 'block';
+    });
+}
+
+function selectAnalyzeEntity(id, name) {
+  _analyzeEntityId = id;
+  _analyzeEntityName = name;
+  document.getElementById('analyze-entity-input').value = name;
+  document.getElementById('analyze-entity-dropdown').style.display = 'none';
+  document.getElementById('btn-analyze-one').disabled = false;
+  document.getElementById('btn-analyze-one-norule').disabled = false;
+  document.getElementById('btn-analyze-web').disabled = false;
+  loadSuggestions();
+}
+
+document.addEventListener('click', function(e) {
+  const dd = document.getElementById('analyze-entity-dropdown');
+  if (dd && !dd.contains(e.target) && e.target.id !== 'analyze-entity-input') {
+    dd.style.display = 'none';
+  }
+});
+
+function analyzeSelectedEntity(useLlm) {
+  if (!_analyzeEntityId) return;
+  const bar = document.getElementById('analyze-status-bar');
+  bar.textContent = useLlm ? '🤖 正在 AI 分析，请稍候…' : '⚙️ 规则分析中…';
+  const btn = document.getElementById(useLlm ? 'btn-analyze-one' : 'btn-analyze-one-norule');
+  btn.disabled = true;
+
+  fetch('/api/entity/analyze', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({entity_id: _analyzeEntityId, use_llm: useLlm}),
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    if (data.error) { bar.textContent = '❌ ' + data.error; return; }
+    bar.innerHTML = `✅ 分析完成：事实候选 <b>${data.fact_driven}</b>，名称候选 <b>${data.name_similar}</b>，新写入 <b>${data.written}</b> 条`;
+    loadSuggestions();
+  })
+  .catch(err => {
+    btn.disabled = false;
+    bar.textContent = '❌ 请求失败: ' + err;
+  });
+}
+
+function analyzeWithSearch() {
+  if (!_analyzeEntityId) return;
+  const bar = document.getElementById('analyze-status-bar');
+  bar.textContent = '🌐 AI + 网络搜索分析中，请稍候（可能需要 20-30 秒）…';
+  const btn = document.getElementById('btn-analyze-web');
+  btn.disabled = true;
+
+  fetch('/api/entity/analyze-with-search', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({entity_id: _analyzeEntityId, use_llm: true}),
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    if (data.error) { bar.textContent = '❌ ' + data.error; return; }
+    const autoMsg = data.auto_confirmed > 0
+      ? `，<b style="color:#38bdf8;">自动入库 ${data.auto_confirmed} 条</b>`
+      : '';
+    bar.innerHTML = `🌐 网搜分析完成：新写入 <b>${data.written}</b> 条${autoMsg}`;
+    loadSuggestions();
+  })
+  .catch(err => {
+    btn.disabled = false;
+    bar.textContent = '❌ 请求失败: ' + err;
+  });
+}
+
+function batchAnalyzeEntities() {
+  const limit = parseInt(document.getElementById('batch-analyze-limit').value);
+  const bar = document.getElementById('analyze-status-bar');
+  bar.textContent = `⚙️ 批量扫描 ${limit} 个实体（规则模式）…`;
+  fetch('/api/entity/analyze-batch', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({limit, use_llm: false}),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { bar.textContent = '❌ ' + data.error; return; }
+    bar.innerHTML = `✅ 全量扫描完成：分析 <b>${data.analyzed}</b> 个实体`;
+    loadSuggestions();
+  })
+  .catch(err => { bar.textContent = '❌ 请求失败: ' + err; });
+}
+
+function setSuggFilter(type, btn) {
+  _suggFilter = type;
+  document.querySelectorAll('#sub-pane-analyze .merge-filter-bar .filter-tab').forEach(b => {
+    if (['全部','⚡ 合并','🔗 关系','🏷️ 别名'].some(t => b.textContent.includes(t.slice(-2)))) b.classList.remove('active');
+  });
+  btn.classList.add('active');
+  renderSuggestions(_lastSuggestions || []);
+}
+
+function setSuggStatus(status, btn) {
+  _suggStatus = status;
+  document.querySelectorAll('#sub-pane-analyze .merge-filter-bar .filter-tab').forEach(b => {
+    if (b.textContent.includes('待审核') || b.textContent.includes('全部状态')) b.classList.remove('active');
+  });
+  btn.classList.add('active');
+  loadSuggestions();
+}
+
+let _lastSuggestions = [];
+
+function loadSuggestions() {
+  const container = document.getElementById('suggestion-list-container');
+  container.innerHTML = '<div class="task-loading">加载中…</div>';
+  let url = `/api/entity/relation-suggestions?status=${_suggStatus}&limit=200`;
+  if (_analyzeEntityId) url += `&entity_id=${encodeURIComponent(_analyzeEntityId)}`;
+  fetch(url)
+    .then(r => r.json())
+    .then(data => {
+      _lastSuggestions = data.suggestions || [];
+      renderSuggestions(_lastSuggestions);
+    })
+    .catch(err => {
+      container.innerHTML = `<div class="task-loading" style="color:#dc2626;">加载失败: ${err}</div>`;
+    });
+}
+
+function renderSuggestions(suggestions) {
+  const container = document.getElementById('suggestion-list-container');
+  let filtered = suggestions;
+  if (_suggFilter !== 'all') filtered = filtered.filter(s => s.suggestion_type === _suggFilter);
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="task-loading">暂无建议。请搜索一个实体进行分析，或点击"全量扫描"。</div>';
+    return;
+  }
+
+  const SUGG_TYPE_ZH = {merge:'合并', relation:'关系', alias:'别名'};
+  const REL_TYPE_ZH = {SUBSIDIARY:'子公司', JV:'合资', PARTNER:'合作', INVESTS_IN:'投资/持有', BRAND:'品牌', SHAREHOLDER:'股东'};
+
+  container.innerHTML = filtered.map(s => {
+    const typeClass = s.suggestion_type;
+    const typeZh = SUGG_TYPE_ZH[s.suggestion_type] || s.suggestion_type;
+    const relLabel = s.relation_type ? ` · ${REL_TYPE_ZH[s.relation_type] || s.relation_type}` : '';
+    const confPct = Math.round((s.confidence || 0) * 100);
+    const confColor = confPct >= 80 ? '#10b981' : confPct >= 60 ? '#f59e0b' : '#6b6b6b';
+    const statusDim = s.status !== 'pending' ? `status-${s.status}` : '';
+    const entityLabel = s.entity_name ? `<span style="font-size:11px;color:#6b6b6b;margin-right:6px;">${escHtml(s.entity_name)} →</span>` : '';
+    return `<div class="sugg-card type-${typeClass} ${statusDim}" id="sugg-${s.id}">
+      <div>
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
+          ${entityLabel}
+          <span class="sugg-type-badge ${typeClass}">${typeZh}${relLabel}</span>
+          <span class="sugg-target">${escHtml(s.target_name)}</span>
+          <span style="font-size:11px;color:${confColor};margin-left:4px;">${confPct}%</span>
+          ${s.auto_confirmed ? `<span style="font-size:10px;background:#0c2a3a;color:#38bdf8;border:1px solid #1a4a6a;border-radius:3px;padding:0 4px;margin-left:2px;">\ud83c\udf10 \u81ea\u52a8\u5165\u5e93</span>` : ''}
+          ${s.status !== 'pending' ? `<span class="status-badge ${s.status}" style="margin-left:4px;">${s.status === 'confirmed' ? '\u5df2\u786e\u8ba4' : '\u5df2\u62d2\u7edd'}</span>` : ''}
+        </div>
+        ${s.evidence ? `<div class="sugg-evidence">📎 ${escHtml(s.evidence)}</div>` : ''}
+        ${s.search_evidence ? `<div class="sugg-reason" style="color:#38bdf8;">🔍 ${escHtml(s.search_evidence.length > 120 ? s.search_evidence.slice(0,120)+'…' : s.search_evidence)}</div>` : ''}
+        ${s.llm_reason ? `<div class="sugg-reason">💬 ${escHtml(s.llm_reason)}</div>` : ''}
+      </div>
+      ${s.status === 'pending' ? `<div class="sugg-actions">
+        <button class="btn btn-sm" style="background:#1a3a1a;color:#34d399;border:1px solid #2a5a2a;font-size:11px;" onclick="confirmSuggestion('${s.id}')">✓ 确认</button>
+        <button class="btn btn-sm" style="background:#3a1a1a;color:#f87171;border:1px solid #5a2a2a;font-size:11px;" onclick="rejectSuggestion('${s.id}')">✗ 拒绝</button>
+      </div>` : '<div></div>'}
+    </div>`;
+  }).join('');
+}
+
+function confirmSuggestion(id) {
+  fetch(`/api/entity/relation-suggestion/${id}/confirm`, {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { alert('确认失败: ' + data.error); return; }
+      const card = document.getElementById('sugg-' + id);
+      if (card) {
+        card.classList.remove('status-pending');
+        card.classList.add('status-confirmed');
+        card.querySelector('.sugg-actions').innerHTML = '<span style="font-size:11px;color:#34d399;">已确认</span>';
+      }
+    });
+}
+
+function rejectSuggestion(id) {
+  fetch(`/api/entity/relation-suggestion/${id}/reject`, {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { alert('拒绝失败: ' + data.error); return; }
+      const card = document.getElementById('sugg-' + id);
+      if (card) {
+        card.classList.add('status-rejected');
+        card.querySelector('.sugg-actions').innerHTML = '<span style="font-size:11px;color:#6b6b6b;">已拒绝</span>';
+      }
+    });
+}
+
+
 const TYPE_ZH = {
   'COMPANY': '企业', 'GROUP': '群体/排名', 'PROJECT': '项目',
   'REGION': '地区', 'PRODUCT': '产品', 'PERSON': '人物',
@@ -1219,7 +1551,148 @@ function dismissAiSuggestion(index) {
   if (el) el.remove();
 }
 
-/* ===== 手动去重归一化 ===== */
+/* ===== 手动去重归一化 — 聚类辅助函数 ===== */
+
+function _normForSim(s) {
+  return s.replace(/[（(）)\s]/g, '').toLowerCase();
+}
+function _containScoreFE(a, b) {
+  const na = _normForSim(a), nb = _normForSim(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1.0;
+  const [shorter, longer] = na.length <= nb.length ? [na, nb] : [nb, na];
+  if (longer.includes(shorter)) return 0.5 + shorter.length / longer.length * 0.45;
+  return 0;
+}
+function _lcsRatioFE(a, b) {
+  const na = _normForSim(a), nb = _normForSim(b);
+  if (!na || !nb || na.length > 35 || nb.length > 35) return 0;
+  const m = na.length, n = nb.length;
+  const dp = Array.from({length: m + 1}, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = na[i-1] === nb[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+  return dp[m][n] / Math.max(m, n);
+}
+function _simFE(a, b) { return Math.max(_containScoreFE(a, b), _lcsRatioFE(a, b)); }
+
+const _GEO_SET = new Set([
+  '香港','青岛','上海','北京','天津','广州','深圳','南京','成都',
+  '宁波','武汉','苏州','张家港','常州','无锡','重庆','济南','杭州','厦门',
+]);
+function _geoInBracket(s) {
+  const m = s.match(/[（(]([^）)]+)[）)]/);
+  if (!m) return null;
+  const c = m[1].trim(); return _GEO_SET.has(c) ? c : null;
+}
+function _geoDiffers(a, b) {
+  const ga = _geoInBracket(a), gb = _geoInBracket(b);
+  return !!(ga && gb && ga !== gb);
+}
+
+/** 并查集聚类：相似度 >= threshold 的实体归为同一簇 */
+function _clusterDedup(items, threshold) {
+  threshold = threshold || 0.68;
+  const n = items.length;
+  const par = items.map((_, i) => i);
+  const find = i => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+  const union = (i, j) => { const pi = find(i), pj = find(j); if (pi !== pj) par[pj] = pi; };
+  const scores = {};
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    if (_geoDiffers(items[i].text, items[j].text)) continue;
+    const s = _simFE(items[i].text, items[j].text);
+    scores[i + '|' + j] = s;
+    if (s >= threshold) union(i, j);
+  }
+  const map = {};
+  for (let i = 0; i < n; i++) { const r = find(i); (map[r] = map[r] || []).push(i); }
+  const clusters = Object.values(map).map(idxList => {
+    // 已标准化实体排前，同类按事实数降序
+    idxList.sort((ia, ib) => {
+      const a = items[ia], b = items[ib];
+      if (a.source === 'entity' && b.source !== 'entity') return -1;
+      if (b.source === 'entity' && a.source !== 'entity') return 1;
+      return (b.fact_count || 0) - (a.fact_count || 0);
+    });
+    return idxList;
+  });
+  // 多成员簇优先，再按最大事实数排序
+  clusters.sort((ca, cb) => {
+    if (cb.length !== ca.length) return cb.length - ca.length;
+    return Math.max(...cb.map(i => items[i].fact_count || 0))
+         - Math.max(...ca.map(i => items[i].fact_count || 0));
+  });
+  return { clusters, scores };
+}
+
+/** 渲染聚类结果 */
+function _renderDedupClusters(items, clusters, scores) {
+  const list = document.getElementById('dedup-item-list');
+  const srcBadge = item => item.source === 'entity'
+    ? `<span style="font-size:10px;padding:1px 4px;background:#1e3a5f;color:#60a5fa;border-radius:3px;">已标准化</span>`
+    : `<span style="font-size:10px;padding:1px 4px;background:#2a1a0a;color:#fbbf24;border-radius:3px;">文本</span>`;
+  const typeBadge = item => item.entity_type
+    ? `<span style="font-size:10px;color:#6b6b6b;">[${item.entity_type}]</span>` : '';
+
+  let html = '';
+  clusters.forEach((idxList, ci) => {
+    const pivotIdx = idxList[0];
+    const pivot = items[pivotIdx];
+    const cid = 'dc' + ci;
+
+    if (idxList.length > 1) {
+      // ── 多成员聚类：显示为卡片 ──
+      const hasGeoWarn = idxList.some((ia, ii) =>
+        idxList.slice(ii + 1).some(ib => _geoDiffers(items[ia].text, items[ib].text)));
+      html += `<div style="border:1px solid #3a3a5a;border-radius:7px;margin-bottom:8px;overflow:hidden;">
+        <div style="background:#1a1a32;padding:6px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:11px;color:#a78bfa;font-weight:700;">聚类 ${ci + 1}</span>
+          <span style="font-size:11px;color:#6b6b6b;">${idxList.length} 个相似名称</span>
+          ${hasGeoWarn ? `<span style="font-size:10px;background:#3a1500;color:#fb923c;border:1px solid #7c2d12;border-radius:3px;padding:1px 5px;">⚠️ 含地区区分词，请谨慎合并</span>` : ''}
+          <button style="margin-left:auto;font-size:11px;padding:2px 8px;background:#1a3a1a;color:#34d399;border:1px solid #2a5a2a;border-radius:4px;cursor:pointer;"
+            onclick="selectCluster('${cid}','${escHtml(pivot.text)}')">全选集群</button>
+        </div>`;
+      idxList.forEach(i => {
+        const item = items[i];
+        const isPivot = i === pivotIdx;
+        const key = (pivotIdx < i ? pivotIdx + '|' + i : i + '|' + pivotIdx);
+        const s = (scores[key] !== undefined) ? scores[key] : _simFE(pivot.text, item.text);
+        const autoCheck = isPivot || s >= 0.90;
+        const sColor = s >= 0.90 ? '#34d399' : s >= 0.75 ? '#fbbf24' : '#94a3b8';
+        html += `<label style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:#1a1a1a;border-top:1px solid #222;cursor:pointer;font-size:13px;">
+          <input type="checkbox" class="dedup-check" data-idx="${i}" data-cluster="${cid}" ${autoCheck ? 'checked' : ''} style="accent-color:#3b82f6;width:14px;height:14px;" />
+          <span style="flex:1;color:#fafafa;">${escHtml(item.text)}</span>
+          ${typeBadge(item)}
+          ${isPivot
+            ? `<span style="font-size:10px;background:#1a3a2a;color:#34d399;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">建议主</span>`
+            : `<span style="font-size:10px;color:${sColor};">${Math.round(s * 100)}% 相似</span>`}
+          ${srcBadge(item)}
+          <span style="font-size:11px;color:#505050;">${item.fact_count}条</span>
+        </label>`;
+      });
+      html += `</div>`;
+    } else {
+      // ── 单独实体：普通行 ──
+      const item = items[pivotIdx];
+      html += `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:5px;cursor:pointer;font-size:13px;margin-bottom:2px;">
+        <input type="checkbox" class="dedup-check" data-idx="${pivotIdx}" style="accent-color:#3b82f6;width:14px;height:14px;" />
+        <span style="flex:1;color:#fafafa;">${escHtml(item.text)}</span>
+        ${typeBadge(item)} ${srcBadge(item)}
+        <span style="font-size:11px;color:#505050;margin-left:auto;">${item.fact_count}条</span>
+      </label>`;
+    }
+  });
+  list.innerHTML = html;
+}
+
+/** 全选某聚类并填入建议主实体名 */
+function selectCluster(cid, suggestedName) {
+  document.querySelectorAll('.dedup-check[data-cluster="' + cid + '"]')
+    .forEach(cb => { cb.checked = true; });
+  document.getElementById('dedup-canonical-name').value = suggestedName;
+}
+
+/* ===== 手动去重归一化 — 主逻辑 ===== */
 let _dedupItems = [];
 
 function runDedupSearch() {
@@ -1235,24 +1708,18 @@ function runDedupSearch() {
     .then(r => r.json())
     .then(data => {
       _dedupItems = data.items || [];
-      document.getElementById('dedup-result-hint').textContent =
-        `找到 ${_dedupItems.length} 个匹配项（勾选要合并的条目）`;
       if (!_dedupItems.length) {
+        document.getElementById('dedup-result-hint').textContent = '未找到匹配项。';
         list.innerHTML = '<div style="color:#6b6b6b;font-size:13px;">未找到匹配项。</div>';
         return;
       }
-      list.innerHTML = _dedupItems.map((item, i) => {
-        const srcLabel = item.source === 'entity'
-          ? `<span style="font-size:10px;padding:1px 5px;background:#1e3a5f;color:#60a5fa;border-radius:3px;">已标准化</span>`
-          : `<span style="font-size:10px;padding:1px 5px;background:#2a1a0a;color:#fbbf24;border-radius:3px;">文本</span>`;
-        const typeLabel = item.entity_type ? `<span style="font-size:10px;color:#6b6b6b;">[${item.entity_type}]</span>` : '';
-        return `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#1e1e1e;border:1px solid #333;border-radius:5px;cursor:pointer;font-size:13px;">
-          <input type="checkbox" class="dedup-check" data-idx="${i}" style="accent-color:#3b82f6;width:14px;height:14px;" />
-          <span style="flex:1;color:#fafafa;">${escHtml(item.text)}</span>
-          ${typeLabel} ${srcLabel}
-          <span style="font-size:11px;color:#6b6b6b;margin-left:auto;">${item.fact_count}条</span>
-        </label>`;
-      }).join('');
+      const { clusters, scores } = _clusterDedup(_dedupItems);
+      const multiCnt = clusters.filter(c => c.length > 1).length;
+      document.getElementById('dedup-result-hint').textContent =
+        `找到 ${_dedupItems.length} 个匹配项` +
+        (multiCnt > 0 ? `，自动发现 ${multiCnt} 个相似聚类` : '') +
+        `（勾选要合并的条目）`;
+      _renderDedupClusters(_dedupItems, clusters, scores);
     })
     .catch(err => {
       list.innerHTML = '<div class="task-loading" style="color:#dc2626;">搜索失败: ' + err + '</div>';
@@ -1260,7 +1727,8 @@ function runDedupSearch() {
 }
 
 function dedupSelectAll() {
-  document.querySelectorAll('.dedup-check').forEach(cb => cb.checked = !cb.checked);
+  const allChecked = [...document.querySelectorAll('.dedup-check')].every(cb => cb.checked);
+  document.querySelectorAll('.dedup-check').forEach(cb => { cb.checked = !allChecked; });
 }
 
 function applyDedupMerge() {
