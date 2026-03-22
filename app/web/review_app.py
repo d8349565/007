@@ -14,7 +14,7 @@ from app.services.query import (
     get_document_evidences, get_document_tasks, get_doc_stats,
     get_passed_facts_stats, cascade_delete_document, update_document_meta,
     get_graph_data, get_entity_list, get_entity_timeline, get_entity_overview,
-    get_entity_hierarchy,
+    get_entity_hierarchy, get_entity_detail,
 )
 from app.web.api_tasks import api_tasks_bp
 
@@ -259,7 +259,7 @@ def create_app() -> Flask:
         valid_types = cfg.get("fact_types", [])
         statuses = [
             "HUMAN_REVIEW_REQUIRED", "AUTO_PASS", "PENDING",
-            "REJECTED", "HUMAN_PASS", "HUMAN_REJECTED",
+            "REJECTED", "HUMAN_PASS", "HUMAN_REJECTED", "UNCERTAIN",
         ]
 
         return render_template(
@@ -1260,56 +1260,34 @@ def create_app() -> Flask:
 
     @app.route("/entity/<entity_id>")
     def entity_timeline_page(entity_id):
-        """实体时间轴页面"""
+        """实体详情页面（含基础信息、关系、时间轴）"""
         fact_type = request.args.get("fact_type", "")
+        tab = request.args.get("tab", "overview")  # overview | timeline | relations
+
+        # 获取详情（基础信息+别名+关系+统计）
+        detail = get_entity_detail(entity_id)
+
+        # 获取时间轴数据
         data = get_entity_timeline(entity_id=entity_id, fact_type=fact_type)
-        if not data["facts"] and not data["entity_info"].get("name"):
+        if not detail and not data["facts"]:
             return "Entity not found", 404
 
-        # 解析 qualifier_json 并收集筛选选项
-        qualifier_options = {}  # {key: sorted set of values}
-        for f in data["facts"]:
-            qd = {}
-            if f.get("qualifier_json"):
-                try:
-                    qd = json.loads(f["qualifier_json"])
-                except (json.JSONDecodeError, TypeError):
-                    qd = {}
-            f["qualifiers_display"] = qd
-            for k, v in qd.items():
-                if v is not None and v != "" and not isinstance(v, (dict, list, bool)):
-                    qualifier_options.setdefault(k, set()).add(str(v))
-
-        # 转为排序列表
-        qualifier_options = {k: sorted(v) for k, v in qualifier_options.items() if len(v) >= 1}
-
-        valid_types = cfg.get("fact_types", [])
-        return render_template(
-            "entity_timeline.html",
-            entity=data["entity_info"],
-            facts=data["facts"],
-            available_types=data["available_types"],
-            total_count=data["total_count"],
-            current_type=fact_type,
-            fact_types=valid_types,
-            qualifier_options=qualifier_options,
-        )
-
-    @app.route("/api/entity/<entity_id>/timeline")
-    def api_entity_timeline(entity_id):
-        """实体时间轴数据 API"""
-        fact_type = request.args.get("fact_type", "")
-        data = get_entity_timeline(entity_id=entity_id, fact_type=fact_type)
-        return jsonify(data)
-
-    @app.route("/entity/search")
-    def entity_search_page():
-        """按名称搜索实体的时间轴页面"""
-        subject = request.args.get("subject", "")
-        fact_type = request.args.get("fact_type", "")
-        if not subject:
-            return redirect(url_for("graph_page"))
-        data = get_entity_timeline(subject_text=subject, fact_type=fact_type)
+        # 若 detail 为 None（文本搜索场景），用 timeline data 构建最小 detail
+        if not detail:
+            detail = {
+                "id": entity_id,
+                "canonical_name": data["entity_info"].get("name", "未知"),
+                "entity_type": data["entity_info"].get("entity_type", ""),
+                "normalized_name": "",
+                "aliases": [],
+                "relations_from": [],
+                "relations_to": [],
+                "fact_type_stats": [],
+                "total_fact_count": data["total_count"],
+                "source_doc_count": 0,
+                "time_earliest": None,
+                "time_latest": None,
+            }
 
         # 解析 qualifier_json 并收集筛选选项
         qualifier_options = {}
@@ -1328,15 +1306,196 @@ def create_app() -> Flask:
         qualifier_options = {k: sorted(v) for k, v in qualifier_options.items() if len(v) >= 1}
 
         valid_types = cfg.get("fact_types", [])
+
+        REL_TYPE_ZH = {
+            "SUBSIDIARY": "子公司", "SHAREHOLDER": "股东", "JV": "合资",
+            "BRAND": "品牌归属", "PARTNER": "合作方", "INVESTS_IN": "投资/持有",
+        }
+
         return render_template(
             "entity_timeline.html",
             entity=data["entity_info"],
+            detail=detail,
             facts=data["facts"],
             available_types=data["available_types"],
             total_count=data["total_count"],
             current_type=fact_type,
+            current_tab=tab,
             fact_types=valid_types,
             qualifier_options=qualifier_options,
+            REL_TYPE_ZH=REL_TYPE_ZH,
+        )
+
+    @app.route("/api/entity/<entity_id>/detail")
+    def api_entity_detail(entity_id):
+        """实体完整详情 API"""
+        detail = get_entity_detail(entity_id)
+        if not detail:
+            return jsonify({"error": "not found"}), 404
+        return jsonify(detail)
+
+    @app.route("/api/entity/<entity_id>/update", methods=["POST"])
+    def api_entity_update(entity_id):
+        """更新实体基本信息（名称、类型）"""
+        data = request.get_json(silent=True) or {}
+        conn = get_connection()
+        try:
+            ent = conn.execute("SELECT id FROM entity WHERE id=?", (entity_id,)).fetchone()
+            if not ent:
+                return jsonify({"error": "entity not found"}), 404
+
+            updates = []
+            params = []
+            if "canonical_name" in data and data["canonical_name"].strip():
+                new_name = data["canonical_name"].strip()
+                updates.append("canonical_name=?")
+                params.append(new_name)
+                # 同步更新 normalized_name
+                import re
+                normalized = re.sub(r"[（(）)\s]", "", new_name).lower()
+                updates.append("normalized_name=?")
+                params.append(normalized)
+                # 同步更新 fact_atom.subject_text
+                conn.execute(
+                    "UPDATE fact_atom SET subject_text=? WHERE subject_entity_id=?",
+                    (new_name, entity_id),
+                )
+                conn.execute(
+                    "UPDATE fact_atom SET object_text=? WHERE object_entity_id=?",
+                    (new_name, entity_id),
+                )
+            if "entity_type" in data and data["entity_type"]:
+                updates.append("entity_type=?")
+                params.append(data["entity_type"])
+
+            if updates:
+                params.append(entity_id)
+                conn.execute(
+                    f"UPDATE entity SET {', '.join(updates)} WHERE id=?",
+                    params,
+                )
+                conn.commit()
+            return jsonify({"ok": True})
+        finally:
+            conn.close()
+
+    @app.route("/api/entity/<entity_id>/alias/add", methods=["POST"])
+    def api_entity_alias_add(entity_id):
+        """添加实体别名"""
+        data = request.get_json(silent=True) or {}
+        alias_name = (data.get("alias_name") or data.get("alias") or "").strip()
+        if not alias_name:
+            return jsonify({"error": "alias_name required"}), 400
+
+        conn = get_connection()
+        try:
+            ent = conn.execute("SELECT id FROM entity WHERE id=?", (entity_id,)).fetchone()
+            if not ent:
+                return jsonify({"error": "entity not found"}), 404
+
+            # 检查别名是否已存在
+            existing = conn.execute(
+                "SELECT id FROM entity_alias WHERE alias_name=?", (alias_name,)
+            ).fetchone()
+            if existing:
+                return jsonify({"error": f"别名 '{alias_name}' 已被使用"}), 409
+
+            import uuid
+            conn.execute(
+                "INSERT INTO entity_alias (id, entity_id, alias_name) VALUES (?, ?, ?)",
+                (str(uuid.uuid4()), entity_id, alias_name),
+            )
+            conn.commit()
+            return jsonify({"ok": True})
+        finally:
+            conn.close()
+
+    @app.route("/api/entity/<entity_id>/alias/<alias_id>/delete", methods=["POST"])
+    def api_entity_alias_delete(entity_id, alias_id):
+        """删除实体别名"""
+        conn = get_connection()
+        try:
+            conn.execute(
+                "DELETE FROM entity_alias WHERE id=? AND entity_id=?",
+                (alias_id, entity_id),
+            )
+            conn.commit()
+            return jsonify({"ok": True})
+        finally:
+            conn.close()
+
+    @app.route("/api/entity/<entity_id>/timeline")
+    def api_entity_timeline(entity_id):
+        """实体时间轴数据 API"""
+        fact_type = request.args.get("fact_type", "")
+        data = get_entity_timeline(entity_id=entity_id, fact_type=fact_type)
+        return jsonify(data)
+
+    @app.route("/entity/search")
+    def entity_search_page():
+        """按名称搜索实体的时间轴页面"""
+        subject = request.args.get("subject", "")
+        fact_type = request.args.get("fact_type", "")
+        tab = request.args.get("tab", "timeline")  # 搜索结果默认显示时间轴
+        if not subject:
+            return redirect(url_for("graph_page"))
+        data = get_entity_timeline(subject_text=subject, fact_type=fact_type)
+
+        # 尝试通过 entity_info 获取 detail
+        entity_info = data.get("entity_info", {})
+        eid = entity_info.get("id")
+        detail = get_entity_detail(eid) if eid else None
+        if not detail:
+            detail = {
+                "id": eid or "",
+                "canonical_name": entity_info.get("name", subject),
+                "entity_type": entity_info.get("entity_type", ""),
+                "normalized_name": "",
+                "aliases": [],
+                "relations_from": [],
+                "relations_to": [],
+                "fact_type_stats": [],
+                "total_fact_count": data["total_count"],
+                "source_doc_count": 0,
+                "time_earliest": None,
+                "time_latest": None,
+            }
+
+        # 解析 qualifier_json 并收集筛选选项
+        qualifier_options = {}
+        for f in data["facts"]:
+            qd = {}
+            if f.get("qualifier_json"):
+                try:
+                    qd = json.loads(f["qualifier_json"])
+                except (json.JSONDecodeError, TypeError):
+                    qd = {}
+            f["qualifiers_display"] = qd
+            for k, v in qd.items():
+                if v is not None and v != "" and not isinstance(v, (dict, list, bool)):
+                    qualifier_options.setdefault(k, set()).add(str(v))
+
+        qualifier_options = {k: sorted(v) for k, v in qualifier_options.items() if len(v) >= 1}
+
+        valid_types = cfg.get("fact_types", [])
+
+        REL_TYPE_ZH = {
+            "SUBSIDIARY": "子公司", "SHAREHOLDER": "股东", "JV": "合资",
+            "BRAND": "品牌归属", "PARTNER": "合作方", "INVESTS_IN": "投资/持有",
+        }
+
+        return render_template(
+            "entity_timeline.html",
+            entity=data["entity_info"],
+            detail=detail,
+            facts=data["facts"],
+            available_types=data["available_types"],
+            total_count=data["total_count"],
+            current_type=fact_type,
+            current_tab=tab,
+            fact_types=valid_types,
+            qualifier_options=qualifier_options,
+            REL_TYPE_ZH=REL_TYPE_ZH,
         )
 
     def _start_background_process(doc_ids: list[str]):

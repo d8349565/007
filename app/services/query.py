@@ -736,6 +736,8 @@ def get_graph_data(fact_type: str = "", doc_id: str = "") -> dict:
                     "confidence_score": r["confidence_score"],
                     "evidence_text": r["evidence_text"],
                     "document_title": r["document_title"],
+                    "subject_entity_id": r["subject_entity_id"],
+                    "object_entity_id": r["object_entity_id"],
                 })
 
         # ── 补全标准化实体的 canonical_name 和 entity_type ──
@@ -868,6 +870,91 @@ def get_entity_list(search: str = "", entity_type: str = "", limit: int = 200) -
         conn.close()
 
 
+def get_entity_detail(entity_id: str) -> dict | None:
+    """
+    获取实体的完整详情：基本信息、别名、关系、事实统计。
+    """
+    conn = get_connection()
+    try:
+        ent = conn.execute(
+            "SELECT id, canonical_name, normalized_name, entity_type FROM entity WHERE id=?",
+            (entity_id,),
+        ).fetchone()
+        if not ent:
+            return None
+
+        info = dict(ent)
+
+        # 别名
+        aliases = conn.execute(
+            "SELECT id, alias_name FROM entity_alias WHERE entity_id=? ORDER BY alias_name",
+            (entity_id,),
+        ).fetchall()
+        info["aliases"] = [dict(a) for a in aliases]
+
+        # 关系（from 方向：当前实体是 from）
+        rels_from = conn.execute(
+            """SELECT r.id, r.relation_type, r.detail_json, r.source,
+                      e.id AS target_id, e.canonical_name AS target_name, e.entity_type AS target_type
+               FROM entity_relation r
+               JOIN entity e ON r.to_entity_id = e.id
+               WHERE r.from_entity_id = ?
+               ORDER BY r.relation_type, e.canonical_name""",
+            (entity_id,),
+        ).fetchall()
+        # 关系（to 方向：当前实体是 to）
+        rels_to = conn.execute(
+            """SELECT r.id, r.relation_type, r.detail_json, r.source,
+                      e.id AS target_id, e.canonical_name AS target_name, e.entity_type AS target_type
+               FROM entity_relation r
+               JOIN entity e ON r.from_entity_id = e.id
+               WHERE r.to_entity_id = ?
+               ORDER BY r.relation_type, e.canonical_name""",
+            (entity_id,),
+        ).fetchall()
+        info["relations_from"] = [dict(r) for r in rels_from]  # 当前实体 → target
+        info["relations_to"] = [dict(r) for r in rels_to]      # target → 当前实体
+
+        # 事实统计（按 fact_type 分组）
+        type_stats = conn.execute(
+            """SELECT f.fact_type, COUNT(*) AS cnt
+               FROM fact_atom f
+               WHERE (f.subject_entity_id = ? OR f.object_entity_id = ?)
+                 AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+               GROUP BY f.fact_type
+               ORDER BY cnt DESC""",
+            (entity_id, entity_id),
+        ).fetchall()
+        info["fact_type_stats"] = [dict(r) for r in type_stats]
+        info["total_fact_count"] = sum(r["cnt"] for r in type_stats)
+
+        # 关联文档数
+        doc_count = conn.execute(
+            """SELECT COUNT(DISTINCT f.document_id) AS cnt
+               FROM fact_atom f
+               WHERE (f.subject_entity_id = ? OR f.object_entity_id = ?)
+                 AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')""",
+            (entity_id, entity_id),
+        ).fetchone()["cnt"]
+        info["source_doc_count"] = doc_count
+
+        # 时间跨度
+        time_range = conn.execute(
+            """SELECT MIN(f.time_expr) AS earliest, MAX(f.time_expr) AS latest
+               FROM fact_atom f
+               WHERE (f.subject_entity_id = ? OR f.object_entity_id = ?)
+                 AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                 AND f.time_expr IS NOT NULL AND f.time_expr != ''""",
+            (entity_id, entity_id),
+        ).fetchone()
+        info["time_earliest"] = time_range["earliest"] if time_range else None
+        info["time_latest"] = time_range["latest"] if time_range else None
+
+        return info
+    finally:
+        conn.close()
+
+
 def get_entity_timeline(
     entity_id: str = "",
     subject_text: str = "",
@@ -918,6 +1005,7 @@ def get_entity_timeline(
                        f.object_text, f.value_num, f.value_text, f.unit,
                        f.currency, f.time_expr, f.location_text,
                        f.confidence_score, f.review_status, f.qualifier_json,
+                       f.subject_entity_id, f.object_entity_id,
                        es.evidence_text, sd.title AS document_title, sd.id AS document_id
                 FROM fact_atom f
                 LEFT JOIN evidence_span es ON f.evidence_span_id = es.id
