@@ -353,7 +353,7 @@ def review_document_facts(
     document_id: str,
 ) -> list[dict]:
     """
-    对整篇文档的所有 fact_atom 做结构性审核（一次 LLM 调用）。
+    对整篇文档的所有 fact_atom 做结构性审核（分批 LLM 调用）。
 
     审核内容：格式正确性、字段类型、主体合理性、字段归位、原子可还原性。
     不审核事实内容准确性。
@@ -371,7 +371,32 @@ def review_document_facts(
     cfg = get_config()
     system_prompt = _load_prompt()
 
-    # 构建全部 fact records
+    # 分批处理，每批最多 20 条，避免单次请求过大导致超时
+    BATCH_SIZE = 20
+    all_results = []
+
+    for i in range(0, len(facts_with_ids), BATCH_SIZE):
+        batch = facts_with_ids[i:i + BATCH_SIZE]
+        batch_num = i // BATCH_SIZE + 1
+        total_batches = (len(facts_with_ids) + BATCH_SIZE - 1) // BATCH_SIZE
+        logger.info(
+            "Reviewer 批次 %d/%d，处理 %d 条 fact",
+            batch_num, total_batches, len(batch),
+        )
+
+        batch_result = _review_batch(batch, document_id, system_prompt, cfg)
+        all_results.extend(batch_result)
+
+    return all_results
+
+
+def _review_batch(
+    facts_with_ids: list[tuple[str, dict]],
+    document_id: str,
+    system_prompt: str,
+    cfg: dict,
+) -> list[dict]:
+    """单批次的事实审核（一次 LLM 调用）"""
     fact_records_with_id = []
     for fid, frec in facts_with_ids:
         rec = dict(frec)
@@ -397,22 +422,22 @@ def review_document_facts(
         )
     except Exception as e:
         _record_task_end(task_id, "failed", error=str(e))
-        logger.error("Reviewer 结构审核失败: %s", e)
+        logger.error("Reviewer 批次调用失败 [%s]: %s", document_id[:8], e)
         results = []
         for fid, frec in facts_with_ids:
-            fallback = {
+            _persist_review(
+                fid, "UNCERTAIN", 0.0,
+                "HUMAN_REVIEW_REQUIRED",
+                f"审核调用异常: {e}，进入人工审核池",
+            )
+            results.append({
                 "fact_atom_id": fid,
                 "verdict": "UNCERTAIN",
                 "score": 0.0,
                 "issues": [],
-                "review_note": "审核调用异常，进入人工审核池",
+                "review_note": f"审核调用异常: {e}",
                 "review_status": "HUMAN_REVIEW_REQUIRED",
-            }
-            _persist_review(
-                fid, "UNCERTAIN", 0.0,
-                "HUMAN_REVIEW_REQUIRED", fallback["review_note"],
-            )
-            results.append(fallback)
+            })
         return results
 
     # 解析结果
