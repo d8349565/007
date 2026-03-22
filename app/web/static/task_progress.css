@@ -5,7 +5,7 @@
 /* 最小化小标签 */
 .task-progress-mini {
   position: fixed;
-  top: 60px;
+  top: 110px;
   right: 16px;
   z-index: 1000;
   background: var(--bg-card);
@@ -47,7 +47,7 @@
 /* 展开浮窗 */
 .task-progress-widget {
   position: fixed;
-  top: 60px;
+  top: 110px;
   right: 16px;
   width: 380px;
   max-height: 420px;
