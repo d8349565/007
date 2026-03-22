@@ -1,6 +1,7 @@
 """文档导入模块：支持 txt/md/URL + 批量导入 + 去重覆盖"""
 
 import hashlib
+import re
 import uuid
 from pathlib import Path
 from typing import Generator
@@ -88,7 +89,7 @@ def import_url(
     # 提取正文
     # 优先尝试 article / main 标签
     body = soup.find("article") or soup.find("main") or soup.find("body")
-    raw_text = body.get_text(separator="\n") if body else soup.get_text(separator="\n")
+    raw_text = _extract_article_text(body if body else soup)
 
     if not title:
         title = _extract_title(soup, raw_text, url)
@@ -167,6 +168,80 @@ def import_batch(
 
     logger.info("批量导入完成: %d/%d 成功", len(doc_ids), len(files))
     return doc_ids
+
+
+def _extract_article_text(root) -> str:
+    """
+    从 HTML 根节点提取正文文本。
+
+    自定义遍历策略：
+    - 块级元素（p, div, section, li 等）：输出前后换行，保持段落感
+    - 行内元素（span, a, em, strong 等）：直接拼接字符不断开
+    - 逐字拆分的 span（Sohu 等平台的特殊结构）：无缝拼接
+
+    这样搜狐等逐字包 span 的页面不会变成"每字一行"的破碎文本。
+    """
+    BLOCK_TAGS = {"p", "div", "section", "article", "li", "blockquote",
+                  "h1", "h2", "h3", "h4", "h5", "h6",
+                  "tr", "th", "td", "br"}
+    # 不递归进入的标签
+    SKIP_TAGS = {"script", "style", "nav", "header", "footer", "aside",
+                 "iframe", "noscript", "svg", "canvas"}
+
+    parts = []
+    _walk_text(root, parts, BLOCK_TAGS, SKIP_TAGS, inside_block=False)
+    text = "".join(parts)
+
+    # 后处理：合并连续空白、移除孤立单字符行（逐字拆分的残留）
+    lines = text.split("\n")
+    cleaned_lines = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        # 如果一行只有一个字符且两边有空行，很可能是逐字拆分的残留；跳过
+        if len(line) == 1 and ord(line) < 0x4E00:  # ASCII/数字单字
+            continue
+        cleaned_lines.append(line)
+    # 段落之间保留空行
+    return "\n\n".join(cleaned_lines)
+
+
+def _walk_text(node, parts: list, block_tags: set, skip_tags: set, inside_block: bool) -> None:
+    """递归遍历 DOM 节点，收集文本"""
+    if not hasattr(node, "name") or node.name is None:
+        # 文本节点
+        text = str(node)
+        if inside_block:
+            parts.append(text)
+        else:
+            # 不在块内时做基础清理
+            text = re.sub(r"\s+", " ", text).strip()
+            if text:
+                parts.append(text)
+        return
+
+    name = node.name.lower()
+
+    if name in skip_tags:
+        return
+
+    is_block = name in block_tags
+
+    # 进入块级标签：先加换行
+    if is_block:
+        # 避免连续加多个换行
+        if parts and not parts[-1].endswith("\n"):
+            parts.append("\n")
+
+    # 递归处理子节点
+    for child in node.children:
+        _walk_text(child, parts, block_tags, skip_tags, inside_block=is_block or inside_block)
+
+    # 离开块级标签：加换行
+    if is_block:
+        if parts and not parts[-1].endswith("\n"):
+            parts.append("\n")
 
 
 def _extract_title(soup: BeautifulSoup, raw_text: str, fallback: str) -> str:

@@ -1,0 +1,34 @@
+<!-- 任务进度浮窗组件 -->
+<div id="task-progress-mini" class="task-progress-mini" onclick="showTaskWidget()" style="display: none;">
+  <span class="mini-icon">⚡</span>
+  <span class="mini-text">任务进度</span>
+  <span class="mini-badge" id="mini-badge" style="display: none;">0</span>
+</div>
+
+<div id="task-progress-widget" class="task-progress-widget">
+  <div class="widget-header">
+    <div class="widget-title">
+      <span>⚡</span>
+      <span>任务进度</span>
+      <span class="badge" id="widget-badge" style="display: none;">0</span>
+    </div>
+    <button class="widget-btn-minimize" onclick="hideTaskWidget()">−</button>
+  </div>
+  <div class="widget-body">
+    <!-- 总体进度 -->
+    <div class="progress-section">
+      <div class="progress-header">
+        <span>总进度</span>
+        <span id="progress-text">0/0</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- 任务列表 -->
+    <div class="task-list" id="task-list">
+      <div class="task-empty">暂无处理中的任务</div>
+    </div>
+  </div>
+</div>

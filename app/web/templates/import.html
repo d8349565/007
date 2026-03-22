@@ -3,6 +3,10 @@
 {% block title %}导入 — 资讯颗粒化{% endblock %}
 {% block container_class %}container-narrow{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='task_progress.css') }}">
+{% endblock %}
+
 {% block content %}
   <div class="page-header">
     <div class="page-title">导入文章</div>
@@ -103,6 +107,9 @@
     </div>
 
   </div>
+
+{# 任务进度浮窗组件 #}
+{% include '_task_progress_widget.html' %}
 {% endblock %}
 
 {% block scripts %}
@@ -132,7 +139,7 @@ function submitPaste(e) {
       if (data.error) { showResult('result-paste', 'error', data.error); }
       else {
         let msg = '导入成功！';
-        if (data.processing) msg += ' 正在后台处理中...';
+        if (data.processing) { msg += ' 正在后台处理中...'; onImportStarted(); }
         showResult('result-paste', 'success', msg);
         form.reset();
       }
@@ -181,7 +188,7 @@ function submitFile(e) {
       else {
         let msg = '成功导入 ' + data.imported + ' 个文件';
         if (data.errors && data.errors.length) msg += '，' + data.errors.length + ' 个失败';
-        if (data.processing) msg += '。正在后台处理中...';
+        if (data.processing) { msg += '。正在后台处理中...'; onImportStarted(); }
         showResult('result-file', 'success', msg);
         fileList.innerHTML = ''; fileInput.value = '';
       }
@@ -211,6 +218,7 @@ function submitUrl(e) {
       return;
     }
     btn.textContent = `抓取中 ${i+1}/${total}...`;
+    if (i === 0 && autoProcess) onImportStarted();
     const fd = new FormData();
     fd.append('url', urls[i]);
     if (autoProcess) fd.append('auto_process', '1');
@@ -224,4 +232,5 @@ function submitUrl(e) {
   return false;
 }
 </script>
+<script src="{{ url_for('static', filename='task_progress.js') }}"></script>
 {% endblock %}

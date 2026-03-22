@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>任务进度浮窗设计</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', -apple-system, sans-serif; background: #1a1a1a; color: #fff; padding: 20px; }
+
+    h1 { color: #3b82f6; margin-bottom: 8px; font-size: 18px; }
+    p { color: #a0a0a0; font-size: 14px; margin-bottom: 24px; }
+
+    .demo-section { margin-bottom: 40px; }
+    .demo-label { color: #f59e0b; font-size: 12px; font-weight: bold; margin-bottom: 12px; text-transform: uppercase; }
+
+    /* 模拟页面顶部导航栏 */
+    .mock-nav {
+      background: #202020;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #404040;
+      margin-bottom: 0;
+    }
+    .mock-nav-brand { color: #fff; font-weight: bold; }
+    .mock-nav-links { display: flex; gap: 20px; }
+    .mock-nav-links span { color: #a0a0a0; font-size: 14px; }
+    .mock-nav-links span.active { color: #3b82f6; }
+
+    /* 任务进度浮窗 */
+    .task-progress-widget {
+      position: fixed;
+      top: 60px;
+      right: 16px;
+      width: 320px;
+      background: #2a2a2a;
+      border: 1px solid #404040;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      overflow: hidden;
+      z-index: 1000;
+    }
+
+    .widget-header {
+      background: #323232;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+    .widget-header:hover { background: #3c3c3c; }
+
+    .widget-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .widget-title .icon { font-size: 16px; }
+    .widget-title .badge {
+      background: #ef4444;
+      color: #fff;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: normal;
+    }
+
+    .widget-actions { display: flex; gap: 8px; }
+    .widget-btn {
+      background: none;
+      border: none;
+      color: #a0a0a0;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .widget-btn:hover { background: #404040; color: #fff; }
+
+    .widget-body { padding: 12px 16px; }
+
+    /* 收起状态 */
+    .widget-collapsed .widget-body { display: none; }
+
+    /* 进度条 */
+    .progress-section { margin-bottom: 12px; }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #a0a0a0;
+      margin-bottom: 6px;
+    }
+    .progress-bar {
+      height: 6px;
+      background: #404040;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6, #60a5fa);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    /* 任务列表 */
+    .task-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .task-item {
+      background: #323232;
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .task-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .task-icon.pending { background: #404040; color: #a0a0a0; }
+    .task-icon.running { background: rgba(59,130,246,0.2); color: #3b82f6; }
+    .task-icon.done { background: rgba(16,185,129,0.2); color: #10b981; }
+    .task-icon.error { background: rgba(239,68,68,0.2); color: #ef4444; }
+
+    .task-content { flex: 1; min-width: 0; }
+    .task-title {
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .task-meta {
+      font-size: 11px;
+      color: #a0a0a0;
+      display: flex;
+      gap: 8px;
+    }
+    .task-status {
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .task-status.pending { background: #404040; color: #a0a0a0; }
+    .task-status.running { background: rgba(59,130,246,0.2); color: #3b82f6; }
+    .task-status.done { background: rgba(16,185,129,0.2); color: #10b981; }
+    .task-status.error { background: rgba(239,68,68,0.2); color: #ef4444; }
+
+    /* 错误详情 */
+    .error-detail {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-top: 8px;
+      font-size: 11px;
+      color: #f87171;
+      font-family: 'JetBrains Mono', monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+
+    /* 最小化状态 */
+    .widget-minimized {
+      position: fixed;
+      top: 60px;
+      right: 16px;
+      width: auto;
+      background: #323232;
+      border: 1px solid #404040;
+      border-radius: 20px;
+      padding: 8px 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      z-index: 1000;
+    }
+    .widget-minimized:hover { background: #3c3c3c; }
+    .widget-minimized .icon { font-size: 16px; }
+    .widget-minimized .text { font-size: 13px; color: #a0a0a0; }
+    .widget-minimized .count {
+      background: #ef4444;
+      color: #fff;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+    .widget-minimized .count.success { background: #10b981; }
+
+    /* 交互状态标签 */
+    .interaction-demo {
+      background: #202020;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 12px;
+    }
+    .interaction-label { color: #a0a0a0; font-size: 12px; margin-bottom: 12px; }
+    .interaction-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+    .demo-btn {
+      background: #323232;
+      border: 1px solid #404040;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .demo-btn:hover { background: #3c3c3c; border-color: #3b82f6; }
+    .demo-btn.active { background: rgba(59,130,246,0.2); border-color: #3b82f6; color: #3b82f6; }
+  </style>
+</head>
+<body>
+
+<h1>📋 任务进度浮窗设计草图</h1>
+<p>平时缩小在右上角，点击展开查看进度详情。点击外部自动收起。</p>
+
+<!-- 展开状态 -->
+<div class="demo-section">
+  <div class="demo-label">展开状态（点击可交互）</div>
+
+  <div style="position: relative; background: #1a1a1a; padding-top: 60px; min-height: 400px;">
+
+    <!-- 模拟导航栏 -->
+    <div class="mock-nav">
+      <div class="mock-nav-brand">◆ 资讯颗粒化</div>
+      <div class="mock-nav-links">
+        <span>概览</span>
+        <span class="active">导入</span>
+        <span>文档</span>
+        <span>审核</span>
+        <span>结果</span>
+      </div>
+    </div>
+
+    <!-- 浮窗 -->
+    <div class="task-progress-widget" id="widget">
+      <div class="widget-header" onclick="toggleWidget()">
+        <div class="widget-title">
+          <span class="icon">⚡</span>
+          <span>任务进度</span>
+          <span class="badge" id="error-badge">2</span>
+        </div>
+        <div class="widget-actions">
+          <button class="widget-btn" title="最小化" onclick="event.stopPropagation(); minimizeWidget()">−</button>
+        </div>
+      </div>
+      <div class="widget-body">
+
+        <!-- 总体进度 -->
+        <div class="progress-section">
+          <div class="progress-header">
+            <span>总进度</span>
+            <span>5/7 完成</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: 71%"></div>
+          </div>
+        </div>
+
+        <!-- 任务列表 -->
+        <div class="task-list">
+
+          <!-- 进行中 -->
+          <div class="task-item">
+            <div class="task-icon running">⟳</div>
+            <div class="task-content">
+              <div class="task-title">佐敦全球第一</div>
+              <div class="task-meta">
+                <span class="task-status running">实体链接</span>
+                <span>约15秒</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 完成 -->
+          <div class="task-item">
+            <div class="task-icon done">✓</div>
+            <div class="task-content">
+              <div class="task-title">湘江关西涂料</div>
+              <div class="task-meta">
+                <span class="task-status done">已完成</span>
+                <span>提取 3 条</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 失败 -->
+          <div class="task-item">
+            <div class="task-icon error">✗</div>
+            <div class="task-content">
+              <div class="task-title">麦加芯彩招股书</div>
+              <div class="task-meta">
+                <span class="task-status error">失败</span>
+                <span>无法解析 JSON</span>
+              </div>
+              <div class="error-detail">LLM 返回内容无法解析为 JSON: <think>
+分析中...
+</think></div>
+            </div>
+          </div>
+
+          <!-- 待处理 -->
+          <div class="task-item">
+            <div class="task-icon pending">○</div>
+            <div class="task-content">
+              <div class="task-title">立邦战略合作</div>
+              <div class="task-meta">
+                <span class="task-status pending">等待中</span>
+                <span>队列位置 5</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 模拟页面内容 -->
+    <div style="padding: 20px; color: #a0a0a0; font-size: 14px;">
+      页面内容区域（导入表单）...
+    </div>
+
+  </div>
+</div>
+
+<!-- 最小化状态 -->
+<div class="demo-section">
+  <div class="demo-label">最小化状态（悬浮在右上角）</div>
+  <div style="position: relative; background: #1a1a1a; padding-top: 60px; min-height: 80px;">
+    <div class="mock-nav">
+      <div class="mock-nav-brand">◆ 资讯颗粒化</div>
+      <div class="mock-nav-links"><span>概览</span><span>导入</span><span>文档</span></div>
+    </div>
+
+    <!-- 最小化浮窗 -->
+    <div class="widget-minimized" onclick="expandWidget()" id="minimized-widget" style="display: none;">
+      <span class="icon">⚡</span>
+      <span class="text">任务进度</span>
+      <span class="count">2</span>
+    </div>
+
+    <!-- 正常显示的最小化 -->
+    <div class="widget-minimized" style="position: relative; margin: 20px auto; display: inline-flex;">
+      <span class="icon">⚡</span>
+      <span class="text">任务进度</span>
+      <span class="count">2</span>
+    </div>
+  </div>
+</div>
+
+<!-- 交互说明 -->
+<div class="demo-section">
+  <div class="demo-label">交互行为</div>
+  <div class="interaction-demo">
+    <div class="interaction-label">用户操作 → 系统响应</div>
+    <div class="interaction-buttons">
+      <button class="demo-btn">📝 导入文档</button>
+      <button class="demo-btn active">⚡ 浮窗出现（右下角）</button>
+      <button class="demo-btn">📄 处理完成 → 绿色 ✓</button>
+      <button class="demo-btn">❌ 失败 → 红色 ✗ + 错误详情</button>
+      <button class="demo-btn">− 最小化 → 缩成小标签</button>
+      <button class="demo-btn">🖱 点击外部 → 自动收起</button>
+      <button class="demo-btn">🔄 处理中 → 蓝色旋转动画</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleWidget() {
+    document.getElementById('widget').classList.toggle('widget-collapsed');
+  }
+  function minimizeWidget() {
+    document.getElementById('widget').style.display = 'none';
+    document.getElementById('minimized-widget').style.display = 'flex';
+  }
+  function expandWidget() {
+    document.getElementById('widget').style.display = 'block';
+    document.getElementById('minimized-widget').style.display = 'none';
+  }
+</script>
+
+</body>
+</html>

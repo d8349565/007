@@ -329,7 +329,7 @@ def _auto_discover_entities(rows: list, conn) -> int:
         if alias_match:
             continue
 
-        entity_type = _infer_entity_type(text, fact_type)
+        entity_type = eu.infer_entity_type(text, fact_type)[0]
         eid = str(uuid.uuid4())
         conn.execute(
             """INSERT OR IGNORE INTO entity (id, canonical_name, normalized_name, entity_type)

@@ -16,6 +16,7 @@ from app.services.query import (
     get_graph_data, get_entity_list, get_entity_timeline, get_entity_overview,
     get_entity_hierarchy,
 )
+from app.web.api_tasks import api_tasks_bp
 
 logger = get_logger(__name__)
 
@@ -1154,14 +1155,58 @@ def create_app() -> Flask:
     def _start_background_process(doc_ids: list[str]):
         """在后台线程中处理文档（避免阻塞 HTTP 请求）"""
         def _run():
+            import signal
             from app.services.pipeline import process_document
+            from app.models.db import get_connection
+
+            # 单文档总超时时间（秒），防止 LLM 调用等场景无限挂起
+            DOC_TIMEOUT = 300  # 5 分钟
+
             for doc_id in doc_ids:
                 try:
+                    # 为当前文档设置 alarm 超时（仅 Unix 有效，Windows 下忽略）
+                    def timeout_handler(signum, frame):
+                        raise TimeoutError(f"文档处理超时（>{DOC_TIMEOUT}s）")
+                    try:
+                        signal.signal(signal.SIGALRM, timeout_handler)
+                        signal.alarm(DOC_TIMEOUT)
+                    except (AttributeError, OSError):
+                        # Windows 不支持 SIGALRM，静默跳过
+                        pass
+
                     process_document(doc_id)
+
+                    # 取消 alarm
+                    try:
+                        signal.alarm(0)
+                    except (AttributeError, OSError):
+                        pass
+
+                except TimeoutError as e:
+                    logger.error("后台处理文档超时 [%s]: %s", doc_id[:8], e)
+                    _mark_failed_status(doc_id)
                 except Exception as e:
                     logger.error("后台处理文档失败 [%s]: %s", doc_id[:8], e)
+                    _mark_failed_status(doc_id)
+
+        def _mark_failed_status(doc_id):
+            """标记文档为失败状态"""
+            from app.models.db import get_connection
+            conn = get_connection()
+            try:
+                conn.execute(
+                    "UPDATE source_document SET status='failed', updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (doc_id,),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
         t = threading.Thread(target=_run, daemon=True)
         t.start()
+
+    # 注册任务状态 API 蓝图
+    app.register_blueprint(api_tasks_bp)
 
     return app
 

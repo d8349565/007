@@ -27,16 +27,26 @@ class LLMClient:
         if cfg is None:
             cfg = get_config()["llm"]
 
-        self.model = cfg.get("model", "deepseek-chat")
+        # 获取当前 provider
+        self.provider = cfg.get("provider", "deepseek")
+
+        # 根据 provider 加载对应配置
+        provider_cfg = cfg.get(self.provider, {})
+        self.model = provider_cfg.get("model", cfg.get("model", "deepseek-chat"))
         self.temperature = cfg.get("temperature", 0.1)
         self.max_tokens = cfg.get("max_tokens", 4096)
         self.timeout = cfg.get("timeout", 120)
         self.max_retries = cfg.get("max_retries", 3)
         self.retry_delay = cfg.get("retry_delay", 2)
 
+        # MiniMax 支持 extra_body 禁用 thinking
+        self.extra_body: dict | None = None
+        if self.provider == "minimax":
+            self.extra_body = {"thinking_budget": -1}  # 禁用思考过程
+
         self.client = OpenAI(
-            api_key=cfg.get("api_key", ""),
-            base_url=cfg.get("base_url", "https://api.deepseek.com"),
+            api_key=provider_cfg.get("api_key", cfg.get("api_key", "")),
+            base_url=provider_cfg.get("base_url", cfg.get("base_url", "https://api.deepseek.com")),
         )
 
     def chat(
@@ -71,6 +81,7 @@ class LLMClient:
                     temperature=temperature or self.temperature,
                     max_tokens=max_tokens or self.max_tokens,
                     timeout=self.timeout,
+                    extra_body=self.extra_body,
                 )
 
                 usage = response.usage
@@ -139,18 +150,21 @@ class LLMClient:
 
     @staticmethod
     def _extract_json(text: str) -> dict | list | None:
-        """从文本中提取 JSON，处理 Markdown 包裹"""
+        """从文本中提取 JSON，处理 Markdown 包裹和 <thinking> 标签"""
+        import re
+
         text = text.strip()
 
-        # 尝试直接解析
+        # 先去除 <thinking>...</thinking> 标签（如 MiniMax thinking 模型）
+        text = re.sub(r"<thinking>.*?</thinking>", "", text, flags=re.DOTALL)
+
+        # 尝试直接解析（去除 thinking 后应该是干净的 JSON）
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             pass
 
         # 尝试去除 Markdown 代码块
-        import re
-
         json_block = re.search(r"```(?:json)?\s*\n?(.*?)```", text, re.DOTALL)
         if json_block:
             try:
@@ -158,15 +172,24 @@ class LLMClient:
             except json.JSONDecodeError:
                 pass
 
-        # 尝试找到第一个 { 或 [
+        # 尝试找到第一个 { 或 [，匹配到最后一个 } 或 ]
+        # 对于嵌套结构如 [[...]]，需要正确配对括号
         for start_char, end_char in [("{", "}"), ("[", "]")]:
             start = text.find(start_char)
-            end = text.rfind(end_char)
-            if start != -1 and end != -1 and end > start:
-                try:
-                    return json.loads(text[start : end + 1])
-                except json.JSONDecodeError:
-                    pass
+            if start == -1:
+                continue
+            # 从 start 位置之后找配对的结束符
+            depth = 0
+            for i in range(start, len(text)):
+                if text[i] == start_char:
+                    depth += 1
+                elif text[i] == end_char:
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            return json.loads(text[start : i + 1])
+                        except json.JSONDecodeError:
+                            break
 
         return None
 

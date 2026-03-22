@@ -63,10 +63,14 @@ def process_document(document_id: str) -> dict:
 
     logger.info("开始处理文档: %s [%s]", doc_title, document_id[:8])
 
+    # 标记为处理中（在开始处理时立即设置，便于 Web 端识别）
+    _mark_document_status(document_id, "processing")
+
     # 幂等性保护：清除此文档的旧处理结果，防止重跑产生重复
     clear_document_results(document_id)
 
     # 2. 文本清洗
+    _mark_document_status(document_id, "cleaning")
     cleaned = clean_text(raw_text)
     if not cleaned.strip():
         logger.warning("清洗后内容为空: %s", document_id)
@@ -88,6 +92,7 @@ def process_document(document_id: str) -> dict:
         conn.close()
 
     # 4. 全文抽取（Agent 1+2 合并：一次 LLM 调用完成证据发现 + 事实抽取）
+    _mark_document_status(document_id, "extracting")
     fact_results = extract_facts_full_text(
         cleaned_text=cleaned,
         document_id=document_id,
@@ -106,6 +111,7 @@ def process_document(document_id: str) -> dict:
     all_fact_atom_ids = []
 
     if fact_results:
+        _mark_document_status(document_id, "reviewing")
         facts_with_ids = [
             (fr["fact_atom_id"], fr["fact_record"]) for fr in fact_results
         ]
@@ -125,6 +131,7 @@ def process_document(document_id: str) -> dict:
 
     # 6. 实体链接
     if all_fact_atom_ids:
+        _mark_document_status(document_id, "linking")
         batch_link_fact_atoms(all_fact_atom_ids)
 
     # 7. 更新文档状态
@@ -159,6 +166,7 @@ def process_batch(document_ids: list[str], show_progress: bool = True) -> list[d
             results.append(result)
         except Exception as e:
             logger.error("处理文档失败 [%s]: %s", doc_id[:8], e)
+            _mark_document_status(doc_id, "failed")
             results.append({
                 "document_id": doc_id,
                 "error": str(e),
@@ -167,14 +175,20 @@ def process_batch(document_ids: list[str], show_progress: bool = True) -> list[d
     return results
 
 
-def _mark_document_status(document_id: str, status: str) -> None:
+def _mark_document_status(document_id: str, status: str, error_message: str = None) -> None:
     """更新文档的处理状态"""
     conn = get_connection()
     try:
-        conn.execute(
-            "UPDATE source_document SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-            (status, document_id),
-        )
+        if error_message:
+            conn.execute(
+                "UPDATE source_document SET status=?, error_message=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (status, error_message, document_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE source_document SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (status, document_id),
+            )
         conn.commit()
     finally:
         conn.close()

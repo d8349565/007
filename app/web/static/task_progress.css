@@ -1,0 +1,257 @@
+/* ============================================================
+ * 任务进度浮窗样式
+ * ============================================================ */
+
+/* 最小化小标签 */
+.task-progress-mini {
+  position: fixed;
+  top: 60px;
+  right: 16px;
+  z-index: 1000;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 20px;
+  padding: 8px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--shadow-md);
+  transition: background 0.2s, transform 0.2s;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.task-progress-mini:hover {
+  background: var(--bg-card-hover);
+  transform: translateY(-1px);
+}
+
+.task-progress-mini .mini-icon {
+  font-size: 16px;
+}
+
+.task-progress-mini .mini-badge {
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.task-progress-mini .mini-badge.success {
+  background: var(--color-success);
+}
+
+/* 展开浮窗 */
+.task-progress-widget {
+  position: fixed;
+  top: 60px;
+  right: 16px;
+  width: 320px;
+  max-height: 420px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  z-index: 1000;
+  display: none;
+  flex-direction: column;
+}
+
+.task-progress-widget.open {
+  display: flex;
+}
+
+/* 浮窗头部 */
+.widget-header {
+  background: var(--bg-card);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.widget-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.widget-title .badge {
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: normal;
+}
+
+.widget-btn-minimize {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.widget-btn-minimize:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+/* 浮窗内容 */
+.widget-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+
+/* 进度条 */
+.progress-section {
+  margin-bottom: 12px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.progress-bar {
+  height: 6px;
+  background: var(--border-subtle);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-primary-hover));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* 任务列表 */
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-item {
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.task-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.task-icon.pending { background: var(--border-subtle); color: var(--text-muted); }
+.task-icon.running { background: var(--accent-glow); color: var(--accent-primary); }
+.task-icon.done { background: var(--color-success-bg); color: var(--color-success); }
+.task-icon.error { background: var(--color-danger-bg); color: var(--color-danger); }
+.task-icon.empty { background: var(--color-warning-bg); color: var(--color-warning); }
+
+/* 运行中图标动画 */
+.task-icon.running .spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.task-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-title {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.task-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.task-status {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.task-status.pending { background: var(--border-subtle); color: var(--text-muted); }
+.task-status.running { background: var(--accent-glow); color: var(--accent-primary); }
+.task-status.done { background: var(--color-success-bg); color: var(--color-success); }
+.task-status.error { background: var(--color-danger-bg); color: var(--color-danger); }
+.task-status.empty { background: var(--color-warning-bg); color: var(--color-warning); }
+
+/* 错误详情 */
+.error-detail {
+  background: var(--color-danger-bg);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--color-danger);
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 80px;
+  overflow-y: auto;
+}
+
+/* 折叠提示 */
+.task-overflow {
+  text-align: center;
+  padding: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+/* 空状态 */
+.task-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+}

@@ -108,10 +108,31 @@ def _validate_record(rec: dict, cfg: dict) -> dict | None:
                 predicate, fact_type,
             )
 
-    # qualifiers 格式
+    # qualifiers 格式：确保是 dict
     qualifiers = rec.get("qualifiers", {})
     if not isinstance(qualifiers, dict):
         qualifiers = {}
+
+    # confidence 确保是数值类型（float 或 int），防止 dict 等非法类型
+    confidence = rec.get("confidence")
+    if confidence is None:
+        confidence = 0.0
+    elif isinstance(confidence, bool):  # bool 是 int 的子类，需先排除
+        confidence = 0.0
+    elif not isinstance(confidence, (int, float)):
+        # 如果是 dict 或其他类型，提取其中的数值（如果有）
+        if isinstance(confidence, dict):
+            logger.warning("confidence 是 dict，尝试提取其中的值")
+            confidence = 0.0
+        else:
+            confidence = 0.0
+    rec["confidence"] = float(confidence)
+
+    # evidence_text 确保是字符串
+    evidence_text = rec.get("evidence_text", "")
+    if not isinstance(evidence_text, str):
+        evidence_text = str(evidence_text) if evidence_text else ""
+    rec["evidence_text"] = evidence_text
 
     # qualifiers 白名单警告
     qual_whitelist = cfg.get("qualifier_whitelist", {}).get(fact_type, [])
@@ -182,6 +203,17 @@ def extract_facts_full_text(
     except Exception as e:
         _record_task_end(task_id, "failed", error=str(e))
         logger.error("全文抽取调用失败 [doc=%s]: %s", document_id[:8], e)
+        # 记录错误到文档
+        from app.models.db import get_connection
+        conn = get_connection()
+        try:
+            conn.execute(
+                "UPDATE source_document SET error_message=? WHERE id=?",
+                (str(e)[:500], document_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
         return []
 
     # 确保是列表
