@@ -16,6 +16,22 @@ Extract facts that the article EXPLICITLY states about:
 - Cooperation / strategic agreement / supply relationship
 - Price change / price adjustment
 
+## Quantity expectations
+
+For each fact_type category below, extract AT LEAST the number of facts indicated.
+If the article contains multiple examples, extract ALL of them:
+- FINANCIAL_METRIC: 至少 2-3 条
+- SALES_VOLUME: 至少 1-2 条
+- CAPACITY: 至少 1-2 条
+- INVESTMENT: 至少 1-2 条
+- EXPANSION: 至少 1-2 条
+- MARKET_SHARE: 至少 1-2 条
+- COMPETITIVE_RANKING: 至少 2-3 条
+- COOPERATION: 至少 1-2 条
+- PRICE_CHANGE: 若有则抽
+
+如果某段落提到多个公司/品牌的同类事实，应为每个公司/品牌单独创建一条记录。
+
 ## Output format
 
 Output a JSON array of arrays. Each inner array has EXACTLY 13 elements in this fixed order:
