@@ -16,6 +16,7 @@ LLM层：对候选对调 LLM，基于事实样本判断是否同一实体
 """
 import json
 import os
+import sqlite3
 import uuid
 from pathlib import Path
 
@@ -241,7 +242,13 @@ def merge_entities(primary_id: str, secondary_id: str) -> dict:
             (primary_id, secondary_id),
         )
 
-        # 6. 删除 secondary 实体
+        # 6. 清理 entity_relation_suggestion（避免外键约束失败）
+        conn.execute(
+            "DELETE FROM entity_relation_suggestion WHERE entity_id=? OR target_entity_id=?",
+            (secondary_id, secondary_id),
+        )
+
+        # 7. 删除 secondary 实体
         conn.execute("DELETE FROM entity WHERE id=?", (secondary_id,))
         conn.commit()
 
@@ -576,109 +583,148 @@ def swap_and_approve_task(task_id: str) -> dict:
 
 # ──────────────────────────── 批量去重归一化 ────────────────────────────
 
-def dedup_batch_rename(texts: list[str], canonical_name: str, entity_type: str, existing_entity_id: str = "") -> dict:
+def dedup_batch_rename(
+    texts: list,
+    canonical_name: str,
+    entity_type: str,
+    existing_entity_id: str = "",
+) -> dict:
     """
-    批量将多个文本归一化到同一个标准实体名称。
+    批量将多个原始文本名称归一化到同一个标准实体。
 
-    参数:
-        texts: 要归一化的文本列表（不含 canonical_name）
-        canonical_name: 标准实体名称
-        entity_type: 实体类型
-        existing_entity_id: 可选，指定已存在的目标实体 ID
+    流程：
+      1. 确定主实体（existing_entity_id → 已有同名实体 → 新建）
+      2. texts 中每个名称若已是独立实体，用 merge_entities() 合并到主实体
+      3. 将每个名称注册为主实体的别名
+      4. 将 fact_atom.subject_entity_id 指向主实体
 
-    返回:
-        {"entity_id": str, "updated_facts": int, "added_aliases": int}
+    返回: {"updated_facts": N, "added_aliases": M}
     """
-    from app.services.entity_linker import add_entity
+    updated_facts = 0
+    added_aliases = 0
 
-    texts = [t.strip() for t in texts if t.strip()]
-    canonical_name = canonical_name.strip()
-    entity_type = entity_type.strip()
-
+    # ── Step 1: 确定 / 创建主实体 ──
     conn = get_connection()
     try:
-        # 1. 确定目标实体
+        primary_id = None
+
         if existing_entity_id:
-            row = conn.execute("SELECT id FROM entity WHERE id = ?", (existing_entity_id,)).fetchone()
-            eid = row["id"] if row else None
+            row = conn.execute(
+                "SELECT id FROM entity WHERE id = ?", (existing_entity_id,)
+            ).fetchone()
+            if row:
+                primary_id = row["id"]
+
+        if not primary_id:
+            row = conn.execute(
+                "SELECT id FROM entity WHERE canonical_name = ? AND entity_type = ?",
+                (canonical_name, entity_type),
+            ).fetchone()
+            if row:
+                primary_id = row["id"]
+
+        if not primary_id:
+            # 新建实体
+            primary_id = str(uuid.uuid4())
+            normalized = canonical_name.strip().lower()
+            conn.execute(
+                "INSERT INTO entity (id, canonical_name, normalized_name, entity_type) "
+                "VALUES (?, ?, ?, ?)",
+                (primary_id, canonical_name, normalized, entity_type),
+            )
         else:
-            eid = None
+            # 更新现有实体名称/类型（先确认无冲突）
+            cur = conn.execute(
+                "SELECT canonical_name, entity_type FROM entity WHERE id = ?",
+                (primary_id,),
+            ).fetchone()
+            if cur and (cur["canonical_name"] != canonical_name or cur["entity_type"] != entity_type):
+                conflict = conn.execute(
+                    "SELECT id FROM entity "
+                    "WHERE canonical_name = ? AND entity_type = ? AND id != ?",
+                    (canonical_name, entity_type, primary_id),
+                ).fetchone()
+                if not conflict:
+                    conn.execute(
+                        "UPDATE entity SET canonical_name = ?, entity_type = ? WHERE id = ?",
+                        (canonical_name, entity_type, primary_id),
+                    )
 
-        if not eid:
-            # 查找同名实体
-            dup_rows = list(conn.execute(
-                "SELECT id FROM entity WHERE canonical_name = ? ORDER BY rowid ASC",
-                (canonical_name,),
-            ).fetchall())
-            if dup_rows:
-                eid = dup_rows[0]["id"]
-                # 自动合并多余的同名实体
-                for dup in dup_rows[1:]:
-                    _merge_into(dup["id"], eid, conn)
-            else:
-                eid = add_entity(canonical_name, entity_type)
-
-        # 确保 canonical_name 与目标一致
-        conn.execute(
-            "UPDATE entity SET canonical_name = ?, entity_type = ? WHERE id = ?",
-            (canonical_name, entity_type, eid),
-        )
-
-        # 2. 将每个文本作为别名，并合并同名实体
-        updated_facts = 0
-        added_aliases = 0
-        all_texts = list(set(texts + [canonical_name]))
-
+        # 收集 texts 中需要合并的次级实体 id
+        # 注意：即主务 text == canonical_name 也要检查，因为可能存在同名但不同类型的实体
+        to_merge = []
         for text in texts:
-            if text == canonical_name:
+            if not text:
                 continue
-            # 若该文本是另一个实体的 canonical_name，先合并
-            dup_ents = list(conn.execute(
-                "SELECT id FROM entity WHERE canonical_name = ? AND id != ? ORDER BY rowid ASC",
-                (text, eid),
-            ).fetchall())
-            for dup in dup_ents:
-                _merge_into(dup["id"], eid, conn)
-            # 添加别名
-            try:
-                conn.execute(
-                    "INSERT OR IGNORE INTO entity_alias (id, entity_id, alias_name) VALUES (?,?,?)",
-                    (str(uuid.uuid4()), eid, text),
-                )
-                added_aliases += 1
-            except Exception:
-                pass
+            rows = conn.execute(
+                "SELECT id FROM entity WHERE canonical_name = ? AND id != ?",
+                (text, primary_id),
+            ).fetchall()
+            for row in rows:
+                if row["id"] not in to_merge:
+                    to_merge.append(row["id"])
 
-        # 3. 批量更新 fact_atom
-        ph = ",".join(["?"] * len(all_texts))
-        r1 = conn.execute(
-            f"UPDATE fact_atom SET subject_entity_id = ?, subject_text = ? WHERE subject_text IN ({ph})",
-            [eid, canonical_name] + all_texts,
-        )
-        updated_facts += r1.rowcount
-        r2 = conn.execute(
-            f"UPDATE fact_atom SET object_entity_id = ?, object_text = ? WHERE object_text IN ({ph})",
-            [eid, canonical_name] + all_texts,
-        )
-        updated_facts += r2.rowcount
         conn.commit()
-
-        return {"entity_id": eid, "updated_facts": updated_facts, "added_aliases": added_aliases}
-
-    except Exception:
-        conn.rollback()
-        raise
     finally:
         conn.close()
 
+    # ── Step 2: 合并次级实体（使用已有的 merge_entities，内部自带事务） ──
+    for sec_id in to_merge:
+        try:
+            merge_entities(primary_id, sec_id)
+            added_aliases += 1
+        except Exception as exc:
+            logger.warning("merge_entities %s→%s 失败: %s", sec_id, primary_id, exc)
 
-def _merge_into(from_id: str, to_id: str, conn) -> None:
-    """将 from_id 实体合并进 to_id（内部用，不提交事务）。"""
-    conn.execute("UPDATE fact_atom SET subject_entity_id = ? WHERE subject_entity_id = ?", (to_id, from_id))
-    conn.execute("UPDATE fact_atom SET object_entity_id = ? WHERE object_entity_id = ?", (to_id, from_id))
-    conn.execute("UPDATE OR IGNORE entity_alias SET entity_id = ? WHERE entity_id = ?", (to_id, from_id))
-    conn.execute("UPDATE OR IGNORE entity_relation SET from_entity_id = ? WHERE from_entity_id = ?", (to_id, from_id))
-    conn.execute("UPDATE OR IGNORE entity_relation SET to_entity_id = ? WHERE to_entity_id = ?", (to_id, from_id))
-    conn.execute("DELETE FROM entity_relation WHERE from_entity_id = ? OR to_entity_id = ?", (from_id, from_id))
-    conn.execute("DELETE FROM entity_alias WHERE entity_id = ?", (from_id,))
-    conn.execute("DELETE FROM entity WHERE id = ?", (from_id,))
+    # ── Step 3: 添加别名 + 链接 fact_atom ──
+    conn = get_connection()
+    try:
+        for text in texts:
+            if not text:
+                continue
+
+            # 添加别名（跳过与规范名相同的）
+            if text != canonical_name:
+                exists = conn.execute(
+                    "SELECT id FROM entity_alias WHERE alias_name = ?", (text,)
+                ).fetchone()
+                if not exists:
+                    try:
+                        conn.execute(
+                            "INSERT INTO entity_alias (id, entity_id, alias_name) "
+                            "VALUES (?, ?, ?)",
+                            (str(uuid.uuid4()), primary_id, text),
+                        )
+                        added_aliases += 1
+                    except Exception:
+                        pass
+                else:
+                    # 别名已存在但可能指向旧实体，更新到主实体
+                    conn.execute(
+                        "UPDATE entity_alias SET entity_id = ? "
+                        "WHERE alias_name = ? AND entity_id != ?",
+                        (primary_id, text, primary_id),
+                    )
+
+            # 将 fact_atom.subject_entity_id 指向主实体，同时将 subject_text 更新为规范名
+            result = conn.execute(
+                "UPDATE fact_atom SET subject_entity_id = ?, subject_text = ? "
+                "WHERE subject_text = ? "
+                "  AND (subject_entity_id IS NULL OR subject_entity_id != ?)",
+                (primary_id, canonical_name, text, primary_id),
+            )
+            updated_facts += result.rowcount
+
+            # object_text 同样归一化
+            conn.execute(
+                "UPDATE fact_atom SET object_entity_id = ?, object_text = ? "
+                "WHERE object_text = ? "
+                "  AND (object_entity_id IS NULL OR object_entity_id != ?)",
+                (primary_id, canonical_name, text, primary_id),
+            )
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"updated_facts": updated_facts, "added_aliases": added_aliases}
