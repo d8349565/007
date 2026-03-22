@@ -32,12 +32,46 @@ If the article contains multiple examples, extract ALL of them:
 
 如果某段落提到多个公司/品牌的同类事实，应为每个公司/品牌单独创建一条记录。
 
-## Output format
+**IMPORTANT**: Every fact_type key must have at least 1 fact in its array.
+Do not skip this requirement even if a fact_type seems "less important".
 
-Output a JSON array of arrays. Each inner array has EXACTLY 13 elements in this fixed order:
+## Output format — STRUCTURED BY TYPE
 
-```
-[0]  fact_type      — string: FINANCIAL_METRIC | SALES_VOLUME | CAPACITY | INVESTMENT | EXPANSION | MARKET_SHARE | COMPETITIVE_RANKING | COOPERATION | PRICE_CHANGE
+Output a JSON object with 9 fixed keys, one per fact_type:
+
+{
+  "FINANCIAL_METRIC": [
+    // Array of FINANCIAL_METRIC facts
+  ],
+  "SALES_VOLUME": [
+    // Array of SALES_VOLUME facts
+  ],
+  "CAPACITY": [
+    // Array of CAPACITY facts
+  ],
+  "INVESTMENT": [
+    // Array of INVESTMENT facts
+  ],
+  "EXPANSION": [
+    // Array of EXPANSION facts
+  ],
+  "MARKET_SHARE": [
+    // Array of MARKET_SHARE facts
+  ],
+  "COMPETITIVE_RANKING": [
+    // Array of COMPETITIVE_RANKING facts
+  ],
+  "COOPERATION": [
+    // Array of COOPERATION facts
+  ],
+  "PRICE_CHANGE": [
+    // Array of PRICE_CHANGE facts
+  ]
+}
+
+Each fact within an array has EXACTLY 13 elements in this fixed order:
+
+[0]  fact_type      — string: must match the parent key name
 [1]  subject        — string (REQUIRED, never null): the entity name
 [2]  predicate      — string: Chinese verb phrase
 [3]  object         — string or null: target entity
@@ -50,9 +84,12 @@ Output a JSON array of arrays. Each inner array has EXACTLY 13 elements in this 
 [10] qualifiers     — object: {} if none
 [11] confidence     — number: 0 to 1
 [12] evidence_text  — string: minimal supporting text copied from the article
-```
 
-No other keys, no explanation, no markdown wrapper. Output ONLY the JSON array.
+**CRITICAL REQUIREMENTS:**
+- Each fact_type key's array must contain AT LEAST 1 fact (unless the article truly has none for that type)
+- If the article contains multiple facts of the same type, ALL must be listed
+- An array can be empty [] ONLY if the article genuinely has no facts of that type
+- Do NOT skip any fact_type key — every key must be present in the output
 
 ## General rules
 
