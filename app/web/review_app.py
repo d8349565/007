@@ -967,6 +967,7 @@ def create_app() -> Flask:
         """
         手动去重搜索：返回已通过事实中所有匹配关键词的 subject_text / object_text，
         以及标准化实体表中匹配的实体。
+        已绑定实体的 subject_text 不再作为独立条目输出（避免与实体重复）。
         """
         kw = request.args.get("q", "").strip()
         if not kw:
@@ -974,23 +975,6 @@ def create_app() -> Flask:
         conn = get_connection()
         try:
             pattern = f"%{kw}%"
-            # 从事实的文本字段搜集候选
-            subj_rows = conn.execute(
-                """SELECT subject_text AS text_val, COUNT(*) AS cnt
-                   FROM fact_atom
-                   WHERE review_status IN ('AUTO_PASS','HUMAN_PASS')
-                     AND subject_text LIKE ? AND subject_text IS NOT NULL
-                   GROUP BY subject_text ORDER BY cnt DESC LIMIT 50""",
-                (pattern,),
-            ).fetchall()
-            obj_rows = conn.execute(
-                """SELECT object_text AS text_val, COUNT(*) AS cnt
-                   FROM fact_atom
-                   WHERE review_status IN ('AUTO_PASS','HUMAN_PASS')
-                     AND object_text LIKE ? AND object_text IS NOT NULL
-                   GROUP BY object_text ORDER BY cnt DESC LIMIT 30""",
-                (pattern,),
-            ).fetchall()
             # 标准化实体
             ent_rows = conn.execute(
                 """SELECT e.id AS entity_id, e.canonical_name AS text_val,
@@ -1003,26 +987,71 @@ def create_app() -> Flask:
                    GROUP BY e.id ORDER BY cnt DESC LIMIT 20""",
                 (pattern,),
             ).fetchall()
+            # 也搜索别名表
+            alias_rows = conn.execute(
+                """SELECT ea.entity_id, e.canonical_name AS text_val,
+                          e.entity_type,
+                          COUNT(DISTINCT f.id) AS cnt
+                   FROM entity_alias ea
+                   JOIN entity e ON ea.entity_id = e.id
+                   LEFT JOIN fact_atom f ON f.subject_entity_id = e.id
+                     AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                   WHERE ea.alias_name LIKE ?
+                   GROUP BY ea.entity_id ORDER BY cnt DESC LIMIT 10""",
+                (pattern,),
+            ).fetchall()
 
-            seen = set()
+            seen = set()  # 实体 ID 集合
+            seen_text = set()  # 文本集合（同名不同类型的实体只显示一条）
             items = []
             for r in ent_rows:
-                key = r["text_val"]
-                seen.add(key)
+                if r["text_val"] in seen_text:
+                    # 同名已存在，称位合并迮安提示而非重复输出
+                    continue
+                seen.add(r["entity_id"])
+                seen_text.add(r["text_val"])
                 items.append({"text": r["text_val"], "fact_count": r["cnt"],
                                "entity_id": r["entity_id"], "entity_type": r["entity_type"],
                                "source": "entity"})
+            for r in alias_rows:
+                if r["entity_id"] not in seen:
+                    seen.add(r["entity_id"])
+                    seen_text.add(r["text_val"])
+                    items.append({"text": r["text_val"], "fact_count": r["cnt"],
+                                   "entity_id": r["entity_id"], "entity_type": r["entity_type"],
+                                   "source": "entity"})
+
+            # 从事实的文本字段搜集候选（只返回未绑定实体的文本）
+            subj_rows = conn.execute(
+                """SELECT subject_text AS text_val, COUNT(*) AS cnt
+                   FROM fact_atom
+                   WHERE review_status IN ('AUTO_PASS','HUMAN_PASS')
+                     AND subject_text LIKE ? AND subject_text IS NOT NULL
+                     AND subject_entity_id IS NULL
+                   GROUP BY subject_text ORDER BY cnt DESC LIMIT 50""",
+                (pattern,),
+            ).fetchall()
+            obj_rows = conn.execute(
+                """SELECT object_text AS text_val, COUNT(*) AS cnt
+                   FROM fact_atom
+                   WHERE review_status IN ('AUTO_PASS','HUMAN_PASS')
+                     AND object_text LIKE ? AND object_text IS NOT NULL
+                     AND object_entity_id IS NULL
+                   GROUP BY object_text ORDER BY cnt DESC LIMIT 30""",
+                (pattern,),
+            ).fetchall()
+
             for r in subj_rows:
                 key = r["text_val"]
-                if key not in seen:
-                    seen.add(key)
+                if key not in seen_text:
+                    seen_text.add(key)
                     items.append({"text": r["text_val"], "fact_count": r["cnt"],
                                   "entity_id": None, "entity_type": None,
                                   "source": "subject_text"})
             for r in obj_rows:
                 key = r["text_val"]
-                if key not in seen:
-                    seen.add(key)
+                if key not in seen_text:
+                    seen_text.add(key)
                     items.append({"text": r["text_val"], "fact_count": r["cnt"],
                                   "entity_id": None, "entity_type": None,
                                   "source": "object_text"})
@@ -1068,6 +1097,166 @@ def create_app() -> Flask:
         except Exception as exc:
             logger.error("batch_rename failed: %s", exc, exc_info=True)
             return jsonify({"error": str(exc)}), 500
+
+    @app.route("/api/dedup/clusters")
+    def api_dedup_clusters():
+        """返回自动检测到的相似名称聚类，供"实体质量概览"使用。
+        只返回成员数 >= 2 的簇，按最大事实数降序排列。
+        """
+        conn = get_connection()
+        try:
+            # 从已通过事实取高频主体 (min_count >= 1)
+            subj_rows = conn.execute(
+                """SELECT subject_text AS text_val, COUNT(*) AS cnt
+                   FROM fact_atom
+                   WHERE review_status IN ('AUTO_PASS','HUMAN_PASS')
+                     AND subject_text IS NOT NULL AND subject_text != ''
+                   GROUP BY subject_text
+                   HAVING cnt >= 1
+                   ORDER BY cnt DESC LIMIT 300"""
+            ).fetchall()
+            # 知识库实体
+            ent_rows = conn.execute(
+                """SELECT e.id AS entity_id, e.canonical_name AS text_val,
+                          e.entity_type,
+                          COUNT(DISTINCT f.id) AS cnt
+                   FROM entity e
+                   LEFT JOIN fact_atom f ON f.subject_entity_id = e.id
+                     AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                   GROUP BY e.id"""
+            ).fetchall()
+        finally:
+            conn.close()
+
+        seen = {}  # text -> item
+        for r in ent_rows:
+            seen[r["text_val"]] = {
+                "text": r["text_val"],
+                "fact_count": r["cnt"] or 0,
+                "entity_id": r["entity_id"],
+                "entity_type": r["entity_type"],
+                "source": "entity",
+            }
+        for r in subj_rows:
+            if r["text_val"] not in seen:
+                seen[r["text_val"]] = {
+                    "text": r["text_val"],
+                    "fact_count": r["cnt"],
+                    "entity_id": None,
+                    "entity_type": None,
+                    "source": "subject_text",
+                }
+        items = list(seen.values())
+
+        # ── 并查集聚类（与前端 _clusterDedup 逻辑一致） ──
+        GEO_SET = {
+            "香港", "青岛", "上海", "北京", "天津", "广州", "深圳", "南京", "成都",
+            "宁波", "武汉", "苏州", "张家港", "常州", "无锡", "重庆", "济南", "杭州", "厦门",
+        }
+
+        def _norm(s):
+            import re
+            return re.sub(r"[（(）)\s]", "", s).lower()
+
+        def _geo_in_bracket(s):
+            import re
+            m = re.search(r"[（(]([^）)]+)[）)]", s)
+            if not m:
+                return None
+            c = m.group(1).strip()
+            return c if c in GEO_SET else None
+
+        def _sim(a, b):
+            na, nb = _norm(a), _norm(b)
+            if not na or not nb:
+                return 0.0
+            if na == nb:
+                return 1.0
+            shorter, longer = (na, nb) if len(na) <= len(nb) else (nb, na)
+            if longer.startswith(shorter) or longer.endswith(shorter) or shorter in longer:
+                score_con = 0.5 + len(shorter) / len(longer) * 0.45
+            else:
+                score_con = 0.0
+            # LCS ratio
+            if len(na) <= 30 and len(nb) <= 30:
+                m_len, n_len = len(na), len(nb)
+                dp = [[0] * (n_len + 1) for _ in range(m_len + 1)]
+                for i in range(1, m_len + 1):
+                    for j in range(1, n_len + 1):
+                        dp[i][j] = dp[i-1][j-1] + 1 if na[i-1] == nb[j-1] else max(dp[i-1][j], dp[i][j-1])
+                score_lcs = dp[m_len][n_len] / max(m_len, n_len)
+            else:
+                score_lcs = 0.0
+            return max(score_con, score_lcs)
+
+        threshold = 0.68
+        n = len(items)
+        par = list(range(n))
+
+        def find(x):
+            while par[x] != x:
+                par[x] = par[par[x]]
+                x = par[x]
+            return x
+
+        scores = {}
+        for i in range(n):
+            for j in range(i + 1, n):
+                a, b = items[i]["text"], items[j]["text"]
+                ga, gb = _geo_in_bracket(a), _geo_in_bracket(b)
+                if ga and gb and ga != gb:
+                    continue  # 地区不同，跳过
+                s = _sim(a, b)
+                scores[(i, j)] = s
+                if s >= threshold:
+                    pi, pj = find(i), find(j)
+                    if pi != pj:
+                        par[pj] = pi
+
+        # 组装簇
+        from collections import defaultdict
+        groups = defaultdict(list)
+        for i in range(n):
+            groups[find(i)].append(i)
+
+        clusters = []
+        for root, members in groups.items():
+            if len(members) < 2:
+                continue
+            # 排序：已标准化实体排前，再按事实数降序
+            members.sort(key=lambda i: (
+                0 if items[i]["source"] == "entity" else 1,
+                -(items[i]["fact_count"] or 0),
+            ))
+            pivot = members[0]
+            cluster_items = []
+            for i in members:
+                sims = scores.get((min(pivot, i), max(pivot, i)), 0.0) if i != pivot else 1.0
+                cluster_items.append({
+                    "text": items[i]["text"],
+                    "fact_count": items[i]["fact_count"],
+                    "entity_id": items[i]["entity_id"],
+                    "entity_type": items[i]["entity_type"],
+                    "source": items[i]["source"],
+                    "sim_to_pivot": round(sims, 3),
+                    "is_pivot": i == pivot,
+                })
+            max_fc = max(it["fact_count"] for it in cluster_items)
+            clusters.append({
+                "pivot_text": items[pivot]["text"],
+                "max_fact_count": max_fc,
+                "members": cluster_items,
+                "has_geo_warn": any(
+                    _geo_in_bracket(cluster_items[a]["text"]) != _geo_in_bracket(cluster_items[b]["text"])
+                    and _geo_in_bracket(cluster_items[a]["text"]) is not None
+                    and _geo_in_bracket(cluster_items[b]["text"]) is not None
+                    for a in range(len(cluster_items))
+                    for b in range(a + 1, len(cluster_items))
+                ),
+            })
+
+        clusters.sort(key=lambda c: -c["max_fact_count"])
+        return jsonify({"clusters": clusters, "total_items": len(items)})
 
     @app.route("/entity/<entity_id>")
     def entity_timeline_page(entity_id):

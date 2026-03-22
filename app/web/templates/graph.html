@@ -38,8 +38,11 @@
 .graph-filter label { display: block; font-size: 11px; font-weight: 600; color: #6b6b6b; margin-bottom: 4px; margin-top: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
 .graph-filter label:first-child { margin-top: 0; }
 .graph-filter select { width: 100%; padding: 6px 8px; border: 1px solid #505050; border-radius: 5px; font-size: 13px; background: #2a2a2a; color: #ffffff; }
+.graph-filter input[type="text"] { width: 100%; padding: 6px 8px; border: 1px solid #505050; border-radius: 5px; font-size: 13px; background: #2a2a2a; color: #ffffff; box-sizing: border-box; }
+.graph-filter input[type="range"] { width: 100%; accent-color: #3b82f6; }
 .graph-filter .filter-stats { margin-top: 12px; padding-top: 10px; border-top: 1px solid #333; font-size: 11px; color: #6b6b6b; line-height: 1.7; }
 .graph-filter .filter-stats strong { color: #fafafa; }
+.graph-filter .search-match-hint { font-size: 11px; color: #fbbf24; margin-top: 4px; }
 
 /* Legend (bottom-left) */
 .graph-legend-panel {
@@ -128,6 +131,10 @@
 
     <!-- Filter panel -->
     <div class="graph-filter">
+      <label>搜索实体</label>
+      <input type="text" id="filterSearch" placeholder="输入实体名称…" onkeydown="if(event.key==='Enter') searchGraphNode()" />
+      <div id="searchMatchHint" class="search-match-hint"></div>
+
       <label>事实类型</label>
       <select id="filterType">
         <option value="">全部类型</option>
@@ -135,6 +142,21 @@
         <option value="{{ ft }}">{{ FACT_TYPE_NAMES.get(ft, ft) }}</option>
         {% endfor %}
       </select>
+
+      <label>实体类型</label>
+      <select id="filterEntityType" onchange="applyClientFilter()">
+        <option value="">全部</option>
+        <option value="COMPANY">企业</option>
+        <option value="GROUP">群体/排名</option>
+        <option value="PROJECT">项目</option>
+        <option value="REGION">地区</option>
+        <option value="UNKNOWN">未知</option>
+        <option value="__TEXT__">未标准化</option>
+      </select>
+
+      <label>最少事实数 <span id="minFactLabel" style="color:#fafafa;">0</span></label>
+      <input type="range" id="filterMinFacts" min="0" max="20" value="0" oninput="document.getElementById('minFactLabel').textContent=this.value; applyClientFilter()" />
+
       <div class="filter-stats" id="graphStats"></div>
     </div>
 
@@ -541,6 +563,98 @@ document.getElementById('edgeLabelToggle').addEventListener('change', function()
 
 // Filter change
 document.getElementById('filterType').addEventListener('change', loadGraph);
+
+// 搜索实体节点：高亮 + 平移居中
+function searchGraphNode() {
+  const q = (document.getElementById('filterSearch').value || '').trim().toLowerCase();
+  const hint = document.getElementById('searchMatchHint');
+  if (!q || !graphData) { hint.textContent = ''; resetHighlight(); return; }
+  const matches = graphData.nodes.filter(n => n.name.toLowerCase().includes(q));
+  hint.textContent = matches.length ? `匹配 ${matches.length} 个节点` : '未找到匹配节点';
+  hint.style.color = matches.length ? '#fbbf24' : '#dc2626';
+  if (!matches.length) { resetHighlight(); return; }
+  // 高亮匹配节点，其余变暗
+  const matchIds = new Set(matches.map(n => n.id));
+  d3.selectAll('#graphSvg circle').attr('opacity', d => matchIds.has(d.id) ? 1 : 0.1)
+    .attr('stroke-width', d => matchIds.has(d.id) ? 4 : 1);
+  d3.selectAll('#graphSvg text').attr('opacity', function(d) {
+    if (!d) return 1;
+    // 边标签：有 source 属性的是边数据
+    if (d.source !== undefined) {
+      const sid = typeof d.source === 'object' ? d.source.id : d.source;
+      const tid = typeof d.target === 'object' ? d.target.id : d.target;
+      return (matchIds.has(sid) || matchIds.has(tid)) ? 1 : 0.05;
+    }
+    // 节点标签
+    return d.id ? (matchIds.has(d.id) ? 1 : 0.1) : 0.3;
+  });
+  d3.selectAll('#graphSvg path').attr('opacity', d => {
+    if (!d || !d.source) return 0.3;
+    const sid = typeof d.source === 'object' ? d.source.id : d.source;
+    const tid = typeof d.target === 'object' ? d.target.id : d.target;
+    return (matchIds.has(sid) || matchIds.has(tid)) ? 1 : 0.05;
+  });
+  // 平移到第一个匹配节点
+  const first = matches[0];
+  if (first.x != null && first.y != null) {
+    const svg = d3.select('#graphSvg');
+    const container = svg.node().parentElement;
+    const w = container.clientWidth, h = container.clientHeight;
+    const k = 1.5;
+    svg.transition().duration(500)
+      .call(d3.zoom().scaleExtent([0.1, 4]).on('zoom', e => d3.select('#graphSvg > g').attr('transform', e.transform))
+        .transform, d3.zoomIdentity.translate(w/2 - first.x * k, h/2 - first.y * k).scale(k));
+  }
+}
+
+function resetHighlight() {
+  d3.selectAll('#graphSvg circle').attr('opacity', 1).attr('stroke-width', d => d && d.is_text_node ? 1.5 : 2.5);
+  d3.selectAll('#graphSvg text').attr('opacity', 1);
+  d3.selectAll('#graphSvg path').attr('opacity', 1);
+}
+
+// 客户端筛选（实体类型 + 最少事实数）
+function applyClientFilter() {
+  if (!graphData) return;
+  const etFilter = document.getElementById('filterEntityType').value;
+  const minFacts = parseInt(document.getElementById('filterMinFacts').value) || 0;
+
+  d3.selectAll('#graphSvg circle').each(function(d) {
+    let visible = true;
+    if (minFacts > 0 && (d.fact_count || 0) < minFacts) visible = false;
+    if (etFilter) {
+      if (etFilter === '__TEXT__') {
+        if (!d.is_text_node) visible = false;
+      } else {
+        if (d.is_text_node || d.entity_type !== etFilter) visible = false;
+      }
+    }
+    d3.select(this).attr('opacity', visible ? 1 : 0.06).attr('r', visible ? Math.max(8, Math.min(16, 6 + (d.fact_count || 1))) : 3);
+  });
+
+  const visibleIds = new Set();
+  d3.selectAll('#graphSvg circle').each(function(d) {
+    if (d3.select(this).attr('opacity') > 0.5) visibleIds.add(d.id);
+  });
+
+  d3.selectAll('#graphSvg text').attr('opacity', function(d) {
+    if (!d) return 1;
+    // 边标签：有 source 属性的是边数据
+    if (d.source !== undefined) {
+      const sid = typeof d.source === 'object' ? d.source.id : d.source;
+      const tid = typeof d.target === 'object' ? d.target.id : d.target;
+      return (visibleIds.has(sid) && visibleIds.has(tid)) ? 1 : 0.05;
+    }
+    // 节点标签
+    return d.id ? (visibleIds.has(d.id) ? 1 : 0.06) : 0.3;
+  });
+  d3.selectAll('#graphSvg path').attr('opacity', d => {
+    if (!d || !d.source) return 0.3;
+    const sid = typeof d.source === 'object' ? d.source.id : d.source;
+    const tid = typeof d.target === 'object' ? d.target.id : d.target;
+    return (visibleIds.has(sid) && visibleIds.has(tid)) ? 1 : 0.03;
+  });
+}
 
 // Initial load
 loadGraph();
