@@ -85,3 +85,5 @@ node_modules/
 
 # Tools
 .gstack/
+data/mvp.db-shm
+data/mvp.db-wal
