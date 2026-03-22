@@ -73,7 +73,7 @@ PRIMARY_TYPE_PRIORITY = {
 PROJECT_ENDINGS = ("项目", "工程", "专项", "计划")
 
 # 独立设施关键词
-FACILITY_KEYWORDS = ("新工厂", "生产基地", "研发基地", "产业基地", "产业园区")
+FACILITY_KEYWORDS = ("工厂", "生产基地", "研发基地", "产业基地", "产业园区")
 
 # 公司类后缀词
 COMPANY_SUFFIXES = (
@@ -202,6 +202,12 @@ def infer_entity_type(text: str, fact_type: str = "") -> tuple[str, list[str]]:
         return ("UNKNOWN", [])
 
     tags: list[str] = []
+
+    # 0. 含指标/概念后缀 → 非实体，直接返回 UNKNOWN
+    _METRIC_ENDINGS = ("产能", "产量", "销量", "份额", "价格", "市场", "营收", "利润", "增速", "增长率")
+    for me in _METRIC_ENDINGS:
+        if text.endswith(me):
+            return ("UNKNOWN", tags)
 
     # 1. 以项目/工程结尾 → PROJECT（最高优先级）
     for ending in PROJECT_ENDINGS:

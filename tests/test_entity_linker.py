@@ -12,7 +12,7 @@ from app.services.entity_linker import (
     add_entity,
     add_alias,
     batch_link_fact_atoms,
-    _infer_entity_type,
+    infer_entity_type,
     _auto_discover_entities,
 )
 
@@ -59,19 +59,19 @@ def _insert_fact_atom(conn, fact_id, subject_text, object_text, fact_type="FINAN
 # --- 测试实体类型推断 ---
 
 def test_infer_company():
-    assert _infer_entity_type("立邦涂料") == "COMPANY"
-    assert _infer_entity_type("中涂化工") == "COMPANY"
-    assert _infer_entity_type("PPG工业集团") == "COMPANY"
+    assert infer_entity_type("立邦涂料")[0] == "COMPANY"
+    assert infer_entity_type("中涂化工")[0] == "COMPANY"
+    assert infer_entity_type("PPG工业集团")[0] == "COMPANY"
 
 
 def test_infer_group():
-    assert _infer_entity_type("前十强企业") == "GROUP"
-    assert _infer_entity_type("外资品牌") == "GROUP"
+    assert infer_entity_type("前十强企业")[0] == "GROUP"
+    assert infer_entity_type("外资品牌")[0] == "GROUP"
 
 
 def test_infer_unknown():
-    assert _infer_entity_type("年产值") == "UNKNOWN"
-    assert _infer_entity_type("GDP") == "UNKNOWN"
+    assert infer_entity_type("年产值")[0] == "UNKNOWN"
+    assert infer_entity_type("GDP")[0] == "UNKNOWN"
 
 
 # --- 测试精确匹配 ---

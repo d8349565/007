@@ -6,6 +6,7 @@
   <div class="page-header">
     <div class="page-title">事实原子审核</div>
     <div class="page-actions">
+      <button class="btn btn-sm btn-warning" onclick="batchReEvaluate()" title="用当前规则重新评估所有待人工审核的事实（无需重调 LLM）">⚡ 批量重评估</button>
       <a class="btn btn-sm btn-success" href="/export?fact_type={{ current_type }}&status={{ current_status }}">导出 CSV</a>
     </div>
   </div>
@@ -551,5 +552,30 @@ function submitEdit(action) {
 document.getElementById('editModal').addEventListener('click', function(e) {
   if (e.target === this) closeEditModal();
 });
+
+/* ==========================================================
+ *  批量重评估（调用后端 API，无需重调 LLM）
+ * ========================================================== */
+async function batchReEvaluate() {
+  const btn = document.querySelector('button[onclick="batchReEvaluate()"]');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ 评估中…';
+  try {
+    const r = await fetch('/api/review/re-evaluate', { method: 'POST' });
+    const d = await r.json();
+    if (d.success) {
+      alert('批量重评估完成：共 ' + d.evaluated + ' 条，晋升 AUTO_PASS ' + d.promoted + ' 条，保留人工审核 ' + d.kept + ' 条');
+      if (d.promoted > 0) location.reload();
+    } else {
+      alert('评估失败：' + (d.error || '未知错误'));
+    }
+  } catch (e) {
+    alert('请求失败：' + e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
 </script>
 {% endblock %}

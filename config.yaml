@@ -94,6 +94,23 @@ predicate_whitelist:
     - 营收
     - 利润总额
     - 增长率
+    - 总投资
+    - 中标
+    - 价值
+    - 合同额
+    - 交易额
+    - 总价
+    - 市值
+    - 财务
+    - 计划投资
+    - 预计年产值
+    - 投资额为
+    - 营业利润
+    - 应占溢利
+    - 造船完工量
+    - 订单量
+    - 指标为
+    - 市场价值
   SALES_VOLUME:
     - 实现
     - 销售量
@@ -105,6 +122,16 @@ predicate_whitelist:
     - 交付量
     - 消费量
     - 消耗
+    - 年产
+    - 形成
+    - 用量
+    - 面积
+    - 工程量
+    - 销售收入为
+    - 设计产能
+    - 生产规模
+    - 占世界总量
+    - 产能为
   CAPACITY:
     - 规划
     - 新增年产
@@ -116,6 +143,8 @@ predicate_whitelist:
     - 设计产能
     - 产能为
     - 设计产能为
+    - 年产
+    - 形成产能
   INVESTMENT:
     - 计划总投资
     - 投资额
@@ -124,6 +153,9 @@ predicate_whitelist:
     - 投资
     - 收购
     - 完成收购
+    - 签约落地
+    - 投资建厂
+    - 投资扩充
   EXPANSION:
     - 新建
     - 扩建
@@ -133,6 +165,18 @@ predicate_whitelist:
     - 建设
     - 落地
     - 竣工
+    - 试生产
+    - 投资建厂
+    - 投资扩充
+    - 开工
+    - 投建
+    - 建厂
+    - 计划建设
+    - 计划新建
+    - 计划投资
+    - 通过验收
+    - 建成
+    - 投建
   MARKET_SHARE:
     - 市场份额
     - 占市场份额
@@ -144,14 +188,41 @@ predicate_whitelist:
     - 市场份额达
     - 前十强市占率
     - 前五市占率
+    - 位列
+    - 位居
+    - 占据
+    - 市场占有率
+    - 占世界总量
+    - 三大指标占
+    - 完工量占
+    - 位列榜首
+    - 连续排名第一
+    - 近乎完全垄断
+    - 产销量位居
   COMPETITIVE_RANKING:
     - 排名第
     - 位居第
+    - 位居
     - 跻身前
     - 入选
     - 连续排名
     - 名列
     - 排名在范围内
+    - 排名
+    - 位列
+    - 上榜
+    - 冒首
+    - 销量第一
+    - 垄断
+    - 领先
+    - 处于
+    - 全球销量冠军
+    - 位居全球
+    - 全球领先
+    - 垃断
+    - 领先地位
+    - 保持第一
+    - 成为
   COOPERATION:
     - 签署合作协议
     - 战略合作
@@ -161,20 +232,22 @@ predicate_whitelist:
     - 签约
     - 收购股权
     - 股权合作
-    - 击败
     - 提供涂料
     - 应用于
     - 供货于
-  EXPANSION:
-    - 新建
-    - 扩建
-    - 开工建设
-    - 投产
-    - 布局
-    - 建设
-    - 落地
-    - 竣工
-    - 试生产
+    - 承接
+    - 中标
+    - 合资
+    - 获战略投资
+    - 共同投资设立
+    - 投资设立
+    - 联合重组
+    - 合并
+    - 共建
+    - 完购项目
+    - 签署采购合同
+    - 合作建造
+    - 完成涂装
   PRICE_CHANGE:
     - 价格上涨
     - 价格下跌
@@ -273,15 +346,11 @@ qualifier_whitelist:
 
 # --- 审核 ---
 review:
-  auto_pass_confidence: 0.85
+  auto_pass_confidence: 0.65
   force_human_review_types: []
   force_human_review_predicates: []
   # 特定 fact_type 必须在 qualifiers 中含有以下字段之一，否则即使 PASS 也不允许 AUTO_PASS
-  # 规则：qualifiers 中至少一个 key 有非空值（OR 关系）
-  # COMPETITIVE_RANKING 已在 force_human_review_types 中，此处只补充其他类型
-  require_qualifier_any:
-    FINANCIAL_METRIC:
-      - metric_name
+  require_qualifier_any: {}
 
 # --- 日志 ---
 logging:

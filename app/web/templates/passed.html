@@ -216,10 +216,11 @@
                 {{ f.document_title[:18] }}{% if f.document_title|length > 18 %}…{% endif %}
               </a>
               {% else %}
-              <span class="truncate-inner text-xs text-muted" style="max-width:120px;"
+              <a href="/documents/{{ f.document_id }}"
+                class="truncate-inner text-xs" style="max-width:120px;color:#60a5fa;text-decoration:none;"
                 data-tip="{{ f.document_title|e }}">
                 {{ f.document_title[:18] }}{% if f.document_title|length > 18 %}…{% endif %}
-              </span>
+              </a>
               {% endif %}
               {% else %}<span class="text-muted">—</span>{% endif %}
             </td>

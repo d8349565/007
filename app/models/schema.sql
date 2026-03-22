@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS source_document (
     raw_text     TEXT NOT NULL,
     content_hash TEXT NOT NULL UNIQUE,    -- SHA256 去重键
     status       TEXT NOT NULL DEFAULT 'ACTIVE',
+    error_message TEXT,                   -- 处理失败时的错误信息
     crawl_time   TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );

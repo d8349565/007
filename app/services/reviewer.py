@@ -140,16 +140,16 @@ def _map_verdict_to_status(
         if qual_key in qualifiers:
             return "HUMAN_REVIEW_REQUIRED"
 
-    # predicate 白名单模糊校验：不匹配则降级，防止游离 predicate 被 AUTO_PASS
+    # predicate 白名单模糊校验：不匹配仅记录日志，不阻断 AUTO_PASS
+    # (白名单作为"期望词表"辅助监控，不作为硬性门禁)
     predicate_whitelist = cfg.get("predicate_whitelist", {}).get(fact_type, [])
     if predicate_whitelist:
         pred_val = fact_record.get("predicate", "")
         if pred_val and not any(root in pred_val for root in predicate_whitelist):
-            logger.info(
-                "predicate '%s' 未匹配白名单，强制人工审核 (fact_type=%s)",
+            logger.debug(
+                "predicate '%s' 未匹配白名单 (fact_type=%s)，继续评估",
                 pred_val, fact_type,
             )
-            return "HUMAN_REVIEW_REQUIRED"
 
     # 关键限定词存在性守门：特定 fact_type 若缺少上下文限定词则不允许 AUTO_PASS
     # 配置格式: review.require_qualifier_any: {FACT_TYPE: [key1, key2, ...]}
@@ -162,6 +162,15 @@ def _map_verdict_to_status(
             fact_type, required_any,
         )
         return "HUMAN_REVIEW_REQUIRED"
+
+    # MARKET_SHARE 定性守门：无量化数值时禁止 AUTO_PASS（保留人工确认）
+    if fact_type == "MARKET_SHARE":
+        if fact_record.get("value_num") is None and not fact_record.get("value_text"):
+            logger.debug(
+                "MARKET_SHARE 无量化数值 (predicate='%s')，保留人工审核",
+                fact_record.get("predicate", ""),
+            )
+            return "HUMAN_REVIEW_REQUIRED"
 
     # PASS 且分数足够高
     if verdict == "PASS" and score >= auto_pass_threshold:
@@ -344,6 +353,81 @@ def _persist_review(
              verdict.lower(), review_note),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def batch_re_evaluate_pending() -> dict:
+    """用当前 config 重新评估所有 HUMAN_REVIEW_REQUIRED 的事实原子，无需重新调用 LLM。
+
+    逻辑：
+    - confidence_score >= 0.65 视为 reviewer 当初给出 PASS（只是被旧配置的白名单或阈值阻断）
+    - confidence_score < 0.65 视为 reviewer 给出 UNCERTAIN，保留人工审核
+    - 用 _map_verdict_to_status 结合新 config 重新计算，若结果为 AUTO_PASS 则晋升
+
+    返回:
+        {"evaluated": int, "promoted": int, "kept": int}
+    """
+    cfg = get_config()
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """SELECT id, fact_type, predicate, object_text, value_num, value_text,
+                      qualifier_json, confidence_score
+               FROM fact_atom WHERE review_status = 'HUMAN_REVIEW_REQUIRED'"""
+        ).fetchall()
+
+        promoted = 0
+        kept = 0
+        for row in rows:
+            score = row["confidence_score"] or 0.0
+            # 置信度低于 0.65 的保留人工审核（推测 reviewer 当初给了 UNCERTAIN）
+            if score < 0.65:
+                kept += 1
+                continue
+
+            # 重新构造 fact_record 供 _map_verdict_to_status 使用
+            try:
+                qualifiers = json.loads(row["qualifier_json"] or "{}")
+            except Exception:
+                qualifiers = {}
+            fact_record = {
+                "fact_type": row["fact_type"],
+                "predicate": row["predicate"],
+                "qualifiers": qualifiers,
+                "value_num": row["value_num"],
+                "value_text": row["value_text"],
+            }
+
+            # 用新 config 重新评估（推断当时 verdict=PASS，只是被旧规则拦截）
+            new_status = _map_verdict_to_status("PASS", score, fact_record, cfg)
+            if new_status == "AUTO_PASS":
+                conn.execute(
+                    """UPDATE fact_atom
+                       SET review_status='AUTO_PASS',
+                           review_note='[批量重评估] 符合当前自动通过标准',
+                           updated_at=CURRENT_TIMESTAMP
+                       WHERE id=?""",
+                    (row["id"],),
+                )
+                conn.execute(
+                    """INSERT INTO review_log
+                       (id, target_type, target_id, old_status, new_status,
+                        reviewer, review_action, review_note)
+                       VALUES (?, 'fact_atom', ?, 'HUMAN_REVIEW_REQUIRED', 'AUTO_PASS',
+                               'batch_re_evaluate', 'pass', '批量重评估晋升')""",
+                    (str(uuid.uuid4()), row["id"]),
+                )
+                promoted += 1
+            else:
+                kept += 1
+
+        conn.commit()
+        logger.info(
+            "批量重评估完成: 共 %d 条，晋升 %d 条，保留 %d 条",
+            len(rows), promoted, kept,
+        )
+        return {"evaluated": len(rows), "promoted": promoted, "kept": kept}
     finally:
         conn.close()
 

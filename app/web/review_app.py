@@ -1068,8 +1068,6 @@ def create_app() -> Flask:
         except Exception as exc:
             logger.error("batch_rename failed: %s", exc, exc_info=True)
             return jsonify({"error": str(exc)}), 500
-        finally:
-            conn.close()
 
     @app.route("/entity/<entity_id>")
     def entity_timeline_page(entity_id):
@@ -1204,6 +1202,21 @@ def create_app() -> Flask:
 
         t = threading.Thread(target=_run, daemon=True)
         t.start()
+
+    # ─────────────── 批量重评估 API ───────────────
+
+    @app.route("/api/review/re-evaluate", methods=["POST"])
+    def api_review_re_evaluate():
+        """用当前 config 批量重评估 HUMAN_REVIEW_REQUIRED 事实，无需重新调用 LLM。
+        对 confidence_score >= 0.65 且符合新配置条件的事实晋升为 AUTO_PASS。
+        """
+        from app.services.reviewer import batch_re_evaluate_pending
+        try:
+            result = batch_re_evaluate_pending()
+            return jsonify({"success": True, **result})
+        except Exception as e:
+            logger.error("批量重评估失败: %s", e, exc_info=True)
+            return jsonify({"error": str(e)}), 500
 
     # 注册任务状态 API 蓝图
     app.register_blueprint(api_tasks_bp)
