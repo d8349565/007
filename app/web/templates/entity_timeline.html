@@ -1,22 +1,174 @@
 {% extends "_base.html" %}
+
 {% set active = 'graph' %}
-{% block title %}{{ entity.name }} — 实体时间轴{% endblock %}
+
+{% block title %}{{ detail.canonical_name or entity.name }} — 实体详情{% endblock %}
 
 {% block head %}
 <style>
-/* Entity timeline page */
-.entity-header {
-  display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap;
+
+/* ===== Entity Detail Page ===== */
+
+/* Header */
+.ed-header {
+  background: #1e1e1e; border-radius: 10px; padding: 20px 24px;
+  margin-bottom: 0; border: 1px solid #333;
 }
-.entity-name { font-size: 24px; font-weight: 800; color: #fafafa; }
-.entity-type-badge {
-  display: inline-block; padding: 4px 12px; border-radius: 16px;
+.ed-header-top {
+  display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap;
+}
+.ed-back { font-size: 13px; color: #3b82f6; text-decoration: none; white-space: nowrap; padding-top: 6px; }
+.ed-back:hover { text-decoration: underline; }
+.ed-name-block { flex: 1; min-width: 200px; }
+.ed-name {
+  font-size: 26px; font-weight: 800; color: #fafafa; line-height: 1.2;
+  word-break: break-all;
+}
+.ed-name-sub {
+  margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.ed-type-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 12px;
   font-size: 12px; font-weight: 600; background: rgba(139,92,246,0.15); color: #a78bfa;
+  cursor: default;
 }
-.entity-stats { font-size: 13px; color: #6b6b6b; margin-left: auto; }
-.entity-stats strong { color: #fafafa; }
-.entity-back { font-size: 13px; color: #3b82f6; text-decoration: none; }
-.entity-back:hover { text-decoration: underline; }
+.ed-aliases {
+  font-size: 12px; color: #6b7280; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+}
+.ed-alias-tag {
+  background: #2a2a2a; border: 1px solid #444; border-radius: 8px;
+  padding: 1px 8px; font-size: 11px; color: #a0a0a0; display: inline-flex; align-items: center; gap: 4px;
+}
+.ed-alias-del {
+  cursor: pointer; color: #ef4444; font-size: 13px; line-height: 1;
+  background: none; border: none; padding: 0; margin-left: 2px;
+}
+.ed-alias-del:hover { color: #fca5a5; }
+.ed-header-right {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0;
+}
+.ed-stat-row { display: flex; gap: 20px; }
+.ed-stat { text-align: right; }
+.ed-stat-val { font-size: 20px; font-weight: 700; color: #fafafa; line-height: 1; }
+.ed-stat-lbl { font-size: 11px; color: #6b7280; margin-top: 2px; }
+.ed-edit-btn {
+  padding: 6px 14px; background: rgba(59,130,246,0.12); color: #60a5fa;
+  border: 1px solid rgba(59,130,246,0.3); border-radius: 6px; font-size: 12px;
+  cursor: pointer; white-space: nowrap;
+}
+.ed-edit-btn:hover { background: rgba(59,130,246,0.2); }
+
+/* Edit panel (inline) */
+.ed-edit-panel {
+  display: none; margin-top: 14px; padding: 16px;
+  background: #252525; border-radius: 8px; border: 1px solid #404040;
+}
+.ed-edit-panel.open { display: block; }
+.ed-edit-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 12px; }
+.ed-edit-row:last-child { margin-bottom: 0; }
+.ed-edit-field { display: flex; flex-direction: column; gap: 4px; min-width: 200px; }
+.ed-edit-field label { font-size: 11px; color: #6b7280; font-weight: 500; }
+.ed-edit-field input, .ed-edit-field select {
+  padding: 7px 10px; background: #1a1a1a; border: 1px solid #505050;
+  border-radius: 6px; color: #fafafa; font-size: 13px;
+}
+.ed-edit-field input:focus, .ed-edit-field select:focus {
+  outline: none; border-color: #3b82f6;
+}
+.ed-save-btn {
+  padding: 7px 18px; background: #3b82f6; color: #fff;
+  border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.ed-save-btn:hover { background: #2563eb; }
+.ed-cancel-btn {
+  padding: 7px 14px; background: transparent; color: #6b7280;
+  border: 1px solid #404040; border-radius: 6px; font-size: 13px; cursor: pointer;
+}
+.ed-cancel-btn:hover { color: #a0a0a0; }
+
+/* Alias add inline */
+.ed-alias-add { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.ed-alias-add input {
+  padding: 5px 10px; background: #1a1a1a; border: 1px solid #505050;
+  border-radius: 6px; color: #fafafa; font-size: 12px; width: 180px;
+}
+.ed-alias-add input:focus { outline: none; border-color: #3b82f6; }
+.ed-alias-add button {
+  padding: 5px 12px; background: rgba(59,130,246,0.12); color: #60a5fa;
+  border: 1px solid rgba(59,130,246,0.3); border-radius: 6px; font-size: 12px; cursor: pointer;
+}
+.ed-alias-add button:hover { background: rgba(59,130,246,0.2); }
+
+/* Tabs */
+.ed-tabs {
+  display: flex; gap: 0; border-bottom: 2px solid #333;
+  margin-top: 20px; margin-bottom: 20px;
+}
+.ed-tab {
+  padding: 10px 20px; font-size: 14px; font-weight: 500; color: #6b7280;
+  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
+  white-space: nowrap; transition: color 0.15s, border-color 0.15s;
+}
+.ed-tab:hover { color: #d0d0d0; }
+.ed-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; font-weight: 600; }
+.ed-tab-panel { display: none; }
+.ed-tab-panel.active { display: block; }
+
+/* Overview tab */
+.ed-overview-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px; margin-bottom: 24px;
+}
+.ed-metric-card {
+  background: #1e1e1e; border-radius: 8px; padding: 16px;
+  border: 1px solid #333; text-align: center;
+}
+.ed-metric-val { font-size: 28px; font-weight: 800; color: #fafafa; line-height: 1; }
+.ed-metric-lbl { font-size: 12px; color: #6b7280; margin-top: 6px; }
+
+.ed-section-title {
+  font-size: 13px; font-weight: 600; color: #a0a0a0; text-transform: uppercase;
+  letter-spacing: 0.06em; margin-bottom: 12px; margin-top: 24px;
+}
+.ed-section-title:first-child { margin-top: 0; }
+
+/* Fact type distribution */
+.ed-ft-dist { display: flex; flex-direction: column; gap: 8px; }
+.ed-ft-row { display: flex; align-items: center; gap: 10px; }
+.ed-ft-label { width: 130px; font-size: 12px; color: #a0a0a0; text-align: right; flex-shrink: 0; }
+.ed-ft-bar-wrap { flex: 1; background: #2a2a2a; border-radius: 3px; height: 8px; overflow: hidden; }
+.ed-ft-bar { height: 100%; border-radius: 3px; transition: width 0.3s; }
+.ed-ft-cnt { width: 36px; font-size: 12px; color: #6b7280; text-align: right; flex-shrink: 0; }
+
+/* Alias section */
+.ed-alias-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+
+/* Relations tab */
+.rel-group { margin-bottom: 24px; }
+.rel-group-title {
+  font-size: 13px; font-weight: 700; color: #ffffff; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.rel-group-badge {
+  font-size: 11px; padding: 1px 8px; border-radius: 8px;
+  background: rgba(139,92,246,0.12); color: #a78bfa; font-weight: 500;
+}
+.rel-items { display: flex; flex-direction: column; gap: 6px; }
+.rel-item {
+  display: flex; align-items: center; gap: 10px;
+  background: #1e1e1e; border-radius: 6px; padding: 10px 14px;
+  border: 1px solid #333;
+}
+.rel-arrow { font-size: 11px; color: #6b7280; flex-shrink: 0; }
+.rel-entity-link {
+  font-size: 14px; font-weight: 600; color: #60a5fa; text-decoration: none; flex: 1;
+}
+.rel-entity-link:hover { text-decoration: underline; color: #93c5fd; }
+.rel-entity-type {
+  font-size: 11px; padding: 1px 8px; border-radius: 8px;
+  background: rgba(59,130,246,0.1); color: #93c5fd; flex-shrink: 0;
+}
+.rel-empty { color: #4b4b4b; font-size: 13px; text-align: center; padding: 32px; }
 
 /* Timeline filter */
 .tl-filter {
@@ -145,21 +297,155 @@
 .tl-empty {
   text-align: center; padding: 48px; color: #6b6b6b;
 }
+
 </style>
 {% endblock %}
 
 {% block content %}
-  <!-- Header -->
-  <div class="entity-header">
-    <a class="entity-back" href="/graph">← 返回图谱</a>
-    <span class="entity-name">{{ entity.name }}</span>
-    {% if entity.entity_type %}
-    <span class="entity-type-badge">{{ ENTITY_TYPE_ZH.get(entity.entity_type, entity.entity_type) }}</span>
-    {% endif %}
-    <span class="entity-stats">共 <strong>{{ total_count }}</strong> 条相关事实</span>
+{% set QUAL_KEY_ZH = {
+  'metric_name': '指标', 'segment': '细分领域', 'yoy': '同比', 'qoq': '环比',
+  'report_scope': '报告范围', 'product_type': '产品类型', 'project_name': '项目名称',
+  'investment_type': '投资类型', 'market_scope': '市场范围', 'ranking_name': '排名名称',
+  'ranking_scope': '排名范围', 'cooperation_type': '合作类型', 'product_name': '产品名称',
+  'price_type': '价格类型', 'stage': '阶段', 'scope': '范围', 'purpose': '目的',
+  'phase': '期次', 'duration': '期限', 'reason': '原因', 'rank': '排名',
+  'ranking_year': '排名年份',
+} %}
+{% set FT_COLORS = {
+  'FINANCIAL_METRIC': '#f59e0b', 'SALES_VOLUME': '#10b981', 'CAPACITY': '#3b82f6',
+  'INVESTMENT': '#ec4899', 'EXPANSION': '#a855f7', 'MARKET_SHARE': '#14b8a6',
+  'COMPETITIVE_RANKING': '#eab308', 'COOPERATION': '#8b5cf6', 'PRICE_CHANGE': '#ef4444',
+} %}
+
+<!-- ===== Header ===== -->
+<div class="ed-header">
+  <div class="ed-header-top">
+    <a class="ed-back" href="/graph">← 返回图谱</a>
+    <div class="ed-name-block">
+      <div class="ed-name">{{ detail.canonical_name or entity.name }}</div>
+      <div class="ed-name-sub">
+        {% if detail.entity_type %}
+        <span class="ed-type-badge">{{ ENTITY_TYPE_ZH.get(detail.entity_type, detail.entity_type) }}</span>
+        {% endif %}
+        {% if detail.aliases %}
+        <div class="ed-aliases">
+          <span style="color:#4b5563;">别名:</span>
+          {% for alias in detail.aliases %}
+          <span class="ed-alias-tag" id="alias-{{ alias.id }}">
+            {{ alias.alias_name }}
+            {% if detail.id %}<button class="ed-alias-del" onclick="deleteAlias('{{ alias.id }}')" title="删除">×</button>{% endif %}
+          </span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if detail.id %}
+        <div class="ed-alias-add">
+          <input type="text" id="alias-input" placeholder="添加别名…" maxlength="100"
+                 onkeydown="if(event.key==='Enter') addAlias()">
+          <button onclick="addAlias()">+ 别名</button>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="ed-header-right">
+      <div class="ed-stat-row">
+        <div class="ed-stat">
+          <div class="ed-stat-val">{{ detail.total_fact_count }}</div>
+          <div class="ed-stat-lbl">事实总数</div>
+        </div>
+        {% if detail.source_doc_count %}
+        <div class="ed-stat">
+          <div class="ed-stat-val">{{ detail.source_doc_count }}</div>
+          <div class="ed-stat-lbl">来源文档</div>
+        </div>
+        {% endif %}
+      </div>
+      {% if detail.id %}
+      <button class="ed-edit-btn" onclick="toggleEditPanel()">✏ 编辑信息</button>
+      {% endif %}
+    </div>
   </div>
 
-  <!-- Filter -->
+  {% if detail.id %}
+  <!-- Inline edit panel -->
+  <div class="ed-edit-panel" id="ed-edit-panel">
+    <div class="ed-edit-row">
+      <div class="ed-edit-field" style="flex:1;min-width:200px;">
+        <label>规范名称</label>
+        <input type="text" id="edit-name" value="{{ detail.canonical_name or '' }}" placeholder="实体名称">
+      </div>
+      <div class="ed-edit-field">
+        <label>实体类型</label>
+        <select id="edit-type">
+          <option value="">-- 选择类型 --</option>
+          {% for et_key, et_zh in ENTITY_TYPE_ZH.items() %}
+          <option value="{{ et_key }}" {% if et_key == detail.entity_type %}selected{% endif %}>{{ et_zh }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="ed-save-btn" onclick="saveEntityInfo()">保存</button>
+      <button class="ed-cancel-btn" onclick="toggleEditPanel()">取消</button>
+    </div>
+    <div id="edit-msg" style="font-size:12px;margin-top:6px;"></div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ===== Tabs ===== -->
+<div class="ed-tabs">
+  <div class="ed-tab {% if current_tab == 'overview' %}active{% endif %}" onclick="switchTab('overview')">概要</div>
+  <div class="ed-tab {% if current_tab == 'timeline' %}active{% endif %}" onclick="switchTab('timeline')">时间轴 <span style="font-size:11px;color:#6b7280;">({{ total_count }})</span></div>
+  <div class="ed-tab {% if current_tab == 'relations' %}active{% endif %}" onclick="switchTab('relations')">关联关系 <span style="font-size:11px;color:#6b7280;">({{ (detail.relations_from | length) + (detail.relations_to | length) }})</span></div>
+</div>
+
+<!-- ======= TAB: 概要 ======= -->
+<div class="ed-tab-panel {% if current_tab == 'overview' %}active{% endif %}" id="tab-overview">
+  <div class="ed-overview-grid">
+    <div class="ed-metric-card">
+      <div class="ed-metric-val">{{ detail.total_fact_count }}</div>
+      <div class="ed-metric-lbl">事实总数</div>
+    </div>
+    <div class="ed-metric-card">
+      <div class="ed-metric-val">{{ detail.source_doc_count or 0 }}</div>
+      <div class="ed-metric-lbl">来源文档</div>
+    </div>
+    <div class="ed-metric-card">
+      <div class="ed-metric-val" style="font-size:16px;">{{ detail.time_earliest or '—' }}</div>
+      <div class="ed-metric-lbl">最早记录</div>
+    </div>
+    <div class="ed-metric-card">
+      <div class="ed-metric-val" style="font-size:16px;">{{ detail.time_latest or '—' }}</div>
+      <div class="ed-metric-lbl">最新记录</div>
+    </div>
+    <div class="ed-metric-card">
+      <div class="ed-metric-val">{{ detail.aliases | length }}</div>
+      <div class="ed-metric-lbl">别名数量</div>
+    </div>
+    <div class="ed-metric-card">
+      <div class="ed-metric-val">{{ (detail.relations_from | length) + (detail.relations_to | length) }}</div>
+      <div class="ed-metric-lbl">关联关系</div>
+    </div>
+  </div>
+
+  {% if detail.fact_type_stats %}
+  <div class="ed-section-title">事实类型分布</div>
+  {% set max_cnt = detail.fact_type_stats[0].cnt %}
+  <div class="ed-ft-dist">
+    {% for stat in detail.fact_type_stats %}
+    <div class="ed-ft-row">
+      <span class="ed-ft-label">{{ FACT_TYPE_NAMES.get(stat.fact_type, stat.fact_type) }}</span>
+      <div class="ed-ft-bar-wrap">
+        <div class="ed-ft-bar" style="width:{{ [stat.cnt * 100 // max_cnt, 100] | min }}%;background:{{ FT_COLORS.get(stat.fact_type, '#3b82f6') }};"></div>
+      </div>
+      <span class="ed-ft-cnt">{{ stat.cnt }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- ======= TAB: 时间轴 ======= -->
+<div class="ed-tab-panel {% if current_tab == 'timeline' %}active{% endif %}" id="tab-timeline">
   <div class="tl-filter">
     <label>事实类型</label>
     <select onchange="filterTimeline(this.value)">
@@ -171,40 +457,12 @@
     {% if qualifier_options %}
     <span style="width:1px;height:20px;background:#404040;"></span>
     <div class="tl-qual-filter">
-      {% set QUAL_KEY_ZH = {
-        'metric_name': '指标',
-        'segment': '细分领域',
-        'yoy': '同比',
-        'qoq': '环比',
-        'report_scope': '报告范围',
-        'product_type': '产品类型',
-        'project_name': '项目名称',
-        'investment_type': '投资类型',
-        'market_scope': '市场范围',
-        'ranking_name': '排名名称',
-        'ranking_scope': '排名范围',
-        'cooperation_type': '合作类型',
-        'product_name': '产品名称',
-        'price_type': '价格类型',
-        'stage': '阶段',
-        'scope': '范围',
-        'purpose': '目的',
-        'phase': '期次',
-        'duration': '期限',
-        'reason': '原因',
-        'is_forecast': '预测',
-        'is_approximate': '近似值',
-        'rank': '排名',
-        'ranking_year': '排名年份',
-      } %}
       {% for key, values in qualifier_options.items() %}
-      {% if key not in ('is_forecast', 'is_approximate', 'equivalent_usd', 'equivalent_rmb', 'equivalent_cny', 'equivalent_cny_unit', 'equivalent_weight', 'change_amount', 'change_from_previous_year', 'change_pct', 'stake_percentage', 'capacity_related', 'investment_related') %}
+      {% if key not in ('is_forecast','is_approximate','equivalent_usd','equivalent_rmb','equivalent_cny','equivalent_cny_unit','equivalent_weight','change_amount','change_from_previous_year','change_pct','stake_percentage','capacity_related','investment_related') %}
       <label>{{ QUAL_KEY_ZH.get(key, key) }}</label>
       <select class="qual-filter-select" data-qual-key="{{ key }}" onchange="applyQualFilter()">
         <option value="">全部</option>
-        {% for v in values %}
-        <option value="{{ v }}">{{ v }}</option>
-        {% endfor %}
+        {% for v in values %}<option value="{{ v }}">{{ v }}</option>{% endfor %}
       </select>
       {% endif %}
       {% endfor %}
@@ -213,28 +471,19 @@
     {% endif %}
     <span class="tl-filter-count" id="filter-count"></span>
     <span style="flex:1;"></span>
-    <span style="font-size:12px;color:#94a3b8;">双击图谱中的节点跳转到此页面 · 时间轴按时间倒序排列</span>
+    <span style="font-size:12px;color:#94a3b8;">时间轴按时间倒序排列</span>
   </div>
 
   {% if facts %}
-  <!-- Timeline -->
   <div class="timeline" id="timeline">
     {% set ns = namespace(current_group='') %}
     {% for fact in facts %}
       {% set time_group = fact.time_expr or '时间不明' %}
       {% set show_group = (time_group != ns.current_group) %}
-      {% if show_group %}
-        {% set ns.current_group = time_group %}
-      {% endif %}
-
+      {% if show_group %}{% set ns.current_group = time_group %}{% endif %}
       <div class="tl-item" data-qualifiers='{{ fact.qualifiers_display | tojson }}'>
-        {# Time label #}
         <span class="tl-time-label">{% if show_group %}{{ time_group }}{% endif %}</span>
-
-        {# Dot #}
         <span class="tl-dot dot-{{ fact.fact_type }}"></span>
-
-        {# Card #}
         <div class="tl-card type-{{ fact.fact_type }}">
           <div class="tl-card-head">
             <span class="badge badge-{{ fact.fact_type }} tl-card-type">{{ FACT_TYPE_NAMES.get(fact.fact_type, fact.fact_type) }}</span>
@@ -243,52 +492,40 @@
             {% endif %}
             <span class="tl-card-predicate">{{ fact.predicate or '' }}</span>
             {% if fact.object_text %}
-            <span class="tl-card-object">→ {{ fact.object_text }}</span>
+              {% if fact.object_entity_id %}
+              <span class="tl-card-object">← <a href="/entity/{{ fact.object_entity_id }}" style="color:#60a5fa;text-decoration:none;">{{ fact.object_text }}</a></span>
+              {% else %}
+              <span class="tl-card-object">← {{ fact.object_text }}</span>
+              {% endif %}
             {% endif %}
             {% if fact.qualifiers_display.get('segment') %}
             <span style="font-size:11px;color:#a78bfa;background:rgba(139,92,246,0.12);padding:1px 7px;border-radius:10px;">{{ fact.qualifiers_display['segment'] }}</span>
             {% endif %}
           </div>
-
-          {# Value #}
           {% if fact.value_num is not none %}
-          <div class="tl-card-value">
-            {{ fact.value_num }}<span class="tl-card-unit">{{ fact.unit or '' }}{% if fact.currency %} ({{ fact.currency }}){% endif %}</span>
-          </div>
+          <div class="tl-card-value">{{ fact.value_num }}<span class="tl-card-unit">{{ fact.unit or '' }}{% if fact.currency %} ({{ fact.currency }}){% endif %}</span></div>
           {% elif fact.value_text %}
           <div class="tl-card-value-text">{{ fact.value_text }}</div>
           {% endif %}
-
-          {# Subject (when it's the object side match) #}
           {% if fact.subject_text and fact.subject_text != entity.name %}
           <div style="font-size:12px;color:#a0a0a0;margin-top:2px;">
-            主体: <strong style="color:#e0e0e0;">{{ fact.subject_text }}</strong>
+            主体:
+            {% if fact.subject_entity_id %}
+            <a href="/entity/{{ fact.subject_entity_id }}" style="color:#60a5fa;text-decoration:none;font-weight:600;">{{ fact.subject_text }}</a>
+            {% else %}
+            <strong style="color:#e0e0e0;">{{ fact.subject_text }}</strong>
+            {% endif %}
           </div>
           {% endif %}
-
-          {# Meta #}
           <div class="tl-card-meta">
-            {% if fact.qualifiers_display.get('is_forecast') %}
-            <span style="color:#f59e0b;">⚠ 推测</span>
-            {% endif %}
-            {% if fact.location_text %}
-            <span>📍 {{ fact.location_text }}</span>
-            {% endif %}
-            {% if fact.confidence_score is not none %}
-            <span>信度: {{ "%.2f"|format(fact.confidence_score) }}</span>
-            {% endif %}
-            {% if fact.document_title %}
-            <span>📄 <a href="/documents/{{ fact.document_id }}" style="color:#2563eb;font-size:11px;">{{ fact.document_title }}</a></span>
-            {% endif %}
-            {% if fact.review_status == 'AUTO_PASS' %}
-            <span class="badge badge-pass" style="font-size:10px;">自动✓</span>
-            {% elif fact.review_status == 'HUMAN_PASS' %}
-            <span class="badge badge-info" style="font-size:10px;">人工✓</span>
-            {% endif %}
+            {% if fact.qualifiers_display.get('is_forecast') %}<span style="color:#f59e0b;">⚠ 预测</span>{% endif %}
+            {% if fact.location_text %}<span>📍 {{ fact.location_text }}</span>{% endif %}
+            {% if fact.confidence_score is not none %}<span>信度: {{ "%.2f"|format(fact.confidence_score) }}</span>{% endif %}
+            {% if fact.document_title %}<span>📄 <a href="/documents/{{ fact.document_id }}" style="color:#2563eb;font-size:11px;">{{ fact.document_title }}</a></span>{% endif %}
+            {% if fact.review_status == 'AUTO_PASS' %}<span class="badge badge-pass" style="font-size:10px;">自动✓</span>
+            {% elif fact.review_status == 'HUMAN_PASS' %}<span class="badge badge-info" style="font-size:10px;">人工✓</span>{% endif %}
           </div>
-
-          {# Qualifier tags (exclude already shown and internal fields) #}
-          {% set skip_keys = ('metric_name', 'segment', 'is_forecast', 'is_approximate', 'equivalent_usd', 'equivalent_rmb', 'equivalent_cny', 'equivalent_cny_unit', 'equivalent_weight') %}
+          {% set skip_keys = ('metric_name','segment','is_forecast','is_approximate','equivalent_usd','equivalent_rmb','equivalent_cny','equivalent_cny_unit','equivalent_weight') %}
           {% set shown_quals = [] %}
           {% for k, v in fact.qualifiers_display.items() if k not in skip_keys and v is not none and v != '' and v is not mapping and v is not iterable or v is string %}
           {% if shown_quals.append(1) %}{% endif %}
@@ -302,12 +539,8 @@
             {% endfor %}
           </div>
           {% endif %}
-
-          {# Evidence #}
           {% if fact.evidence_text %}
-          <div class="tl-evidence" onclick="this.classList.toggle('expanded')">
-            {{ fact.evidence_text }}
-          </div>
+          <div class="tl-evidence" onclick="this.classList.toggle('expanded')">{{ fact.evidence_text }}</div>
           {% endif %}
         </div>
       </div>
@@ -320,54 +553,110 @@
     <p style="font-size:12px;margin-top:4px;">需要已通过审核的事实来展示时间轴</p>
   </div>
   {% endif %}
+</div>
+
+<!-- ======= TAB: 关联关系 ======= -->
+<div class="ed-tab-panel {% if current_tab == 'relations' %}active{% endif %}" id="tab-relations">
+  {% set rel_total = (detail.relations_from | length) + (detail.relations_to | length) %}
+  {% if rel_total == 0 %}
+  <div class="rel-empty">暂无已记录的关联关系</div>
+  {% else %}
+
+  {% if detail.relations_from %}
+  {% set seen_from = [] %}
+  {% for rel in detail.relations_from %}{% if rel.relation_type not in seen_from %}{% if seen_from.append(rel.relation_type) %}{% endif %}{% endif %}{% endfor %}
+  {% for rtype in seen_from %}
+  <div class="rel-group">
+    <div class="rel-group-title">
+      {{ detail.canonical_name or entity.name }} 的
+      <span class="rel-group-badge">{{ REL_TYPE_ZH.get(rtype, rtype) }}</span>
+    </div>
+    <div class="rel-items">
+      {% for rel in detail.relations_from if rel.relation_type == rtype %}
+      <div class="rel-item">
+        <span class="rel-arrow">→</span>
+        <a class="rel-entity-link" href="/entity/{{ rel.target_id }}">{{ rel.target_name }}</a>
+        <span class="rel-entity-type">{{ ENTITY_TYPE_ZH.get(rel.target_type, rel.target_type or '') }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if detail.relations_to %}
+  {% set seen_to = [] %}
+  {% for rel in detail.relations_to %}{% if rel.relation_type not in seen_to %}{% if seen_to.append(rel.relation_type) %}{% endif %}{% endif %}{% endfor %}
+  {% for rtype in seen_to %}
+  <div class="rel-group">
+    <div class="rel-group-title">
+      <span class="rel-group-badge">{{ REL_TYPE_ZH.get(rtype, rtype) }}</span>
+      关系中，被指向 {{ detail.canonical_name or entity.name }}
+    </div>
+    <div class="rel-items">
+      {% for rel in detail.relations_to if rel.relation_type == rtype %}
+      <div class="rel-item">
+        <a class="rel-entity-link" href="/entity/{{ rel.target_id }}">{{ rel.target_name }}</a>
+        <span class="rel-arrow">→ {{ detail.canonical_name or entity.name }}</span>
+        <span class="rel-entity-type">{{ ENTITY_TYPE_ZH.get(rel.target_type, rel.target_type or '') }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% endif %}
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+
+const ENTITY_ID = '{{ detail.id | default("") }}';
+
+/* ===== Tab switching ===== */
+function switchTab(tab) {
+  const tabIds = ['overview', 'timeline', 'relations'];
+  document.querySelectorAll('.ed-tab').forEach((t, i) => {
+    t.classList.toggle('active', tabIds[i] === tab);
+  });
+  document.querySelectorAll('.ed-tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'tab-' + tab);
+  });
+  const url = new URL(window.location.href);
+  url.searchParams.set('tab', tab);
+  history.replaceState(null, '', url.toString());
+}
+
+/* ===== Timeline filter ===== */
 function filterTimeline(type) {
   const url = new URL(window.location.href);
-  if (type) {
-    url.searchParams.set('fact_type', type);
-  } else {
-    url.searchParams.delete('fact_type');
-  }
+  if (type) { url.searchParams.set('fact_type', type); }
+  else { url.searchParams.delete('fact_type'); }
+  url.searchParams.set('tab', 'timeline');
   window.location.href = url.toString();
 }
 
-/* ===== Qualifier 客户端筛选 ===== */
+/* ===== Qualifier client-side filter ===== */
 function applyQualFilter() {
-  const selects = document.querySelectorAll('.qual-filter-select');
   const filters = {};
-  selects.forEach(sel => {
-    if (sel.value) {
-      filters[sel.dataset.qualKey] = sel.value;
-    }
+  document.querySelectorAll('.qual-filter-select').forEach(sel => {
+    if (sel.value) filters[sel.dataset.qualKey] = sel.value;
   });
-
   const items = document.querySelectorAll('.tl-item');
   let shown = 0;
-  let total = items.length;
-
   items.forEach(item => {
     const qualData = JSON.parse(item.dataset.qualifiers || '{}');
     let match = true;
     for (const [key, val] of Object.entries(filters)) {
-      if (String(qualData[key] || '') !== val) {
-        match = false;
-        break;
-      }
+      if (String(qualData[key] || '') !== val) { match = false; break; }
     }
     item.style.display = match ? '' : 'none';
     if (match) shown++;
   });
-
-  // 更新计数
   const countEl = document.getElementById('filter-count');
-  if (Object.keys(filters).length > 0) {
-    countEl.textContent = '显示 ' + shown + ' / ' + total + ' 条';
-  } else {
-    countEl.textContent = '';
-  }
+  countEl.textContent = Object.keys(filters).length > 0 ? '显示 ' + shown + ' 条' : '';
 }
 
 function resetQualFilters() {
@@ -375,5 +664,64 @@ function resetQualFilters() {
   document.querySelectorAll('.tl-item').forEach(item => { item.style.display = ''; });
   document.getElementById('filter-count').textContent = '';
 }
+
+/* ===== Edit panel ===== */
+function toggleEditPanel() {
+  const panel = document.getElementById('ed-edit-panel');
+  if (panel) panel.classList.toggle('open');
+}
+
+async function saveEntityInfo() {
+  if (!ENTITY_ID) return;
+  const name = document.getElementById('edit-name').value.trim();
+  const type = document.getElementById('edit-type').value;
+  const msg = document.getElementById('edit-msg');
+  if (!name) { msg.style.color = '#ef4444'; msg.textContent = '名称不能为空'; return; }
+  try {
+    const res = await fetch(`/api/entity/${ENTITY_ID}/update`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({canonical_name: name, entity_type: type})
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      msg.style.color = '#10b981'; msg.textContent = '保存成功，正在刷新…';
+      setTimeout(() => window.location.reload(), 800);
+    } else {
+      msg.style.color = '#ef4444'; msg.textContent = data.error || '保存失败';
+    }
+  } catch (e) { msg.style.color = '#ef4444'; msg.textContent = '网络错误'; }
+}
+
+/* ===== Alias management ===== */
+async function addAlias() {
+  if (!ENTITY_ID) return;
+  const input = document.getElementById('alias-input');
+  const aliasName = input.value.trim();
+  if (!aliasName) return;
+  try {
+    const res = await fetch(`/api/entity/${ENTITY_ID}/alias/add`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({alias_name: aliasName})
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) { input.value = ''; window.location.reload(); }
+    else { alert(data.error || '添加失败'); }
+  } catch (e) { alert('网络错误'); }
+}
+
+async function deleteAlias(aliasId) {
+  if (!ENTITY_ID || !confirm('确认删除此别名？')) return;
+  try {
+    const res = await fetch(`/api/entity/${ENTITY_ID}/alias/${aliasId}/delete`, {method: 'POST'});
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      const el = document.getElementById('alias-' + aliasId);
+      if (el) el.remove();
+    } else { alert(data.error || '删除失败'); }
+  } catch (e) { alert('网络错误'); }
+}
+
 </script>
 {% endblock %}

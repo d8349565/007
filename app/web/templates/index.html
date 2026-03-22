@@ -188,7 +188,7 @@
           {% set max_fc = entity_overview.top_entities[0].fact_count if entity_overview.top_entities else 1 %}
           {% for e in entity_overview.top_entities %}
           <tr>
-            <td class="font-bold" style="color:#ffffff;">{{ e.canonical_name }}</td>
+            <td class="font-bold"><a href="/entity/{{ e.id }}" style="color:#ffffff;text-decoration:none;">{{ e.canonical_name }}</a></td>
             <td><span style="font-size:11px;background:rgba(139,92,246,0.2);color:#a78bfa;padding:2px 7px;border-radius:10px;">{{ ENTITY_TYPE_ZH.get(e.entity_type, e.entity_type) }}</span></td>
             <td>{{ e.fact_count }}</td>
             <td>

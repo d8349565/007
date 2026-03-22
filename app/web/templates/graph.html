@@ -149,7 +149,12 @@
         <option value="COMPANY">企业</option>
         <option value="GROUP">群体/排名</option>
         <option value="PROJECT">项目</option>
-        <option value="REGION">地区</option>
+        <option value="COUNTRY">国家/地区</option>
+        <option value="REGION">地区/城市</option>
+        <option value="PRODUCT">产品/品牌</option>
+        <option value="PERSON">人物</option>
+        <option value="ORG">机构/组织</option>
+        <option value="OTHER">其他</option>
         <option value="UNKNOWN">未知</option>
         <option value="__TEXT__">未标准化</option>
       </select>
@@ -216,7 +221,7 @@ const FACT_TYPE_NAMES = {{ FACT_TYPE_NAMES | tojson }};
 const TYPE_ZH = {
   'COMPANY': '企业', 'GROUP': '群体/排名', 'PROJECT': '项目',
   'REGION': '地区', 'PRODUCT': '产品', 'PERSON': '人物',
-  'ORG': '机构', 'OTHER': '其他', 'UNKNOWN': '未知'
+  'ORG': '机构', 'OTHER': '其他', 'UNKNOWN': '未知', 'COUNTRY': '国家/地区',
 };
 const COLORS = ['#f472b6','#60a5fa','#a78bfa','#34d399','#f87171','#fbbf24','#2dd4bf','#c084fc','#fb923c','#818cf8'];
 
@@ -267,7 +272,7 @@ function renderGraph() {
   // 每个节点分配独立颜色：标准化实体用实体类型激光色，文本节点用按名称哈希分配的柔和色
   const TEXT_NODE_COLOR = '#6b6b6b';
   // 标准化实体类型颜色
-  const TYPE_COLORS = { COMPANY: '#3b82f6', PROJECT: '#f472b6', GROUP: '#f59e0b', REGION: '#94a3b8', COUNTRY: '#a78bfa', UNKNOWN: '#60a5fa' };
+  const TYPE_COLORS = { COMPANY: '#3b82f6', PROJECT: '#f472b6', GROUP: '#f59e0b', REGION: '#94a3b8', COUNTRY: '#a78bfa', PRODUCT: '#2dd4bf', PERSON: '#fb923c', ORG: '#818cf8', OTHER: '#6b6b6b', UNKNOWN: '#60a5fa' };
   // 文本节点可用颜色查找表（柔和富色）
   const TEXT_PALETTE = ['#34d399','#f87171','#fbbf24','#2dd4bf','#c084fc','#fb923c','#818cf8','#4ade80','#e879f9','#38bdf8','#a3e635','#fd8a8a','#67e8f9','#fdba74','#d8b4fe'];
   function strHash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
@@ -498,10 +503,10 @@ function highlightEdge(d) {
 function showNodeDetail(d) {
   document.getElementById('detailTitle').textContent = '实体详情';
   const timelineLink = d.is_text_node
-    ? '<div class="gd-section"><span style="font-size:11px;color:#6b6b6b;">⚠️ 未标准化实体，需在主体管理中关联标准名称后才可查看时间轴</span></div>'
-    : `<div class="gd-section"><a class="gd-link" href="/entity/${d.id}">📅 查看时间轴 →</a></div>`;
+    ? '<div class="gd-section"><span style="font-size:11px;color:#6b6b6b;">⚠️ 未标准化实体，需在主体管理中关联标准名称后才可查看详情</span></div>'
+    : `<div class="gd-section"><a class="gd-link" href="/entity/${d.id}">📋 查看实体详情 →</a></div>`;
   let html = `
-    <div class="gd-row"><span class="gd-label">名称</span><span class="gd-value" style="font-weight:700;font-size:15px;">${esc(d.name)}</span></div>
+    <div class="gd-row"><span class="gd-label">名称</span><span class="gd-value" style="font-weight:700;font-size:15px;">${d.is_text_node ? esc(d.name) : '<a href="/entity/'+d.id+'" style="color:#60a5fa;text-decoration:none;">'+esc(d.name)+'</a>'}</span></div>
     <div class="gd-row"><span class="gd-label">类型</span><span class="gd-value"><span class="gd-badge badge-info">${d.is_text_node ? '⚫ 文本节点' : (TYPE_ZH[d.entity_type] || esc(d.entity_type))}</span></span></div>
     <div class="gd-row"><span class="gd-label">关联事实</span><span class="gd-value">${d.fact_count || 0} 条</span></div>
     ${timelineLink}
@@ -530,9 +535,17 @@ function showEdgeDetail(d) {
   document.getElementById('detailTitle').textContent = '事实详情';
   const val = d.value_num != null ? `<span class="gd-value-highlight">${d.value_num}</span><span class="gd-unit">${esc(d.unit||'')} ${esc(d.currency||'')}</span>` : (d.value_text ? `<span style="font-weight:600;color:#fafafa;">${esc(d.value_text)}</span>` : '<span style="color:#6b6b6b;">无</span>');
 
+  // Build clickable entity links for subject/object
+  const subjectLink = d.subject_entity_id
+    ? `<a href="/entity/${d.subject_entity_id}" style="color:#60a5fa;text-decoration:none;font-weight:600;">${esc(d.subject_text)}</a>`
+    : esc(d.subject_text);
+  const objectLink = d.object_entity_id
+    ? `<a href="/entity/${d.object_entity_id}" style="color:#60a5fa;text-decoration:none;font-weight:600;">${esc(d.object_text||'')}</a>`
+    : esc(d.object_text||'');
+
   let html = `
     <div style="background:#1a1a1a;padding:10px 12px;border-radius:8px;margin-bottom:14px;font-size:13px;font-weight:500;color:#a1a1a1;line-height:1.5;border:1px solid #262626;">
-      ${esc(d.subject_text)} → ${esc(d.predicate||'')} → ${esc(d.object_text||'')}
+      ${subjectLink} → ${esc(d.predicate||'')} → ${objectLink}
     </div>
     <div class="gd-row"><span class="gd-label">类型</span><span class="gd-value"><span class="gd-badge badge-${d.fact_type}">${FACT_TYPE_NAMES[d.fact_type]||d.fact_type}</span></span></div>
     <div class="gd-row"><span class="gd-label">数值</span><span class="gd-value">${val}</span></div>
