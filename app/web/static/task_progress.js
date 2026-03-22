@@ -69,11 +69,12 @@ const STATUS_MAP = {
 function renderTaskStatus(data) {
   const { tasks, summary } = data;
 
-  // 总体进度（total<=1 时隐藏进度条，只有一个任务时意义不大）
+  // 总体进度（有多个运行中任务时显示，1个或不显示时隐藏）
+  const runningCount = summary.running || 0;
   const progressSection = document.getElementById('progress-section');
   const progressText = document.getElementById('progress-text');
   const progressFill = document.getElementById('progress-fill');
-  if (summary.total > 1 && progressSection) {
+  if (runningCount > 1 && progressSection) {
     progressSection.style.display = 'block';
     if (progressText) progressText.textContent = `${summary.done}/${summary.total}`;
     const pct = (summary.done / summary.total * 100);
