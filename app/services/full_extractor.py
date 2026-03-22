@@ -149,6 +149,109 @@ def _validate_record(rec: dict, cfg: dict) -> dict | None:
     return rec
 
 
+def _complement_facts_by_type(
+    facts_by_type: dict[str, list[dict]],
+    cleaned_text: str,
+    document_id: str,
+    cfg: dict,
+) -> dict[str, list[dict]]:
+    """
+    阶段 2：对每个 fact_type 的抽取结果进行上下文补全审查。
+    """
+    comp_prompt_path = _PROMPT_DIR / "context_complementation.txt"
+    comp_prompt = comp_prompt_path.read_text(encoding="utf-8")
+
+    # 动态拼接 fact_type 规则
+    rules_parts = []
+    for rule_file in sorted(_RULES_DIR.glob("*.txt")):
+        rules_parts.append(rule_file.read_text(encoding="utf-8"))
+    if rules_parts:
+        comp_prompt += "\n\n## Fact-type specific rules\n\n"
+        comp_prompt += "\n\n".join(rules_parts)
+
+    client = get_llm_client()
+    result_by_type = {}
+
+    for fact_type, facts in facts_by_type.items():
+        if not facts:
+            result_by_type[fact_type] = []
+            continue
+
+        user_input = json.dumps(
+            {
+                "article_text": cleaned_text,
+                "fact_type": fact_type,
+                "already_extracted_facts": facts,
+            },
+            ensure_ascii=False,
+        )
+
+        task_id = str(uuid.uuid4())
+        _record_task_start(task_id, document_id, "complementation")
+
+        try:
+            result = client.chat_json(comp_prompt, user_input)
+            raw_data = result["data"]
+            _record_task_end(
+                task_id, "success",
+                result["input_tokens"], result["output_tokens"],
+                result["model"],
+            )
+        except Exception as e:
+            _record_task_end(task_id, "failed", error=str(e))
+            logger.error("阶段2补全调用失败 [doc=%s, type=%s]: %s", document_id[:8], fact_type, e)
+            result_by_type[fact_type] = facts
+            continue
+
+        supplemented = raw_data.get("supplemented_facts", [])
+        unchanged = raw_data.get("unchanged_facts", [])
+
+        # 合并去重
+        all_facts = list(unchanged)
+        existing_evidence = {f.get("evidence_text", "") for f in all_facts}
+        for new_fact in supplemented:
+            if new_fact.get("evidence_text", "") not in existing_evidence:
+                all_facts.append(new_fact)
+
+        result_by_type[fact_type] = all_facts
+        logger.info(
+            "[doc=%s] 阶段2 %s: 原=%d, 补=%d, 终=%d",
+            document_id[:8], fact_type, len(facts), len(supplemented), len(all_facts),
+        )
+
+    return result_by_type
+
+
+def _parse_structured_output(raw_data: dict, cfg: dict) -> list[dict]:
+    """
+    解析结构化输出格式（按 fact_type 分组的 JSON），
+    转换为标准的 list[dict] 格式。
+    """
+    parsed_records = []
+
+    for fact_type, facts in raw_data.items():
+        if not isinstance(facts, list):
+            continue
+
+        for item in facts:
+            if isinstance(item, list):
+                rec = _list_to_dict(item)
+            elif isinstance(item, dict):
+                rec = dict(item)
+                rec["fact_type"] = fact_type
+            else:
+                continue
+
+            if rec is None:
+                continue
+
+            validated = _validate_record(rec, cfg)
+            if validated is not None:
+                parsed_records.append(validated)
+
+    return parsed_records
+
+
 def extract_facts_full_text(
     cleaned_text: str,
     document_id: str,
@@ -215,30 +318,46 @@ def extract_facts_full_text(
             conn.close()
         return []
 
-    # 确保是列表
-    if not isinstance(raw_data, list):
-        raw_data = [raw_data]
+    # 阶段 1：解析结构化输出
+    if isinstance(raw_data, dict):
+        # 结构化格式：按 fact_type 分组
+        parsed_records_stage1 = _parse_structured_output(raw_data, cfg)
+    else:
+        # 兼容旧格式（list of lists / list of dicts）
+        parsed_records_stage1 = []
+        raw_list = raw_data if isinstance(raw_data, list) else [raw_data]
+        for item in raw_list:
+            if isinstance(item, list):
+                rec = _list_to_dict(item)
+            elif isinstance(item, dict):
+                rec = item
+            else:
+                continue
+            if rec:
+                validated = _validate_record(rec, cfg)
+                if validated:
+                    parsed_records_stage1.append(validated)
 
-    # 解析列表格式 → 字典
+    # 将阶段1结果按类型分组
+    facts_by_type = {}
+    for rec in parsed_records_stage1:
+        ft = rec.get("fact_type", "UNKNOWN")
+        if ft not in facts_by_type:
+            facts_by_type[ft] = []
+        facts_by_type[ft].append(rec)
+
+    # 阶段 2：上下文补全
+    logger.info("[doc=%s] 开始阶段2上下文补全...", document_id[:8])
+    facts_by_type = _complement_facts_by_type(
+        facts_by_type, cleaned_text, document_id, cfg,
+    )
+
+    # 合并所有类型的事实
     parsed_records = []
-    for item in raw_data:
-        # 支持 list-of-lists（列表格式）和 list-of-dicts（兼容旧格式）
-        if isinstance(item, list):
-            rec = _list_to_dict(item)
-        elif isinstance(item, dict):
-            rec = item
-        else:
-            logger.warning("跳过无效记录类型: %s", type(item))
-            continue
+    for facts in facts_by_type.values():
+        parsed_records.extend(facts)
 
-        if rec is None:
-            continue
-
-        validated = _validate_record(rec, cfg)
-        if validated is not None:
-            parsed_records.append(validated)
-
-    logger.info("[doc=%s] 全文抽取得到 %d 条有效记录", document_id[:8], len(parsed_records))
+    logger.info("[doc=%s] 两阶段抽取完成，共 %d 条有效记录", document_id[:8], len(parsed_records))
 
     # 写入数据库：evidence_span + fact_atom
     fact_results = []
