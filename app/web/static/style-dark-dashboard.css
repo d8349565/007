@@ -814,7 +814,7 @@ a:hover {
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-card);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  overflow-x: auto;
+  /* overflow-x: auto; */
 }
 
 .tab-btn {
