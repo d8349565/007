@@ -295,11 +295,32 @@ def _upsert_document(
 
     conn = get_connection()
     try:
-        # 检查是否已存在
-        row = conn.execute(
-            "SELECT id FROM source_document WHERE content_hash = ?",
-            (content_hash,),
-        ).fetchone()
+        # URL 类型优先按 URL 去重（URL 是唯一标识，content_hash 可能因动态内容而不同）
+        if url:
+            row = conn.execute(
+                "SELECT id FROM source_document WHERE url = ?",
+                (url,),
+            ).fetchone()
+            if row:
+                doc_id = row["id"]
+                conn.execute(
+                    """UPDATE source_document SET
+                        source_type=?, source_name=?, title=?, author=?,
+                        url=?, publish_time=?, raw_text=?,
+                        crawl_time=CURRENT_TIMESTAMP, status='ACTIVE'
+                    WHERE id=?""",
+                    (source_type, source_name, title, author,
+                     url, publish_time, raw_text, doc_id),
+                )
+                conn.commit()
+                logger.info("文档 URL 已存在，更新: %s [%s]", title, doc_id[:8])
+                return doc_id
+        else:
+            # 非 URL 类型按 content_hash 去重
+            row = conn.execute(
+                "SELECT id FROM source_document WHERE content_hash = ?",
+                (content_hash,),
+            ).fetchone()
 
         if row:
             doc_id = row["id"]

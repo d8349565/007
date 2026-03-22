@@ -4,8 +4,11 @@ let taskPollInterval = null;
 function showTaskWidget() {
   const mini = document.getElementById('task-progress-mini');
   const widget = document.getElementById('task-progress-widget');
+  const progressSection = document.getElementById('progress-section');
   if (mini) mini.style.display = 'none';
   if (widget) widget.classList.add('open');
+  // 打开时先隐藏进度条，等 API 返回后再决定是否显示
+  if (progressSection) progressSection.style.display = 'none';
   fetchTaskStatus();
   // 开始轮询
   if (!taskPollInterval) {
@@ -137,7 +140,7 @@ function renderTaskStatus(data) {
     let meta = `<span class="task-status ${statusInfo.cls}">${statusInfo.label}</span>`;
     if (task.status === 'processed') {
       meta += `<span>提取 ${task.facts_count || 0} 条</span>`;
-    } else if (task.status !== 'failed') {
+    } else if (!['failed', 'empty', 'empty_after_clean'].includes(task.status)) {
       meta += `<span>${timeAgo}</span>`;
     }
 

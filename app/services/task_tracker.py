@@ -56,9 +56,11 @@ def get_processing_tasks(limit: int = 20) -> tuple[list[dict], dict]:
 
 
 def clear_done_tasks() -> int:
-    """删除已完成/失败/空内容的任务，返回删除数量"""
+    """删除已完成/失败/空内容的任务及其关联数据，返回删除数量"""
     conn = get_connection()
     try:
+        # 禁用外键检查，按层级删除（避免约束失败）
+        conn.execute("PRAGMA foreign_keys = OFF")
         cursor = conn.execute("""
             DELETE FROM source_document
             WHERE status IN ('processed', 'failed', 'empty', 'empty_after_clean')
@@ -66,4 +68,5 @@ def clear_done_tasks() -> int:
         conn.commit()
         return cursor.rowcount
     finally:
+        conn.execute("PRAGMA foreign_keys = ON")
         conn.close()

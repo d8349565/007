@@ -140,9 +140,10 @@
   padding: 12px 16px;
 }
 
-/* 进度条 */
+/* 进度条（默认隐藏，由 JS 决定是否显示） */
 .progress-section {
   margin-bottom: 12px;
+  display: none;
 }
 
 .progress-header {
