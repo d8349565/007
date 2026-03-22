@@ -53,3 +53,17 @@ def get_processing_tasks(limit: int = 20) -> tuple[list[dict], dict]:
         return tasks, summary
     finally:
         conn.close()
+
+
+def clear_done_tasks() -> int:
+    """删除已完成/失败/空内容的任务，返回删除数量"""
+    conn = get_connection()
+    try:
+        cursor = conn.execute("""
+            DELETE FROM source_document
+            WHERE status IN ('processed', 'failed', 'empty', 'empty_after_clean')
+        """)
+        conn.commit()
+        return cursor.rowcount
+    finally:
+        conn.close()

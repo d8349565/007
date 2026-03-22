@@ -1,6 +1,6 @@
 """任务状态 API"""
 from flask import Blueprint, jsonify
-from app.services.task_tracker import get_processing_tasks
+from app.services.task_tracker import get_processing_tasks, clear_done_tasks
 
 api_tasks_bp = Blueprint('api_tasks', __name__, url_prefix='/api/tasks')
 
@@ -13,3 +13,13 @@ def get_tasks_status():
         'tasks': tasks,
         'summary': summary
     })
+
+
+@api_tasks_bp.route('/clear', methods=['POST'])
+def clear_done():
+    """清空已完成/失败的任务"""
+    try:
+        count = clear_done_tasks()
+        return jsonify({'ok': True, 'cleared': count})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

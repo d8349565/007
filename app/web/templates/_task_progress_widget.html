@@ -12,11 +12,14 @@
       <span>任务进度</span>
       <span class="badge" id="widget-badge" style="display: none;">0</span>
     </div>
-    <button class="widget-btn-minimize" onclick="hideTaskWidget()">−</button>
+    <div class="widget-actions">
+      <button class="widget-btn-clear" id="btn-clear-done" onclick="clearDoneTasks()" style="display:none;">清空已完成</button>
+      <button class="widget-btn-minimize" onclick="hideTaskWidget()">−</button>
+    </div>
   </div>
   <div class="widget-body">
-    <!-- 总体进度 -->
-    <div class="progress-section">
+    <!-- 总体进度（多个任务时显示） -->
+    <div class="progress-section" id="progress-section">
       <div class="progress-header">
         <span>总进度</span>
         <span id="progress-text">0/0</span>

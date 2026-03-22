@@ -66,12 +66,18 @@ const STATUS_MAP = {
 function renderTaskStatus(data) {
   const { tasks, summary } = data;
 
-  // 更新总体进度
+  // 总体进度（total<=1 时隐藏进度条，只有一个任务时意义不大）
+  const progressSection = document.getElementById('progress-section');
   const progressText = document.getElementById('progress-text');
   const progressFill = document.getElementById('progress-fill');
-  if (progressText) progressText.textContent = `${summary.done}/${summary.total}`;
-  const pct = summary.total > 0 ? (summary.done / summary.total * 100) : 0;
-  if (progressFill) progressFill.style.width = pct + '%';
+  if (summary.total > 1 && progressSection) {
+    progressSection.style.display = 'block';
+    if (progressText) progressText.textContent = `${summary.done}/${summary.total}`;
+    const pct = (summary.done / summary.total * 100);
+    if (progressFill) progressFill.style.width = pct + '%';
+  } else if (progressSection) {
+    progressSection.style.display = 'none';
+  }
 
   // 更新徽章
   const miniBadge = document.getElementById('mini-badge');
@@ -91,13 +97,17 @@ function renderTaskStatus(data) {
     if (widgetBadge) widgetBadge.style.display = 'none';
   }
 
-  // 显示/隐藏小标签
+  // 清空已完成按钮（有待清空时显示）
+  const clearBtn = document.getElementById('btn-clear-done');
+  const hasDone = tasks.some(t => t.status === 'processed' || t.status === 'failed' || t.status === 'empty' || t.status === 'empty_after_clean');
+  if (clearBtn) clearBtn.style.display = hasDone ? 'inline' : 'none';
+
+  // 显示/隐藏小标签（total===0 时不显示 mini，浮窗保持空状态可见）
   const mini = document.getElementById('task-progress-mini');
   const widget = document.getElementById('task-progress-widget');
   if (summary.total === 0) {
     if (mini) mini.style.display = 'none';
-    if (widget) widget.classList.remove('open');
-    return;
+    // 浮窗不关闭，继续显示空状态列表
   }
 
   // 如果浮窗没打开且没有失败任务，隐藏小标签
@@ -185,4 +195,15 @@ function onImportStarted() {
   if (mini) mini.style.display = 'flex';
   showTaskWidget();
   fetchTaskStatus();
+}
+
+// 清空已完成/失败任务
+function clearDoneTasks() {
+  fetch('/api/tasks/clear', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { console.error(data.error); return; }
+      fetchTaskStatus();
+    })
+    .catch(err => console.error('清空失败:', err));
 }
