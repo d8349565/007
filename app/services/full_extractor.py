@@ -204,7 +204,6 @@ def extract_facts_full_text(
         _record_task_end(task_id, "failed", error=str(e))
         logger.error("全文抽取调用失败 [doc=%s]: %s", document_id[:8], e)
         # 记录错误到文档
-        from app.models.db import get_connection
         conn = get_connection()
         try:
             conn.execute(
