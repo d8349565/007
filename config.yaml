@@ -9,7 +9,7 @@ database:
 # --- LLM 提供商切换（修改此处即可切换模型）---
 # 可选值：deepseek / kimi / minimax
 llm:
-  provider: "deepseek"
+  provider: "kimi"
 
   # --- DeepSeek 配置 ---
   deepseek:
@@ -104,6 +104,7 @@ predicate_whitelist:
     - 完工量
     - 交付量
     - 消费量
+    - 消耗
   CAPACITY:
     - 规划
     - 新增年产
@@ -113,6 +114,8 @@ predicate_whitelist:
     - 规划产能
     - 年产能
     - 设计产能
+    - 产能为
+    - 设计产能为
   INVESTMENT:
     - 计划总投资
     - 投资额
@@ -137,6 +140,8 @@ predicate_whitelist:
     - 占全球市场份额
     - 市占率
     - 市场份额为
+    - 市占率达到
+    - 市场份额达
     - 前十强市占率
     - 前五市占率
   COMPETITIVE_RANKING:
@@ -156,6 +161,10 @@ predicate_whitelist:
     - 签约
     - 收购股权
     - 股权合作
+    - 击败
+    - 提供涂料
+    - 应用于
+    - 供货于
   EXPANSION:
     - 新建
     - 扩建
@@ -264,9 +273,8 @@ qualifier_whitelist:
 
 # --- 审核 ---
 review:
-  auto_pass_confidence: 0.90
-  force_human_review_types:
-    - COMPETITIVE_RANKING
+  auto_pass_confidence: 0.85
+  force_human_review_types: []
   force_human_review_predicates: []
   # 特定 fact_type 必须在 qualifiers 中含有以下字段之一，否则即使 PASS 也不允许 AUTO_PASS
   # 规则：qualifiers 中至少一个 key 有非空值（OR 关系）
