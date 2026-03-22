@@ -5,27 +5,25 @@ import uuid
 
 from app.logger import get_logger
 from app.models.db import get_connection
+from app.services import entity_utils as eu
 
 logger = get_logger(__name__)
 
-# 括号规范化：去掉中英文括号内容及常见法人后缀
-_PAREN_RE = re.compile(r'[（(][^）)]*[）)]')
-_LEGAL_SUFFIXES = ('有限公司', '有限责任公司', '股份有限公司', '股份公司')
+# ──────────── 复用 entity_utils ────────────
+_PAREN_RE = eu.PAREN_RE
+_LEGAL_SUFFIXES = eu.LEGAL_SUFFIXES
+normalize = eu.normalize
+fingerprint = eu.fingerprint
 
 
 def _normalize_name(text: str) -> str:
     """
     将实体名称规范化，用于模糊匹配：
-    1. 去掉括号内容："中远佐敦船舶涂料（青岛）有限公司" → "中远佐敦船舶涂料有限公司"
-    2. 再去掉常见法人后缀：→ "中远佐敦船舶涂料"
+    1. 去掉括号内容 + 法人后缀
     返回规范化后的字符串；若与原文相同则返回空字符串（无需再查一次）。
     """
-    s = _PAREN_RE.sub('', text).strip()
-    for suffix in _LEGAL_SUFFIXES:
-        if s.endswith(suffix):
-            s = s[:-len(suffix)].strip()
-            break
-    return s if s != text else ''
+    norm = eu.normalize(text)
+    return norm if norm != text else ""
 
 
 def link_entity(raw_text: str, entity_type: str = "") -> dict:
@@ -98,6 +96,159 @@ def link_entity(raw_text: str, entity_type: str = "") -> dict:
         conn.close()
 
 
+def disambiguate(name: str, context: dict | None = None) -> dict:
+    """
+    实体名称消歧：判断一个名称可能对应哪个（些）实体。
+
+    参数:
+        name: 待消歧的名称
+        context: 可选上下文 {"qualifier": "...", "article_title": "...", "source": "..."}
+
+    返回:
+        {
+            "name": str,
+            "candidates": [
+                {
+                    "entity_id": str,
+                    "canonical_name": str,
+                    "entity_type": str,
+                    "primary_type": str | None,    # 新增字段（可能为空）
+                    "tags": list[str],             # 新增字段（可能为空）
+                    "confidence": float,            # 0~1
+                    "qualifiers": list[str],        # 从 qualifier_json 提取的修饰词
+                    "source_articles": list[str],   # 关联文章来源
+                    "geo_paren": str | None,       # 括号内地理词（如"香港"）
+                    "ambiguity_note": str,
+                }
+            ],
+            "fallback_action": "create_new" | "require_manual" | "match_best",
+            "has_context": bool,
+        }
+    """
+    import json
+
+    if not name or not name.strip():
+        return {
+            "name": name or "",
+            "candidates": [],
+            "fallback_action": "require_manual",
+            "has_context": bool(context),
+        }
+
+    text = name.strip()
+    normalized = eu.normalize(text)
+    has_context = bool(context)
+
+    conn = get_connection()
+    try:
+        # 1. 查询所有与规范化名称相同或相似的实体
+        candidates: list[dict] = []
+
+        # 精确匹配 canonical_name
+        rows = conn.execute(
+            """SELECT id, canonical_name, entity_type FROM entity
+               WHERE canonical_name = ? ORDER BY rowid ASC""",
+            (text,),
+        ).fetchall()
+
+        # 如果规范化后与原文不同，也查规范化名
+        if normalized and normalized != text:
+            rows = list(rows)
+            rows2 = conn.execute(
+                """SELECT id, canonical_name, entity_type FROM entity
+                   WHERE canonical_name = ? ORDER BY rowid ASC""",
+                (normalized,),
+            ).fetchall()
+            seen = {r["id"] for r in rows}
+            for r in rows2:
+                if r["id"] not in seen:
+                    rows.append(r)
+
+        for row in rows:
+            entity_id = row["id"]
+
+            # 提取括号内地理词
+            geo = eu.extract_geo_paren(row["canonical_name"])
+
+            # 收集 qualifier 修饰词（从 fact_atom）
+            qualifiers: set[str] = set()
+            art_titles: set[str] = set()
+            fa_rows = conn.execute(
+                """SELECT fa.qualifier_json, sd.title
+                   FROM fact_atom fa
+                   JOIN source_document sd ON fa.document_id = sd.id
+                   WHERE (fa.subject_entity_id = ? OR fa.object_entity_id = ?)
+                     AND fa.qualifier_json IS NOT NULL
+                   LIMIT 20""",
+                (entity_id, entity_id),
+            ).fetchall()
+            for fa in fa_rows:
+                if fa["qualifier_json"]:
+                    try:
+                        q = json.loads(fa["qualifier_json"])
+                        for v in q.values():
+                            if isinstance(v, str) and v.strip():
+                                qualifiers.add(v.strip())
+                    except Exception:
+                        pass
+                if fa["title"]:
+                    art_titles.add(fa["title"][:50])
+
+            # 计算基础置信度
+            confidence = 0.5
+            if eu.extract_geo_paren(text) == geo:
+                # 有地理消歧信号，置信度高
+                confidence = 0.85 if geo else 0.75
+            elif context:
+                # 有上下文，进一步提升
+                ctx_str = str(context).lower()
+                if any(kw in ctx_str for kw in qualifiers):
+                    confidence = 0.88
+
+            # 构建歧义提示
+            ambiguity_note = ""
+            if geo:
+                ambiguity_note = f"括号含地理修饰词'{geo}'"
+            if len(rows) > 1:
+                ambiguity_note = (ambiguity_note + f"；另有{len(rows)-1}个同名实体，需结合上下文判断"
+                                  if ambiguity_note else f"存在{len(rows)}个同名实体，需结合上下文判断")
+
+            candidates.append({
+                "entity_id": entity_id,
+                "canonical_name": row["canonical_name"],
+                "entity_type": row["entity_type"],
+                "primary_type": None,
+                "tags": [],
+                "confidence": confidence,
+                "qualifiers": list(qualifiers)[:10],
+                "source_articles": list(art_titles)[:5],
+                "geo_paren": geo,
+                "ambiguity_note": ambiguity_note,
+            })
+
+        # 2. 决定 fallback_action
+        if candidates:
+            if has_context:
+                # 有上下文：交给调用方判断
+                fallback_action = "match_best"
+            else:
+                # 无上下文：必须人工确认
+                fallback_action = "require_manual"
+        else:
+            # 没有同名实体 → 可创建新的
+            fallback_action = "create_new"
+
+        return {
+            "name": text,
+            "candidates": candidates,
+            "fallback_action": fallback_action,
+            "has_context": has_context,
+        }
+
+    finally:
+        conn.close()
+
+
 def add_entity(name: str, entity_type: str, entity_id: str | None = None) -> str:
     """手动添加实体（管理工具使用）。若同名实体已存在则直接返回其 id（幂等）。"""
     conn = get_connection()
@@ -136,60 +287,8 @@ def add_alias(entity_id: str, alias: str) -> None:
         conn.close()
 
 
-# --- 实体类型推断后缀规则 ---
-# 项目/工程类结尾词（优先级最高：避免"XX涂料新工厂项目"被误判为 COMPANY）
-_PROJECT_ENDINGS = ("项目", "工程", "专项", "计划")
-# 纯工厂/基地名（独立设施，不是公司法人）
-_FACILITY_KEYWORDS = ("新工厂", "生产基地", "研发基地", "产业基地", "产业园区")
-
-_COMPANY_SUFFIXES = (
-    "公司", "集团", "股份", "有限", "企业", "涂料", "化工", "科技",
-    "工业", "实业", "控股", "国际", "材料", "制造",
-)
-
-
-def _infer_entity_type(text: str, fact_type: str = "") -> str:
-    """
-    根据文本特征和 fact_type 上下文推断实体类型。
-    返回: PROJECT / COMPANY / GROUP / PRODUCT / UNKNOWN
-
-    优先级（从高到低）：
-      1. 以"项目/工程/专项/计划"结尾 → PROJECT
-      2. 包含独立设施关键词且无公司法人后缀 → PROJECT
-      3. GROUP 集合主体
-      4. 含公司法人后缀 → COMPANY
-      5. COOPERATION fact_type → PROJECT
-      6. 其他 → UNKNOWN
-    """
-    if not text:
-        return "UNKNOWN"
-
-    # 1. 以项目/工程类词结尾 → 直接 PROJECT（最高优先级）
-    for ending in _PROJECT_ENDINGS:
-        if text.endswith(ending):
-            return "PROJECT"
-
-    # 2. 包含独立设施词且不含公司法人后缀 → PROJECT
-    if any(kw in text for kw in _FACILITY_KEYWORDS):
-        if not any(s in text for s in ("公司", "集团", "股份", "有限")):
-            return "PROJECT"
-
-    # 3. 集合主体检测（优先于公司后缀，因为"企业"同时出现在两者中）
-    if any(kw in text for kw in ("前十强", "前五强", "前三强", "上榜")):
-        return "GROUP"
-    if "品牌" in text and any(kw in text for kw in ("外资", "国产", "本土")):
-        return "GROUP"
-
-    # 4. 主体包含公司类后缀 → COMPANY
-    for suffix in _COMPANY_SUFFIXES:
-        if suffix in text:
-            return "COMPANY"
-
-    # 5. COOPERATION 类型的 object 通常是项目/产品
-    if fact_type == "COOPERATION":
-        return "PROJECT"
-
-    return "UNKNOWN"
+# --- 实体类型推断（委托给 entity_utils）---
+infer_entity_type = eu.infer_entity_type
 
 
 def _auto_discover_entities(rows: list, conn) -> int:
@@ -247,21 +346,8 @@ def _auto_discover_entities(rows: list, conn) -> int:
     return created
 
 
-# --- 常用地点映射（自动创建用） ---
-_LOCATION_KEYWORDS = {
-    "全国": "REGION",
-    "中国": "COUNTRY",
-    "全球": "REGION",
-    "国内": "REGION",
-    "在华": "REGION",
-    "华东": "REGION",
-    "华南": "REGION",
-    "华北": "REGION",
-    "华中": "REGION",
-    "西南": "REGION",
-    "西北": "REGION",
-    "东北": "REGION",
-}
+# --- 常用地点映射（自动创建用）---
+_LOCATION_KEYWORDS = eu.LOCATION_KEYWORDS
 
 
 def _ensure_location_entities(conn) -> int:
@@ -628,6 +714,10 @@ def get_candidate_relations_from_facts() -> list[dict]:
 
 
 def ai_suggest_relations(hint: str = "") -> list[dict]:
+    """
+    [废弃] 请使用 entity_analyzer 模块的 analyze_entity() 方法。
+    此函数将在后续版本中移除。
+    """
     """
     调用 LLM 分析数据库中所有实体之间的可能关系。
 

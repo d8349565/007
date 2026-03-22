@@ -2,7 +2,7 @@
 实体合并服务（规则 + LLM + 人工审核三层架构）：
 
 规则层：LCS + 包含关系快速筛候选对
-LLM层：对候选对调 DeepSeek，基于事实样本判断是否同一实体
+LLM层：对候选对调 LLM，基于事实样本判断是否同一实体
 审核层：结果写入 entity_merge_task 表，人工批准/拒绝后执行
 
 主要函数：
@@ -21,104 +21,39 @@ from pathlib import Path
 
 from app.logger import get_logger
 from app.models.db import get_connection
+from app.services import entity_utils as eu
 
 logger = get_logger(__name__)
 
 # Prompt 文件路径
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "entity_merge.txt"
 
-# ──────────── 相似度计算 ────────────
+# ──────────── 复用 entity_utils ────────────
+contain_score = eu.contain_score
+lcs_ratio = eu.lcs_ratio
+similarity = eu.similarity
+extract_geo_paren = eu.extract_geo_paren
+has_region_prefix = eu.has_region_prefix
+GEO_QUALIFIERS = eu.GEO_QUALIFIERS
+SKIP_NAMES = eu.SKIP_NAMES
+REGION_PREFIXES = eu.REGION_PREFIXES
+
 
 def _normalize(text: str) -> str:
-    return text.strip().replace('（', '(').replace('）', ')').replace(' ', '')
-
-
-# 常见地区区分词（括号内）——出现则表示不同注册主体
-_GEO_QUALIFIERS = frozenset([
-    '香港', '青岛', '上海', '北京', '天津', '广州', '深圳', '南京', '成都',
-    '宁波', '武汉', '苏州', '常州', '无锡', '北京', '重庆', '济南', '废州',
-    '察邬', '杨州', '张家港', '天下', '中国区', '中国', '全国', '全球',
-])
-
-
-def _extract_geo_paren(text: str) -> str | None:
-    # 提取括号内的地区关键词，如"中远佐敦（香港）有限公司" -> "香港"
-    # 如果括号内容不在地区词表中，返回 None
-    import re
-    m = re.search(r'[（(]([^）)]+)[）)]', text)
-    if not m:
-        return None
-    content = m.group(1).strip()
-    if content in _GEO_QUALIFIERS:
-        return content
-    return None
-
-
-def _contain_score(a: str, b: str) -> float:
-    """若一方包含另一方，返回 0.7~1.0 的分数；否则 0"""
-    a, b = _normalize(a), _normalize(b)
-    if not a or not b:
-        return 0.0
-    if a == b:
-        return 1.0
-    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
-    if shorter in longer:
-        # 越短的比例越低，避免 "中国" 包含在所有名字里
-        ratio = len(shorter) / len(longer)
-        return 0.5 + ratio * 0.45  # 范围 [0.5, 0.95]
-    return 0.0
-
-
-def _lcs_ratio(a: str, b: str) -> float:
-    """最长公共子序列 / 较长字符串长度"""
-    a, b = _normalize(a), _normalize(b)
-    if not a or not b:
-        return 0.0
-    m, n = len(a), len(b)
-    if m > 40 or n > 40:  # 超长名称跳过（如项目名）
-        return 0.0
-    dp = [[0] * (n + 1) for _ in range(m + 1)]
-    for i in range(1, m + 1):
-        for j in range(1, n + 1):
-            if a[i - 1] == b[j - 1]:
-                dp[i][j] = dp[i - 1][j - 1] + 1
-            else:
-                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
-    return dp[m][n] / max(m, n)
-
-
-def _similarity(a: str, b: str) -> float:
-    """综合相似度 (0~1)"""
-    contain = _contain_score(a, b)
-    if contain >= 0.95:
-        return contain
-    lcs = _lcs_ratio(a, b)
-    return max(contain, lcs)
+    """内部用：去除空格和中文括号，用于相似度计算"""
+    return text.strip().replace("（", "(").replace("）", ")").replace(" ", "")
 
 
 # ──────────── 推荐生成 ────────────
-
-# 太短的通用词不参与相似度推荐（避免误判）
-_SKIP_NAMES = {
-    '中国', '全国', '全球', '国内', '在华', '我国',
-    '华东', '华南', '华北', '华中', '东北', '西南', '西北',
-    '船舶', '项目', '技改项目', '迁扩建项目',
-}
-
-# 名称中含这些词时，视为地域前缀词，不能靠LCS与其他配对（避免"美国X" vs "中国X"误判）
-_REGION_PREFIXES = ('中国', '美国', '日本', '印度', '在华', '全球', '国内', '我国')
 
 # 匹配阈值
 _THRESHOLD_CONTAIN = 0.70   # 包含关系
 _THRESHOLD_LCS = 0.82       # LCS相似
 
 
-def _has_region_prefix(name: str) -> bool:
-    return any(name.startswith(p) or name.endswith(p) for p in _REGION_PREFIXES)
-
-
 def get_merge_suggestions(limit: int = 50) -> list[dict]:
     """
+    [向后兼容] 纯规则合并建议，建议迁移到 entity_analyzer 模块。
     返回推荐合并的实体对列表，按置信度排序。
     每项: {primary, secondary, score, reason}
     """
@@ -133,8 +68,8 @@ def get_merge_suggestions(limit: int = 50) -> list[dict]:
 
     # 过滤掉通用词、过短名称
     filtered = [e for e in entities
-                if e['canonical_name'] not in _SKIP_NAMES
-                and len(_normalize(e['canonical_name'])) >= 3]
+                if e["canonical_name"] not in eu.SKIP_NAMES
+                and len(_normalize(e["canonical_name"])) >= 3]
 
     suggestions = []
     n = len(filtered)
@@ -151,13 +86,13 @@ def get_merge_suggestions(limit: int = 50) -> list[dict]:
                 continue
 
             # 若两者都有地域前缀（但前缀不同），属于地域区分，不应合并
-            if _has_region_prefix(a['canonical_name']) and _has_region_prefix(b['canonical_name']):
+            if eu.has_region_prefix(a["canonical_name"]) and eu.has_region_prefix(b["canonical_name"]):
                 # 只有包含关系达到极高才允许（避免"中国上榜"≈"美国上榜"）
                 if contain < 0.90:
                     continue
             # 括号内含不同地区词 → 不同注册主体，直接跳过
-            geo_a = _extract_geo_paren(a['canonical_name'])
-            geo_b = _extract_geo_paren(b['canonical_name'])
+            geo_a = eu.extract_geo_paren(a["canonical_name"])
+            geo_b = eu.extract_geo_paren(b["canonical_name"])
             if geo_a and geo_b and geo_a != geo_b:
                 continue
             # 推断谁做主实体（取较短的、包含另一方的为主）
@@ -637,3 +572,113 @@ def swap_and_approve_task(task_id: str) -> dict:
     finally:
         conn.close()
     return approve_task(task_id)
+
+
+# ──────────────────────────── 批量去重归一化 ────────────────────────────
+
+def dedup_batch_rename(texts: list[str], canonical_name: str, entity_type: str, existing_entity_id: str = "") -> dict:
+    """
+    批量将多个文本归一化到同一个标准实体名称。
+
+    参数:
+        texts: 要归一化的文本列表（不含 canonical_name）
+        canonical_name: 标准实体名称
+        entity_type: 实体类型
+        existing_entity_id: 可选，指定已存在的目标实体 ID
+
+    返回:
+        {"entity_id": str, "updated_facts": int, "added_aliases": int}
+    """
+    from app.services.entity_linker import add_entity
+
+    texts = [t.strip() for t in texts if t.strip()]
+    canonical_name = canonical_name.strip()
+    entity_type = entity_type.strip()
+
+    conn = get_connection()
+    try:
+        # 1. 确定目标实体
+        if existing_entity_id:
+            row = conn.execute("SELECT id FROM entity WHERE id = ?", (existing_entity_id,)).fetchone()
+            eid = row["id"] if row else None
+        else:
+            eid = None
+
+        if not eid:
+            # 查找同名实体
+            dup_rows = list(conn.execute(
+                "SELECT id FROM entity WHERE canonical_name = ? ORDER BY rowid ASC",
+                (canonical_name,),
+            ).fetchall())
+            if dup_rows:
+                eid = dup_rows[0]["id"]
+                # 自动合并多余的同名实体
+                for dup in dup_rows[1:]:
+                    _merge_into(dup["id"], eid, conn)
+            else:
+                eid = add_entity(canonical_name, entity_type)
+
+        # 确保 canonical_name 与目标一致
+        conn.execute(
+            "UPDATE entity SET canonical_name = ?, entity_type = ? WHERE id = ?",
+            (canonical_name, entity_type, eid),
+        )
+
+        # 2. 将每个文本作为别名，并合并同名实体
+        updated_facts = 0
+        added_aliases = 0
+        all_texts = list(set(texts + [canonical_name]))
+
+        for text in texts:
+            if text == canonical_name:
+                continue
+            # 若该文本是另一个实体的 canonical_name，先合并
+            dup_ents = list(conn.execute(
+                "SELECT id FROM entity WHERE canonical_name = ? AND id != ? ORDER BY rowid ASC",
+                (text, eid),
+            ).fetchall())
+            for dup in dup_ents:
+                _merge_into(dup["id"], eid, conn)
+            # 添加别名
+            try:
+                conn.execute(
+                    "INSERT OR IGNORE INTO entity_alias (id, entity_id, alias_name) VALUES (?,?,?)",
+                    (str(uuid.uuid4()), eid, text),
+                )
+                added_aliases += 1
+            except Exception:
+                pass
+
+        # 3. 批量更新 fact_atom
+        ph = ",".join(["?"] * len(all_texts))
+        r1 = conn.execute(
+            f"UPDATE fact_atom SET subject_entity_id = ?, subject_text = ? WHERE subject_text IN ({ph})",
+            [eid, canonical_name] + all_texts,
+        )
+        updated_facts += r1.rowcount
+        r2 = conn.execute(
+            f"UPDATE fact_atom SET object_entity_id = ?, object_text = ? WHERE object_text IN ({ph})",
+            [eid, canonical_name] + all_texts,
+        )
+        updated_facts += r2.rowcount
+        conn.commit()
+
+        return {"entity_id": eid, "updated_facts": updated_facts, "added_aliases": added_aliases}
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _merge_into(from_id: str, to_id: str, conn) -> None:
+    """将 from_id 实体合并进 to_id（内部用，不提交事务）。"""
+    conn.execute("UPDATE fact_atom SET subject_entity_id = ? WHERE subject_entity_id = ?", (to_id, from_id))
+    conn.execute("UPDATE fact_atom SET object_entity_id = ? WHERE object_entity_id = ?", (to_id, from_id))
+    conn.execute("UPDATE OR IGNORE entity_alias SET entity_id = ? WHERE entity_id = ?", (to_id, from_id))
+    conn.execute("UPDATE OR IGNORE entity_relation SET from_entity_id = ? WHERE from_entity_id = ?", (to_id, from_id))
+    conn.execute("UPDATE OR IGNORE entity_relation SET to_entity_id = ? WHERE to_entity_id = ?", (to_id, from_id))
+    conn.execute("DELETE FROM entity_relation WHERE from_entity_id = ? OR to_entity_id = ?", (from_id, from_id))
+    conn.execute("DELETE FROM entity_alias WHERE entity_id = ?", (from_id,))
+    conn.execute("DELETE FROM entity WHERE id = ?", (from_id,))

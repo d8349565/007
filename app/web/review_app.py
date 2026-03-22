@@ -1032,18 +1032,19 @@ def create_app() -> Flask:
     @app.route("/api/dedup/batch-rename", methods=["POST"])
     def api_dedup_batch_rename():
         """
-        批量将所选的 subject_text / object_text 归一化到同一个标准名称，
-        并在 entity 表中创建（或匹配到已有）实体，更新 fact_atom 的 subject_entity_id。
+        批量将多个文本归一化到同一个标准实体名称。
+        业务逻辑委托给 entity_merger.dedup_batch_rename()。
 
         请求体 JSON:
           {
-            "texts": ["佐敦", "佐敦涂料", "JOTUN"],   // 要合并的文本列表
-            "canonical_name": "佐敦涂料（中国）有限公司",
+            "texts": ["EntityA", "EntityA Ltd"],
+            "canonical_name": "EntityA Co.",
             "entity_type": "COMPANY",
-            "entity_id": "existing-uuid-or-empty"  // 可选，指定合并目标实体
+            "entity_id": "optional-existing-entity-uuid"
           }
         """
-        from app.services.entity_linker import add_entity, add_alias, link_entity
+        from app.services.entity_merger import dedup_batch_rename
+
         data = request.get_json(silent=True) or {}
         texts = [t.strip() for t in (data.get("texts") or []) if t.strip()]
         canonical = data.get("canonical_name", "").strip()
@@ -1055,99 +1056,15 @@ def create_app() -> Flask:
         if not canonical:
             return jsonify({"error": "canonical_name 不能为空"}), 400
 
-        conn = get_connection()
         try:
-            # 1. 确定目标实体
-            if existing_eid:
-                row = conn.execute("SELECT id FROM entity WHERE id = ?", (existing_eid,)).fetchone()
-                eid = row["id"] if row else None
-            else:
-                eid = None
-
-            if not eid:
-                # 查找所有同名实体（可能有多个重复）
-                dup_rows = conn.execute(
-                    "SELECT id FROM entity WHERE canonical_name = ? ORDER BY rowid ASC",
-                    (canonical,),
-                ).fetchall()
-                if dup_rows:
-                    eid = dup_rows[0]["id"]
-                    # 自动合并多余的同名实体：将其事实/别名迁移到主实体后删除
-                    for dup in dup_rows[1:]:
-                        did = dup["id"]
-                        conn.execute("UPDATE fact_atom SET subject_entity_id = ? WHERE subject_entity_id = ?", (eid, did))
-                        conn.execute("UPDATE fact_atom SET object_entity_id = ? WHERE object_entity_id = ?", (eid, did))
-                        # 别名迁移（忽略冲突）
-                        conn.execute("UPDATE OR IGNORE entity_alias SET entity_id = ? WHERE entity_id = ?", (eid, did))
-                        # 关系迁移（忽略冲突）
-                        conn.execute("UPDATE OR IGNORE entity_relation SET from_entity_id = ? WHERE from_entity_id = ?", (eid, did))
-                        conn.execute("UPDATE OR IGNORE entity_relation SET to_entity_id = ? WHERE to_entity_id = ?", (eid, did))
-                        # 删除迁移失败（冲突跳过）的残留关系行，避免外键约束阻塞 DELETE entity
-                        conn.execute("DELETE FROM entity_relation WHERE from_entity_id = ? OR to_entity_id = ?", (did, did))
-                        conn.execute("DELETE FROM entity_alias WHERE entity_id = ?", (did,))
-                        conn.execute("DELETE FROM entity WHERE id = ?", (did,))
-                else:
-                    eid = add_entity(canonical, entity_type)
-            # 确保 canonical_name 与目标一致（type 统一更新）
-            conn.execute("UPDATE entity SET canonical_name = ?, entity_type = ? WHERE id = ?",
-                         (canonical, entity_type, eid))
-            conn.commit()
-
-            # 2. 将每个文本作为别名加入，更新 fact_atom
-            updated_facts = 0
-            added_aliases = 0
-            for text in texts:
-                if text == canonical:
-                    continue  # 主名本身不作别名
-                # 若该文本是另一个独立实体的 canonical_name，先将其合并进主实体
-                dup_ents = conn.execute(
-                    "SELECT id FROM entity WHERE canonical_name = ? AND id != ? ORDER BY rowid ASC",
-                    (text, eid),
-                ).fetchall()
-                for dup in dup_ents:
-                    did = dup["id"]
-                    conn.execute("UPDATE fact_atom SET subject_entity_id = ? WHERE subject_entity_id = ?", (eid, did))
-                    conn.execute("UPDATE fact_atom SET object_entity_id = ? WHERE object_entity_id = ?", (eid, did))
-                    conn.execute("UPDATE OR IGNORE entity_alias SET entity_id = ? WHERE entity_id = ?", (eid, did))
-                    conn.execute("UPDATE OR IGNORE entity_relation SET from_entity_id = ? WHERE from_entity_id = ?", (eid, did))
-                    conn.execute("UPDATE OR IGNORE entity_relation SET to_entity_id = ? WHERE to_entity_id = ?", (eid, did))
-                    # 删除迁移失败（冲突跳过）的残留关系行，避免外键约束阻塞 DELETE entity
-                    conn.execute("DELETE FROM entity_relation WHERE from_entity_id = ? OR to_entity_id = ?", (did, did))
-                    conn.execute("DELETE FROM entity_alias WHERE entity_id = ?", (did,))
-                    conn.execute("DELETE FROM entity WHERE id = ?", (did,))
-                # 添加别名（已存在则忽略）
-                try:
-                    conn.execute(
-                        "INSERT OR IGNORE INTO entity_alias (id, entity_id, alias_name) VALUES (?,?,?)",
-                        (str(__import__('uuid').uuid4()), eid, text),
-                    )
-                    added_aliases += 1
-                except Exception:
-                    pass
-
-            # 3. 批量更新 fact_atom
-            #    - subject_text / object_text 统一为 canonical（归一化文本）
-            #    - 同时设置 entity_id（无论是否已设置，强制指向目标实体）
-            all_texts = list(set(texts + [canonical]))
-            ph = ",".join(["?"] * len(all_texts))
-            res = conn.execute(
-                f"UPDATE fact_atom SET subject_entity_id = ?, subject_text = ?"
-                f" WHERE subject_text IN ({ph})",
-                [eid, canonical] + all_texts,
+            result = dedup_batch_rename(
+                texts=texts,
+                canonical_name=canonical,
+                entity_type=entity_type,
+                existing_entity_id=existing_eid,
             )
-            updated_facts += res.rowcount
-            res2 = conn.execute(
-                f"UPDATE fact_atom SET object_entity_id = ?, object_text = ?"
-                f" WHERE object_text IN ({ph})",
-                [eid, canonical] + all_texts,
-            )
-            updated_facts += res2.rowcount
-            conn.commit()
-
-            return jsonify({"success": True, "entity_id": eid,
-                            "updated_facts": updated_facts, "added_aliases": added_aliases})
+            return jsonify({"success": True, **result})
         except Exception as exc:
-            conn.rollback()
             logger.error("batch_rename failed: %s", exc, exc_info=True)
             return jsonify({"error": str(exc)}), 500
         finally:

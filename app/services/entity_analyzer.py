@@ -8,52 +8,29 @@
 - reject_suggestion(id)       : 拒绝建议
 """
 import json
-import re
 import uuid
 from pathlib import Path
 from typing import Optional
 
 from app.logger import get_logger
 from app.models.db import get_connection
+from app.services import entity_utils as eu
 
 logger = get_logger(__name__)
 
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "entity_relation_analysis.txt"
 
-# 用于名称相似计算的法人后缀（同 entity_linker）
-_LEGAL_SUFFIXES = ('有限公司', '有限责任公司', '股份有限公司', '股份公司')
-_PAREN_RE = re.compile(r'[（(][^）)]*[）)]')
+# ──────────── 复用 entity_utils ────────────
+strip_legal = eu.normalize  # 兼容旧名
+FACT_TYPES_WITH_OBJECT = eu.FACT_TYPES_WITH_OBJECT
+contain_score = eu.contain_score
+MIN_NAME_LEN = eu.MIN_NAME_LEN
 
-# 事实类型：这些类型的 object_text 可能暗示实体关联
-_FACT_TYPES_WITH_OBJECT = ('COOPERATION', 'INVESTMENT', 'EXPANSION')
-
-# 至少多少字符才参与候选（避免太短的词）
-_MIN_LEN = 4
-
-# 网络搜索确认后自动入库的置信度阈值
-_AUTO_CONFIRM_THRESHOLD = 0.85
-
-
-def _strip_legal(name: str) -> str:
-    """去括号 + 去法人后缀，用于相似度比较"""
-    s = _PAREN_RE.sub('', name).strip()
-    for suf in _LEGAL_SUFFIXES:
-        if s.endswith(suf):
-            s = s[: -len(suf)].strip()
-            break
-    return s
-
-
-def _contain_score(a: str, b: str) -> float:
-    """若一方包含另一方，返回分数"""
-    if not a or not b:
-        return 0.0
-    if a == b:
-        return 1.0
-    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
-    if shorter in longer:
-        return 0.5 + (len(shorter) / len(longer)) * 0.45
-    return 0.0
+# ──────────── 三层置信度决策阈值 ────────────
+# 设计文档：2026-03-21-entity-dedup-relation-design.md
+_AUTO_CONFIRM_THRESHOLD = 0.75   # ≥0.75 + 无冲突 → 自动执行
+_HUMAN_REVIEW_THRESHOLD = 0.40  # ≥0.40 → 人工审核
+_DROP_THRESHOLD = 0.40          # <0.40 → 丢弃/降权
 
 
 def _get_entity_info(entity_id: str, conn) -> Optional[dict]:
@@ -108,7 +85,7 @@ def _extract_fact_driven_candidates(entity_id: str, conn) -> list[dict]:
     candidates = []
     for r in rows:
         target = (r["object_text"] or "").strip()
-        if not target or len(target) < _MIN_LEN or target in seen:
+        if not target or len(target) < eu.MIN_NAME_LEN or target in seen:
             continue
         seen.add(target)
 
@@ -171,7 +148,7 @@ def _extract_name_similar_candidates(entity_id: str, conn) -> list[dict]:
         own_names.add(a["alias_name"])
 
     # 去掉法人后缀后的标准形
-    own_stripped = {_strip_legal(n) for n in own_names}
+    own_stripped = {eu.normalize(n) for n in own_names}
     own_stripped.discard("")
 
     all_entities = conn.execute(
@@ -182,14 +159,14 @@ def _extract_name_similar_candidates(entity_id: str, conn) -> list[dict]:
     candidates = []
     for other in all_entities:
         other_name = other["canonical_name"]
-        other_stripped = _strip_legal(other_name)
+        other_stripped = eu.normalize(other_name)
 
         # 检查包含关系（用规范化后的名称）
         score = 0.0
         for own in own_stripped:
-            if not own or len(own) < _MIN_LEN:
+            if not own or len(own) < eu.MIN_NAME_LEN:
                 continue
-            s = _contain_score(own, other_stripped if other_stripped else other_name)
+            s = eu.contain_score(own, other_stripped if other_stripped else other_name)
             if s > score:
                 score = s
 
@@ -198,7 +175,7 @@ def _extract_name_similar_candidates(entity_id: str, conn) -> list[dict]:
 
         # 推断关系倾向：若 other 比 self 更长（other 包含 self）→ self 可能是 other 的品牌/通称 → SUBSIDIARY
         # 若 self 包含 other → other 可能是 self 的上级 → SUBSIDIARY（反向）
-        entity_name_stripped = _strip_legal(entity["canonical_name"])
+        entity_name_stripped = eu.normalize(entity["canonical_name"])
         if other_stripped and entity_name_stripped in other_stripped:
             rel_hint = "SUBSIDIARY"  # other 可能是 self 子公司/工厂
         elif other_stripped and other_stripped in entity_name_stripped:
@@ -325,7 +302,11 @@ def analyze_entity(
             )
             search_evidence = candidate_search_map.get(target) or entity_bg_summary or None
 
-            # 自动入库判断：搜索有结果 + 置信度达标
+            # ─── 三层置信度决策 ───
+            # 自动执行条件（三者需同时满足）：
+            #   1. confidence >= 0.75（三重证据综合评分达标）
+            #   2. suggestion_type != "skip"
+            #   3. 有网络搜索证据（有外部知识确认）
             has_search_evidence = bool(search_evidence)
             should_auto_confirm = (
                 use_web_search
