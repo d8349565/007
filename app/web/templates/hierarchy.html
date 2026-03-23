@@ -11,8 +11,8 @@ body > main { margin-top: 0 !important; }
 .hierarchy-page { display: flex; height: 100vh; overflow: hidden; position: relative; }
 .hierarchy-canvas-wrap {
   flex: 1; position: relative;
-  background-color: #1a1a1a;
-  background-image: radial-gradient(#333 1.2px, transparent 1.2px);
+  background-color: #f0f4f8;
+  background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
   background-size: 24px 24px;
   overflow: hidden;
 }
@@ -25,34 +25,34 @@ body > main { margin-top: 0 !important; }
   stroke-width: 2.5;
   transition: stroke 0.15s, stroke-width 0.15s;
 }
-.node-rect:hover { stroke: #fafafa !important; stroke-width: 3.5; }
-.node-label { font-size: 12px; fill: #a1a1a1; font-family: system-ui, sans-serif; pointer-events: none; }
-.node-sublabel { font-size: 10px; fill: #6b6b6b; font-family: system-ui, sans-serif; pointer-events: none; }
+.node-rect:hover { stroke: #0f172a !important; stroke-width: 3.5; }
+.node-label { font-size: 12px; fill: #374151; font-family: system-ui, sans-serif; pointer-events: none; }
+.node-sublabel { font-size: 10px; fill: #64748b; font-family: system-ui, sans-serif; pointer-events: none; }
 
 /* Edge styles */
 .link { fill: none; stroke-width: 1.5; }
-.link-SUBSIDIARY { stroke: #444; stroke-dasharray: none; }
-.link-SHAREHOLDER { stroke: #444; stroke-dasharray: 5,3; }
-.link-JV { stroke: #444; stroke-dasharray: 2,3; }
-.link-label { font-size: 10px; fill: #6b6b6b; font-family: system-ui, sans-serif; }
+.link-SUBSIDIARY { stroke: #94a3b8; stroke-dasharray: none; }
+.link-SHAREHOLDER { stroke: #94a3b8; stroke-dasharray: 5,3; }
+.link-JV { stroke: #94a3b8; stroke-dasharray: 2,3; }
+.link-label { font-size: 10px; fill: #64748b; font-family: system-ui, sans-serif; }
 
 /* Empty state */
 .hierarchy-empty {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-  text-align: center; color: #6b6b6b;
+  text-align: center; color: #94a3b8;
 }
 .hierarchy-empty p { font-size: 15px; margin-bottom: 6px; }
 .hierarchy-empty a { color: #3b82f6; font-size: 13px; }
 
 /* Tooltip */
 .hierarchy-tooltip {
-  position: absolute; background: rgba(40,40,40,0.96); border: 1px solid #404040;
-  border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #a1a1a1;
+  position: absolute; background: rgba(255,255,255,0.97); border: 1px solid #e2e8f0;
+  border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #374151;
   pointer-events: none; z-index: 100; max-width: 240px; display: none;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
 }
-.hierarchy-tooltip .tip-name { font-weight: 600; color: #fafafa; font-size: 13px; margin-bottom: 4px; }
-.hierarchy-tooltip .tip-type { color: #6b6b6b; font-size: 11px; }
+.hierarchy-tooltip .tip-name { font-weight: 600; color: #0f172a; font-size: 13px; margin-bottom: 4px; }
+.hierarchy-tooltip .tip-type { color: #64748b; font-size: 11px; }
 .hierarchy-tooltip .tip-fact-count { color: #3b82f6; font-size: 11px; margin-top: 4px; }
 </style>
 {% endblock %}
@@ -184,7 +184,7 @@ function renderHierarchy(rootData) {
     linkGroup.append('path')
       .attr('class', `link ${dashClass}`)
       .attr('d', `M${link.source.x},${link.source.y + NODE_HEIGHT / 2} V${(link.source.y + link.target.y) / 2} H${link.target.x} V${link.target.y - NODE_HEIGHT / 2}`)
-      .attr('stroke', '#444');
+      .attr('stroke', '#94a3b8');
     // Edge label
     if (relType) {
       const midX = (link.source.x + link.target.x) / 2;
@@ -265,7 +265,7 @@ function renderHierarchy(rootData) {
       .attr('stroke-width', 2.5);
 
     // Label
-    const label = node.data.name.length > 10 ? node.data.name.substring(0, 10) + '…' : node.data.name;
+    const label = node.data.name;
     nodeEl.append('text')
       .attr('class', 'node-label')
       .attr('x', NODE_WIDTH / 2)
@@ -294,7 +294,7 @@ function renderHierarchy(rootData) {
         .attr('text-anchor', 'middle')
         .attr('dominant-baseline', 'middle')
         .attr('font-size', '14px')
-        .attr('fill', '#6b6b6b')
+        .attr('fill', '#94a3b8')
         .attr('cursor', 'pointer')
         .text(isExpanded ? '▼' : '▶');
     }

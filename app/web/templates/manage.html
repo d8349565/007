@@ -5,10 +5,10 @@
 {% block head %}
 <style>
 /* 管理页 Tab 切换 */
-.manage-tabs { display:flex; gap:4px; margin-bottom:20px; border-bottom:2px solid #262626; }
+.manage-tabs { display:flex; gap:4px; margin-bottom:20px; border-bottom:2px solid var(--border-subtle); }
 .manage-tab {
   padding:8px 18px; font-size:13px; font-weight:500; cursor:pointer;
-  border-bottom:2px solid transparent; margin-bottom:-2px; color:#6b6b6b;
+  border-bottom:2px solid transparent; margin-bottom:-2px; color:var(--text-muted);
   transition: color .15s, border-color .15s; background:none; border-top:none; border-left:none; border-right:none;
 }
 .manage-tab.active { color:#3b82f6; border-bottom-color:#3b82f6; }
@@ -16,8 +16,8 @@
 
 /* 合并任务面板 */
 .merge-stats-bar {
-  display:flex; gap:16px; padding:12px 18px; background:#2a2a2a;
-  border-bottom:1px solid #404040; font-size:13px; flex-wrap:wrap; align-items:center;
+  display:flex; gap:16px; padding:12px 18px; background:#f8fafc;
+  border-bottom:1px solid var(--border-subtle); font-size:13px; flex-wrap:wrap; align-items:center;
 }
 .merge-stat-item { display:flex; align-items:center; gap:5px; }
 .merge-stat-num { font-weight:700; font-size:15px; }
@@ -28,16 +28,16 @@
 /* 合并任务卡片 */
 .merge-task-list { display:flex; flex-direction:column; gap:8px; }
 .merge-task-card {
-  background:#2a2a2a; border:1px solid #404040; border-radius:8px;
+  background:#ffffff; border:1px solid #e2e8f0; border-radius:8px;
   padding:12px 16px; display:grid;
   grid-template-columns: 1fr auto; gap:10px; align-items:start;
 }
-.merge-task-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+.merge-task-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.08); }
 .merge-task-card.verdict-merge { border-left:3px solid #10b981; }
 .merge-task-card.verdict-keep  { border-left:3px solid #ef4444; }
 .merge-task-card.verdict-uncertain { border-left:3px solid #f59e0b; }
 .merge-task-card.status-executed  { opacity:.6; }
-.merge-task-card.status-rejected  { opacity:.5; background:#323232; }
+.merge-task-card.status-rejected  { opacity:.5; background:#fef2f2; }
 
 .merge-entities-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
 .entity-pill {
@@ -47,8 +47,8 @@
 }
 .entity-pill.primary { background:rgba(16,185,129,0.15); border-color:rgba(16,185,129,0.3); color:#34d399; }
 .entity-pill.secondary { background:rgba(239,68,68,0.15); border-color:rgba(239,68,68,0.3); color:#f87171; }
-.entity-pill .pill-type { font-size:10px; font-weight:400; color:#6b6b6b; }
-.merge-arrow-icon { font-size:16px; color:#6b6b6b; }
+.entity-pill .pill-type { font-size:10px; font-weight:400; color:#94a3b8; }
+.merge-arrow-icon { font-size:16px; color:#94a3b8; }
 
 .llm-analysis-row { display:flex; align-items:flex-start; gap:8px; flex-wrap:wrap; }
 .verdict-badge {
@@ -62,21 +62,21 @@
 .verdict-badge.rule-only { background:rgba(139,92,246,0.15); color:#a78bfa; }
 
 .conf-bar-wrap { display:flex; align-items:center; gap:4px; }
-.conf-bar { width:50px; height:5px; background:#333; border-radius:3px; overflow:hidden; }
+.conf-bar { width:50px; height:5px; background:#e2e8f0; border-radius:3px; overflow:hidden; }
 .conf-bar-fill { height:100%; border-radius:3px; }
-.llm-reason { font-size:12px; color:#6b6b6b; flex:1; min-width:120px; line-height:1.4; }
-.rule-score-tag { font-size:11px; color:#6b6b6b; white-space:nowrap; }
+.llm-reason { font-size:12px; color:var(--text-muted); flex:1; min-width:120px; line-height:1.4; }
+.rule-score-tag { font-size:11px; color:var(--text-muted); white-space:nowrap; }
 
 .merge-task-actions { display:flex; flex-direction:column; gap:5px; min-width:90px; align-items:flex-end; }
 
 /* 过滤栏 */
 .merge-filter-bar {
-  display:flex; gap:8px; padding:10px 18px; border-bottom:1px solid #262626;
+  display:flex; gap:8px; padding:10px 18px; border-bottom:1px solid var(--border-subtle);
   align-items:center; flex-wrap:wrap;
 }
 .filter-tab {
   font-size:12px; padding:3px 10px; border-radius:16px; cursor:pointer;
-  border:1px solid #505050; background:#323232; color:#a0a0a0;
+  border:1px solid #e2e8f0; background:#f1f5f9; color:#64748b;
   transition: background .1s, color .1s;
 }
 .filter-tab.active { background:#3b82f6; color:#fff; border-color:#3b82f6; }
@@ -89,23 +89,23 @@
 .status-badge.rejected { background:rgba(239,68,68,0.15); color:#f87171; }
 
 /* 加载占位 */
-.task-loading { text-align:center; padding:40px; color:#6b6b6b; font-size:14px; }
+.task-loading { text-align:center; padding:40px; color:var(--text-muted); font-size:14px; }
 
 /* 关系画布 */
 .rel-canvas-wrap {
-  position:relative; border:1px solid #333; border-radius:0 0 8px 8px;
-  background:#0d0d0d; height:440px; overflow:hidden;
+  position:relative; border:1px solid #e2e8f0; border-radius:0 0 8px 8px;
+  background:#f0f4f8; height:440px; overflow:hidden;
 }
 .rel-canvas-svg { position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1; }
 .rel-canvas-svg line { pointer-events:stroke;cursor:pointer; }
 .rel-card {
-  position:absolute;padding:8px 14px;background:#252525;border:2px solid #404040;
+  position:absolute;padding:8px 14px;background:#ffffff;border:2px solid #e2e8f0;
   border-radius:8px;cursor:grab;font-size:13px;user-select:none;z-index:2;
   min-width:50px;text-align:center;white-space:nowrap;transition:border-color .15s,box-shadow .15s;
 }
 .rel-card:active { cursor:grabbing; }
-.rel-card:hover { border-color:#555; }
-.rel-card.selected-from { border-color:#3b82f6; box-shadow:0 0 12px rgba(59,130,246,0.4); }
+.rel-card:hover { border-color:#94a3b8; }
+.rel-card.selected-from { border-color:#3b82f6; box-shadow:0 0 12px rgba(59,130,246,0.3); }
 .rel-card .card-close {
   position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;
   background:#dc2626;color:#fff;font-size:12px;line-height:18px;text-align:center;
@@ -113,38 +113,38 @@
 }
 .rel-card:hover .card-close { display:block; }
 .rel-type-popup {
-  position:absolute;z-index:10;background:#2a2a2a;border:1px solid #505050;
-  border-radius:8px;padding:8px;box-shadow:0 4px 16px rgba(0,0,0,0.5);display:none;min-width:180px;
+  position:absolute;z-index:10;background:#ffffff;border:1px solid #e2e8f0;
+  border-radius:8px;padding:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);display:none;min-width:180px;
 }
 .rel-type-btn {
   display:block;width:100%;text-align:left;padding:5px 10px;font-size:12px;
-  background:none;border:none;color:#e0e0e0;cursor:pointer;border-radius:4px;
+  background:none;border:none;color:#374151;cursor:pointer;border-radius:4px;
 }
-.rel-type-btn:hover { background:#404060;color:#fff; }
+.rel-type-btn:hover { background:#f1f5f9;color:#0f172a; }
 .canvas-search-dropdown {
   position:absolute;top:100%;left:0;width:300px;max-height:280px;
-  background:#2a2a2a;border:1px solid #505050;border-radius:6px;z-index:5;display:none;
-  box-shadow:0 4px 12px rgba(0,0,0,0.4);overflow:hidden;flex-direction:column;
+  background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;z-index:5;display:none;
+  box-shadow:0 4px 12px rgba(0,0,0,0.1);overflow:hidden;flex-direction:column;
 }
 .canvas-search-list {
   overflow-y:auto;max-height:210px;
 }
 .canvas-search-item {
   display:flex;align-items:center;gap:7px;
-  padding:6px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #333;color:#e0e0e0;
+  padding:6px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f5f9;color:#374151;
 }
-.canvas-search-item:hover { background:#353550; }
+.canvas-search-item:hover { background:#f8fafc; }
 .canvas-search-item:last-child { border-bottom:none; }
 .canvas-search-item input[type=checkbox] { accent-color:#3b82f6;width:13px;height:13px;flex-shrink:0;cursor:pointer; }
 .canvas-search-footer {
   display:flex;align-items:center;justify-content:space-between;
-  padding:6px 10px;border-top:1px solid #3a3a3a;background:#232323;
+  padding:6px 10px;border-top:1px solid #e2e8f0;background:#f8fafc;
 }
 /* 拖拽连线端口 */
 .card-port {
   position:absolute;right:-7px;top:50%;transform:translateY(-50%);
   width:14px;height:14px;border-radius:50%;
-  background:#3b82f6;border:2px solid #0d0d0d;
+  background:#3b82f6;border:2px solid #ffffff;
   cursor:crosshair;z-index:4;opacity:0;transition:opacity .15s;
 }
 .rel-card:hover .card-port { opacity:1; }
@@ -154,28 +154,28 @@
 }
 /* 质量概览卡片 */
 .qov-cluster {
-  border:1px solid #3a3a5a; border-radius:7px; margin-bottom:8px; overflow:hidden;
+  border:1px solid #e2e8f0; border-radius:7px; margin-bottom:8px; overflow:hidden;
 }
 .qov-cluster-header {
-  background:#1a1a32; padding:7px 12px;
+  background:#f1f5f9; padding:7px 12px;
   display:flex; align-items:center; gap:8px; flex-wrap:wrap;
 }
-.qov-cluster-body { background:#181820; }
+.qov-cluster-body { background:#ffffff; }
 .qov-member {
   display:flex; align-items:center; gap:8px; padding:5px 12px;
-  border-top:1px solid #242432; font-size:12px; color:#e0e0e0;
+  border-top:1px solid #f1f5f9; font-size:12px; color:#374151;
 }
 .qov-member:first-child { border-top:none; }
-.qov-badge-pivot { font-size:10px; padding:1px 5px; border-radius:3px; background:#1a3a2a; color:#34d399; border:1px solid #2a5a3a; }
-.qov-badge-ent { font-size:10px; padding:1px 5px; border-radius:3px; background:#1e3a5f; color:#60a5fa; border:1px solid #2a5a8a; }
-.qov-badge-txt { font-size:10px; padding:1px 5px; border-radius:3px; background:#2a1a0a; color:#fbbf24; border:1px solid #5a3a0a; }
+.qov-badge-pivot { font-size:10px; padding:1px 5px; border-radius:3px; background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
+.qov-badge-ent { font-size:10px; padding:1px 5px; border-radius:3px; background:#dbeafe; color:#1e40af; border:1px solid #bfdbfe; }
+.qov-badge-txt { font-size:10px; padding:1px 5px; border-radius:3px; background:#fef3c7; color:#92400e; border:1px solid #fde68a; }
 /* 子 Tab（实体合并/关联分析） */
 .sub-tabs {
-  display:flex; gap:2px; padding:8px 16px 0; border-bottom:1px solid #303030;
+  display:flex; gap:2px; padding:8px 16px 0; border-bottom:1px solid var(--border-subtle);
 }
 .sub-tab {
   padding:6px 14px; font-size:12px; font-weight:500; cursor:pointer;
-  border-bottom:2px solid transparent; margin-bottom:-1px; color:#6b6b6b;
+  border-bottom:2px solid transparent; margin-bottom:-1px; color:var(--text-muted);
   background:none; border-top:none; border-left:none; border-right:none;
   transition: color .15s, border-color .15s;
 }
@@ -184,17 +184,17 @@
 .sub-pane.active { display:block; }
 /* 关联建议卡片 */
 .sugg-card {
-  background:#252525; border:1px solid #404040; border-radius:8px;
+  background:#ffffff; border:1px solid #e2e8f0; border-radius:8px;
   padding:10px 14px; display:grid;
   grid-template-columns:1fr auto; gap:8px; align-items:start;
   margin-bottom:8px;
 }
-.sugg-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.35); }
+.sugg-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.08); }
 .sugg-card.type-merge   { border-left:3px solid #a78bfa; }
 .sugg-card.type-relation{ border-left:3px solid #3b82f6; }
 .sugg-card.type-alias   { border-left:3px solid #f59e0b; }
 .sugg-card.status-confirmed{ opacity:.55; }
-.sugg-card.status-rejected { opacity:.4; background:#2a2020; }
+.sugg-card.status-rejected { opacity:.4; background:#fef2f2; }
 .sugg-type-badge {
   display:inline-block; font-size:10px; padding:1px 6px; border-radius:3px;
   font-weight:600; margin-right:4px;
@@ -202,8 +202,8 @@
 .sugg-type-badge.merge    { background:rgba(167,139,250,0.15); color:#a78bfa; }
 .sugg-type-badge.relation { background:rgba(59,130,246,0.15);  color:#60a5fa; }
 .sugg-type-badge.alias    { background:rgba(245,158,11,0.15);  color:#fbbf24; }
-.sugg-target { font-size:13px; font-weight:600; color:#e0e0e0; }
-.sugg-evidence { font-size:12px; color:#6b6b6b; margin-top:3px; line-height:1.4; }
+.sugg-target { font-size:13px; font-weight:600; color:#0f172a; }
+.sugg-evidence { font-size:12px; color:var(--text-muted); margin-top:3px; line-height:1.4; }
 .sugg-reason   { font-size:12px; color:#94a3b8; margin-top:4px; font-style:italic; }
 .sugg-actions  { display:flex; flex-direction:column; gap:5px; min-width:80px; align-items:flex-end; }
 </style>
@@ -311,8 +311,8 @@
     <div class="card" style="margin-bottom:12px;">
       <div style="padding:12px 16px 8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
         <div>
-          <span style="font-size:13px;font-weight:600;color:#fafafa;">&#128270; 实体质量概览</span>
-          <span style="font-size:11px;color:#6b6b6b;margin-left:6px;">&#8203;自动居类发现可能需要归一化的同主体名称</span>
+          <span style="font-size:13px;font-weight:600;color:var(--text-primary);">&#128270; 实体质量概览</span>
+          <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">&#8203;自动居类发现可能需要归一化的同主体名称</span>
         </div>
         <button class="btn btn-sm btn-secondary" style="font-size:11px;" onclick="loadQualityOverview()">&#8635; 刷新</button>
       </div>
@@ -323,32 +323,32 @@
 
     <div class="card">
       <div style="padding:14px 16px;">
-        <div style="font-size:13px;font-weight:600;color:#fafafa;margin-bottom:4px;">🔁 手动归一化</div>
-        <div style="font-size:12px;color:#6b6b6b;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">🔁 手动归一化</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">
           搜索事实中出现的主体名称 → 批量勾选属于同一实体的条目 → 统一为规范名称
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
           <input type="text" id="dedup-search-input" placeholder="输入关键词，如&quot;佐敦&quot;"
-            style="flex:1;padding:6px 10px;background:#1a1a1a;border:1px solid #404040;border-radius:6px;color:#fafafa;font-size:13px;"
+            style="flex:1;padding:6px 10px;background:#ffffff;border:1px solid #cbd5e1;border-radius:6px;color:#0f172a;font-size:13px;"
             onkeydown="if(event.key==='Enter') runDedupSearch()" />
           <button class="btn btn-sm btn-primary" onclick="runDedupSearch()">搜索</button>
         </div>
         <div id="dedup-results" style="display:none;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:12px;color:#6b6b6b;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:12px;color:var(--text-muted);">
             <span id="dedup-result-hint"></span>
-            <button class="btn btn-sm" style="background:#2a2a2a;color:#94a3b8;font-size:11px;" onclick="dedupSelectAll()">全选</button>
+            <button class="btn btn-sm" style="background:#f1f5f9;color:#64748b;font-size:11px;" onclick="dedupSelectAll()">全选</button>
           </div>
           <div id="dedup-item-list" style="display:flex;flex-direction:column;gap:4px;overflow-y:visible;margin-bottom:10px;"></div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;">
             <div style="flex:1;min-width:200px;">
-              <div style="font-size:11px;color:#6b6b6b;margin-bottom:4px;">统一规范名称</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">统一规范名称</div>
               <input type="text" id="dedup-canonical-name"
-                style="width:100%;padding:5px 8px;background:#262626;border:1px solid #404040;border-radius:5px;color:#fafafa;font-size:13px;" />
+                style="width:100%;padding:5px 8px;background:#ffffff;border:1px solid #cbd5e1;border-radius:5px;color:#0f172a;font-size:13px;" />
             </div>
             <div>
-              <div style="font-size:11px;color:#6b6b6b;margin-bottom:4px;">实体类型</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">实体类型</div>
               <select id="dedup-entity-type"
-                style="padding:5px 8px;background:#262626;border:1px solid #404040;border-radius:5px;color:#fff;font-size:12px;">
+                style="padding:5px 8px;background:#ffffff;border:1px solid #cbd5e1;border-radius:5px;color:#0f172a;font-size:12px;">
                 <option value="COMPANY">公司 / 企业</option>
                 <option value="GROUP">集团 / 群体</option>
                 <option value="PROJECT">项目 / 工程</option>
@@ -392,7 +392,7 @@
       {# 统计栏 #}
       <div class="merge-stats-bar" id="kb-stats-bar">
         <span class="merge-stat-item">实体 <b class="merge-stat-num" style="color:#3b82f6;" id="kb-entity-count">—</b></span>
-        <span style="color:#333;">|</span>
+        <span style="color:#e2e8f0;">|</span>
         <span class="merge-stat-item">关系 <b class="merge-stat-num" style="color:#10b981;" id="kb-relation-count">—</b></span>
         <span class="merge-stat-item">别名 <b class="merge-stat-num" style="color:#f59e0b;" id="kb-alias-count">—</b></span>
       </div>
@@ -400,12 +400,12 @@
       {# 关系画布 #}
       <div style="padding:12px 16px;border-bottom:1px solid #262626;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="font-size:12px;font-weight:600;color:#6b6b6b;text-transform:uppercase;letter-spacing:0.4px;">关系画布</span>
-          <span style="font-size:11px;color:#505050;">点击两个实体卡片建立关系 · 拖动调整布局</span>
+          <span style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.4px;">关系画布</span>
+          <span style="font-size:11px;color:#94a3b8;">点击两个实体卡片建立关系 · 拖动调整布局</span>
           <span style="margin-left:auto;"></span>
           <div style="position:relative;" id="canvas-search-wrap">
             <input type="text" id="canvas-search-input" placeholder="搜索实体…"
-              style="width:180px;padding:4px 8px;background:#1a1a1a;border:1px solid #404040;border-radius:5px;color:#fafafa;font-size:12px;"
+              style="width:180px;padding:4px 8px;background:#ffffff;border:1px solid #cbd5e1;border-radius:5px;color:#0f172a;font-size:12px;"
               oninput="canvasSearchDebounced()" onkeydown="if(event.key==='Enter') canvasSearch()" />
             <div id="canvas-search-dropdown" class="canvas-search-dropdown">
               <div id="canvas-search-list" class="canvas-search-list"></div>
@@ -419,12 +419,12 @@
             </div>
           </div>
           <button class="btn btn-sm btn-secondary" style="font-size:11px;" onclick="canvasLoadAll()">全部加载</button>
-          <button class="btn btn-sm" style="font-size:11px;background:#1a2a1a;color:#34d399;border:1px solid #2a4a2a;" onclick="canvasAutoLayout()">自动布局</button>
-          <button class="btn btn-sm" style="font-size:11px;background:#323232;color:#94a3b8;" onclick="canvasClear()">清空</button>
+          <button class="btn btn-sm" style="font-size:11px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;" onclick="canvasAutoLayout()">自动布局</button>
+          <button class="btn btn-sm" style="font-size:11px;background:#f1f5f9;color:#64748b;" onclick="canvasClear()">清空</button>
         </div>
         <div id="rel-canvas-wrap" class="rel-canvas-wrap">
           <svg id="rel-canvas-svg" class="rel-canvas-svg"></svg>
-          <div id="rel-canvas-hint" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#333;font-size:14px;pointer-events:none;text-align:center;line-height:1.8;">
+          <div id="rel-canvas-hint" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#94a3b8;font-size:14px;pointer-events:none;text-align:center;line-height:1.8;">
             搜索并添加实体到画布<br>拖动卡片移动位置 · 从卡片右侧圆点拖向目标卡片建立关系
           </div>
           <div id="rel-type-popup" class="rel-type-popup">
@@ -435,37 +435,37 @@
             <button class="rel-type-btn" onclick="canvasCreateRelation('BRAND')">BRAND (品牌归属)</button>
             <button class="rel-type-btn" onclick="canvasCreateRelation('PARTNER')">PARTNER (合作方)</button>
             <button class="rel-type-btn" onclick="canvasCreateRelation('INVESTS_IN')">INVESTS_IN (投资/持有项目)</button>
-            <button class="rel-type-btn" style="color:#dc2626;margin-top:4px;border-top:1px solid #333;padding-top:6px;" onclick="canvasCancelConnect()">取消</button>
+            <button class="rel-type-btn" style="color:#dc2626;margin-top:4px;border-top:1px solid #e2e8f0;padding-top:6px;" onclick="canvasCancelConnect()">取消</button>
           </div>
         </div>
       </div>
 
       {# 关系列表 #}
       <div style="padding:12px 16px;">
-        <div style="font-size:12px;font-weight:600;color:#6b6b6b;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.4px;">实体关系</div>
+        <div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.4px;">实体关系</div>
         <div id="kb-relations-list"><div class="task-loading">点击 Tab 加载...</div></div>
       </div>
 
       {# 实体列表 #}
-      <div style="padding:12px 16px;border-top:1px solid #262626;">
-        <div style="font-size:12px;font-weight:600;color:#6b6b6b;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.4px;">所有实体</div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border-subtle);">
+        <div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.4px;">所有实体</div>
         <div id="kb-entities-list"><div class="task-loading">加载中...</div></div>
       </div>
 
       {# AI 分析关系面板 #}
-      <div style="padding:12px 16px;border-top:1px solid #262626;display:none;" id="kb-ai-section">
-        <div style="font-size:12px;font-weight:600;color:#3b82f6;margin-bottom:10px;">🤖 AI 分析实体关系</div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border-subtle);display:none;" id="kb-ai-section">
+        <div style="font-size:12px;font-weight:600;color:#2563eb;margin-bottom:10px;">🤖 AI 分析实体关系</div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
           <input type="text" id="ai-hint-input"
             placeholder="可选：补充背景提示，如"佐敦集团旗下子公司""
-            style="flex:1;padding:6px 10px;background:#1a1a1a;border:1px solid #404040;border-radius:6px;color:#fafafa;font-size:13px;" />
+            style="flex:1;padding:6px 10px;background:#ffffff;border:1px solid #cbd5e1;border-radius:6px;color:#0f172a;font-size:13px;" />
           <button class="btn btn-sm btn-primary" id="ai-analyze-btn" onclick="runAiAnalysis()">开始分析</button>
         </div>
         <div id="kb-ai-result"></div>
       </div>
 
       {# 候选关系（从事实发现） #}
-      <div style="padding:12px 16px;border-top:1px solid #262626;display:none;" id="kb-candidates-section">
+      <div style="padding:12px 16px;border-top:1px solid var(--border-subtle);display:none;" id="kb-candidates-section">
         <div style="font-size:12px;font-weight:600;color:#a855f7;margin-bottom:8px;">
           🔍 从已通过事实中发现的候选关系
         </div>
@@ -489,7 +489,7 @@
           </div>
           <div class="edit-group full">
             <label>实体类型</label>
-            <select id="new-entity-type" style="width:100%;padding:6px 8px;border:1px solid #505050;border-radius:5px;font-size:13px;background:#2a2a2a;color:#fff;">
+            <select id="new-entity-type" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:5px;font-size:13px;background:#ffffff;color:#0f172a;">
               <option value="COMPANY">COMPANY (企业)</option>
               <option value="GROUP">GROUP (群体/排名)</option>
               <option value="PROJECT">PROJECT (项目)</option>
@@ -526,13 +526,13 @@
         <div class="edit-grid">
           <div class="edit-group full">
             <label>源实体（如母公司）*</label>
-            <select id="rel-from-entity" style="width:100%;padding:6px 8px;border:1px solid #505050;border-radius:5px;font-size:13px;background:#2a2a2a;color:#fff;">
+            <select id="rel-from-entity" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:5px;font-size:13px;background:#ffffff;color:#0f172a;">
               <option value="">-- 选择 --</option>
             </select>
           </div>
           <div class="edit-group full">
             <label>关系类型 *</label>
-            <select id="rel-type" style="width:100%;padding:6px 8px;border:1px solid #505050;border-radius:5px;font-size:13px;background:#2a2a2a;color:#fff;">
+            <select id="rel-type" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:5px;font-size:13px;background:#ffffff;color:#0f172a;">
               <option value="SUBSIDIARY">SUBSIDIARY (子公司)</option>
               <option value="SHAREHOLDER">SHAREHOLDER (股东)</option>
               <option value="JV">JV (合资)</option>
@@ -543,7 +543,7 @@
           </div>
           <div class="edit-group full">
             <label>目标实体（如子公司）*</label>
-            <select id="rel-to-entity" style="width:100%;padding:6px 8px;border:1px solid #505050;border-radius:5px;font-size:13px;background:#2a2a2a;color:#fff;">
+            <select id="rel-to-entity" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:5px;font-size:13px;background:#ffffff;color:#0f172a;">
               <option value="">-- 选择 --</option>
             </select>
           </div>
@@ -786,12 +786,12 @@ function renderKbRelations(relations) {
       if (d.share_pct) detail = ` (${d.share_pct}%)`;
     } catch(e) {}
     html += `
-    <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#2a2a2a;border:1px solid #404040;border-radius:6px;font-size:13px;">
-      <span style="color:#34d399;font-weight:600;">${escHtml(r.from_name)}</span>
-      <span style="color:#6b6b6b;font-size:11px;padding:1px 6px;background:#323232;border-radius:4px;">${REL_TYPE_ZH[r.relation_type] || r.relation_type}${escHtml(detail)}</span>
-      <span style="color:#6b6b6b;">→</span>
-      <span style="color:#60a5fa;font-weight:600;">${escHtml(r.to_name)}</span>
-      <span style="font-size:10px;color:#505050;margin-left:auto;">${r.source}</span>
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;">
+      <span style="color:#059669;font-weight:600;">${escHtml(r.from_name)}</span>
+      <span style="color:#64748b;font-size:11px;padding:1px 6px;background:#f1f5f9;border-radius:4px;">${REL_TYPE_ZH[r.relation_type] || r.relation_type}${escHtml(detail)}</span>
+      <span style="color:#94a3b8;">→</span>
+      <span style="color:#2563eb;font-weight:600;">${escHtml(r.to_name)}</span>
+      <span style="font-size:10px;color:#94a3b8;margin-left:auto;">${r.source}</span>
       <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:1px 6px;color:#dc2626;" onclick="removeRelation('${escHtml(r.id)}')">删除</button>
     </div>`;
   });
@@ -828,10 +828,10 @@ function renderKbEntities(entities, aliases) {
         : '0条';
     const factColor = linked > 0 ? '#34d399' : textMatch > 0 ? '#fbbf24' : '#505050';
     html += `
-    <div style="padding:4px 10px;background:#2a2a2a;border:1px solid #404040;border-radius:6px;font-size:12px;display:flex;align-items:center;gap:4px;flex-shrink:0;" title="ID: ${e.id}">
+    <div style="padding:4px 10px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;display:flex;align-items:center;gap:4px;flex-shrink:0;" title="ID: ${e.id}">
       <span style="color:${typeColor};font-weight:600;">${escHtml(e.canonical_name)}</span>
-      <span style="font-size:10px;color:#6b6b6b;">[${e.entity_type}]</span>
-      <span style="font-size:10px;color:#505050;">${escHtml(aliasStr)}</span>
+      <span style="font-size:10px;color:#64748b;">[${e.entity_type}]</span>
+      <span style="font-size:10px;color:#94a3b8;">${escHtml(aliasStr)}</span>
       <span style="font-size:10px;color:${factColor};">${factTip}</span>
     </div>`;
   });
@@ -954,10 +954,10 @@ function loadCandidateRelations() {
       let html = '<div style="display:flex;flex-direction:column;gap:6px;">';
       candidates.forEach(c => {
         html += `
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#2a2a2a;border:1px solid #505050;border-radius:6px;font-size:13px;">
-          <span style="color:#34d399;font-weight:600;">${escHtml(c.from_name)}</span>
-          <span style="color:#6b6b6b;">→</span>
-          <span style="color:#60a5fa;font-weight:600;">${escHtml(c.to_name)}</span>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;">
+          <span style="color:#059669;font-weight:600;">${escHtml(c.from_name)}</span>
+          <span style="color:#94a3b8;">→</span>
+          <span style="color:#2563eb;font-weight:600;">${escHtml(c.to_name)}</span>
           <span style="font-size:11px;color:#a855f7;padding:1px 6px;background:rgba(168,85,247,0.15);border-radius:4px;">${REL_TYPE_ZH[c.suggested_type] || c.suggested_type}</span>
           <span style="font-size:11px;color:#6b6b6b;">${c.evidence_count}条事实 · ${escHtml(c.sample_predicates.join(', '))}</span>
           <button class="btn btn-sm btn-primary" style="margin-left:auto;font-size:11px;padding:2px 8px;"
@@ -1049,7 +1049,7 @@ function renderAiSuggestions(suggestions) {
       <div style="display:flex;gap:6px;margin-top:6px;">
         <button class="btn btn-sm btn-primary" style="font-size:11px;padding:2px 10px;"
           onclick="acceptAiSuggestion(${i})">采纳</button>
-        <button class="btn btn-sm" style="font-size:11px;padding:2px 8px;background:#2a2a2a;color:#94a3b8;"
+        <button class="btn btn-sm" style="font-size:11px;padding:2px 8px;background:#f1f5f9;color:#64748b;"
           onclick="dismissAiSuggestion(${i})">忽略</button>
       </div>
     </div>`;
@@ -1246,26 +1246,26 @@ function _renderDedupClusters(items, clusters, scores) {
         const s = (scores[key] !== undefined) ? scores[key] : _simFE(pivot.text, item.text);
         const autoCheck = isPivot || s >= 0.90;
         const sColor = s >= 0.90 ? '#34d399' : s >= 0.75 ? '#fbbf24' : '#94a3b8';
-        html += `<label style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:#1a1a1a;border-top:1px solid #222;cursor:pointer;font-size:13px;">
+        html += `<label style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:#ffffff;border-top:1px solid #f1f5f9;cursor:pointer;font-size:13px;">
           <input type="checkbox" class="dedup-check" data-idx="${i}" data-cluster="${cid}" ${autoCheck ? 'checked' : ''} style="accent-color:#3b82f6;width:14px;height:14px;" />
-          <span style="flex:1;color:#fafafa;">${escHtml(item.text)}</span>
+          <span style="flex:1;color:#0f172a;">${escHtml(item.text)}</span>
           ${typeBadge(item)}
           ${isPivot
-            ? `<span style="font-size:10px;background:#1a3a2a;color:#34d399;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">建议主</span>`
+            ? `<span style="font-size:10px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;border-radius:3px;padding:0 4px;">建议主</span>`
             : `<span style="font-size:10px;color:${sColor};">${Math.round(s * 100)}% 相似</span>`}
           ${srcBadge(item)}
-          <span style="font-size:11px;color:#505050;">${item.fact_count}条</span>
+          <span style="font-size:11px;color:#94a3b8;">${item.fact_count}条</span>
         </label>`;
       });
       html += `</div>`;
     } else {
       // ── 单独实体：普通行 ──
       const item = items[pivotIdx];
-      html += `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:5px;cursor:pointer;font-size:13px;margin-bottom:2px;">
+      html += `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#ffffff;border:1px solid #e2e8f0;border-radius:5px;cursor:pointer;font-size:13px;margin-bottom:2px;">
         <input type="checkbox" class="dedup-check" data-idx="${pivotIdx}" style="accent-color:#3b82f6;width:14px;height:14px;" />
-        <span style="flex:1;color:#fafafa;">${escHtml(item.text)}</span>
+        <span style="flex:1;color:#0f172a;">${escHtml(item.text)}</span>
         ${typeBadge(item)} ${srcBadge(item)}
-        <span style="font-size:11px;color:#505050;margin-left:auto;">${item.fact_count}条</span>
+        <span style="font-size:11px;color:#94a3b8;margin-left:auto;">${item.fact_count}条</span>
       </label>`;
     }
   });

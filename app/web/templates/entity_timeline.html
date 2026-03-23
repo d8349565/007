@@ -11,8 +11,8 @@
 
 /* Header */
 .ed-header {
-  background: #1e1e1e; border-radius: 10px; padding: 20px 24px;
-  margin-bottom: 0; border: 1px solid #333;
+  background: #ffffff; border-radius: 10px; padding: 20px 24px;
+  margin-bottom: 0; border: 1px solid #e2e8f0;
 }
 .ed-header-top {
   display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap;
@@ -21,7 +21,7 @@
 .ed-back:hover { text-decoration: underline; }
 .ed-name-block { flex: 1; min-width: 200px; }
 .ed-name {
-  font-size: 26px; font-weight: 800; color: #fafafa; line-height: 1.2;
+  font-size: 26px; font-weight: 800; color: #0f172a; line-height: 1.2;
   word-break: break-all;
 }
 .ed-name-sub {
@@ -29,15 +29,15 @@
 }
 .ed-type-badge {
   display: inline-block; padding: 3px 10px; border-radius: 12px;
-  font-size: 12px; font-weight: 600; background: rgba(139,92,246,0.15); color: #a78bfa;
+  font-size: 12px; font-weight: 600; background: rgba(109,40,217,0.08); color: #5b21b6;
   cursor: default;
 }
 .ed-aliases {
   font-size: 12px; color: #6b7280; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
 }
 .ed-alias-tag {
-  background: #2a2a2a; border: 1px solid #444; border-radius: 8px;
-  padding: 1px 8px; font-size: 11px; color: #a0a0a0; display: inline-flex; align-items: center; gap: 4px;
+  background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 1px 8px; font-size: 11px; color: #475569; display: inline-flex; align-items: center; gap: 4px;
 }
 .ed-alias-del {
   cursor: pointer; color: #ef4444; font-size: 13px; line-height: 1;
@@ -49,7 +49,7 @@
 }
 .ed-stat-row { display: flex; gap: 20px; }
 .ed-stat { text-align: right; }
-.ed-stat-val { font-size: 20px; font-weight: 700; color: #fafafa; line-height: 1; }
+.ed-stat-val { font-size: 20px; font-weight: 700; color: #0f172a; line-height: 1; }
 .ed-stat-lbl { font-size: 11px; color: #6b7280; margin-top: 2px; }
 .ed-edit-btn {
   padding: 6px 14px; background: rgba(59,130,246,0.12); color: #60a5fa;
@@ -61,7 +61,7 @@
 /* Edit panel (inline) */
 .ed-edit-panel {
   display: none; margin-top: 14px; padding: 16px;
-  background: #252525; border-radius: 8px; border: 1px solid #404040;
+  background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;
 }
 .ed-edit-panel.open { display: block; }
 .ed-edit-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 12px; }
@@ -69,8 +69,8 @@
 .ed-edit-field { display: flex; flex-direction: column; gap: 4px; min-width: 200px; }
 .ed-edit-field label { font-size: 11px; color: #6b7280; font-weight: 500; }
 .ed-edit-field input, .ed-edit-field select {
-  padding: 7px 10px; background: #1a1a1a; border: 1px solid #505050;
-  border-radius: 6px; color: #fafafa; font-size: 13px;
+  padding: 7px 10px; background: #ffffff; border: 1px solid #cbd5e1;
+  border-radius: 6px; color: #0f172a; font-size: 13px;
 }
 .ed-edit-field input:focus, .ed-edit-field select:focus {
   outline: none; border-color: #3b82f6;
@@ -81,16 +81,16 @@
 }
 .ed-save-btn:hover { background: #2563eb; }
 .ed-cancel-btn {
-  padding: 7px 14px; background: transparent; color: #6b7280;
-  border: 1px solid #404040; border-radius: 6px; font-size: 13px; cursor: pointer;
+  padding: 7px 14px; background: transparent; color: #64748b;
+  border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; cursor: pointer;
 }
-.ed-cancel-btn:hover { color: #a0a0a0; }
+.ed-cancel-btn:hover { color: #374151; }
 
 /* Alias add inline */
 .ed-alias-add { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 .ed-alias-add input {
-  padding: 5px 10px; background: #1a1a1a; border: 1px solid #505050;
-  border-radius: 6px; color: #fafafa; font-size: 12px; width: 180px;
+  padding: 5px 10px; background: #ffffff; border: 1px solid #cbd5e1;
+  border-radius: 6px; color: #0f172a; font-size: 12px; width: 180px;
 }
 .ed-alias-add input:focus { outline: none; border-color: #3b82f6; }
 .ed-alias-add button {
@@ -101,7 +101,7 @@
 
 /* Tabs */
 .ed-tabs {
-  display: flex; gap: 0; border-bottom: 2px solid #333;
+  display: flex; gap: 0; border-bottom: 2px solid #e2e8f0;
   margin-top: 20px; margin-bottom: 20px;
 }
 .ed-tab {
@@ -109,7 +109,7 @@
   cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
   white-space: nowrap; transition: color 0.15s, border-color 0.15s;
 }
-.ed-tab:hover { color: #d0d0d0; }
+.ed-tab:hover { color: #374151; }
 .ed-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; font-weight: 600; }
 .ed-tab-panel { display: none; }
 .ed-tab-panel.active { display: block; }
@@ -120,14 +120,14 @@
   gap: 12px; margin-bottom: 24px;
 }
 .ed-metric-card {
-  background: #1e1e1e; border-radius: 8px; padding: 16px;
-  border: 1px solid #333; text-align: center;
+  background: #ffffff; border-radius: 8px; padding: 16px;
+  border: 1px solid #e2e8f0; text-align: center;
 }
-.ed-metric-val { font-size: 28px; font-weight: 800; color: #fafafa; line-height: 1; }
+.ed-metric-val { font-size: 28px; font-weight: 800; color: #0f172a; line-height: 1; }
 .ed-metric-lbl { font-size: 12px; color: #6b7280; margin-top: 6px; }
 
 .ed-section-title {
-  font-size: 13px; font-weight: 600; color: #a0a0a0; text-transform: uppercase;
+  font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase;
   letter-spacing: 0.06em; margin-bottom: 12px; margin-top: 24px;
 }
 .ed-section-title:first-child { margin-top: 0; }
@@ -135,10 +135,10 @@
 /* Fact type distribution */
 .ed-ft-dist { display: flex; flex-direction: column; gap: 8px; }
 .ed-ft-row { display: flex; align-items: center; gap: 10px; }
-.ed-ft-label { width: 130px; font-size: 12px; color: #a0a0a0; text-align: right; flex-shrink: 0; }
-.ed-ft-bar-wrap { flex: 1; background: #2a2a2a; border-radius: 3px; height: 8px; overflow: hidden; }
+.ed-ft-label { width: 130px; font-size: 12px; color: #64748b; text-align: right; flex-shrink: 0; }
+.ed-ft-bar-wrap { flex: 1; background: #f1f5f9; border-radius: 3px; height: 8px; overflow: hidden; }
 .ed-ft-bar { height: 100%; border-radius: 3px; transition: width 0.3s; }
-.ed-ft-cnt { width: 36px; font-size: 12px; color: #6b7280; text-align: right; flex-shrink: 0; }
+.ed-ft-cnt { width: 36px; font-size: 12px; color: #94a3b8; text-align: right; flex-shrink: 0; }
 
 /* Alias section */
 .ed-alias-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
@@ -146,7 +146,7 @@
 /* Relations tab */
 .rel-group { margin-bottom: 24px; }
 .rel-group-title {
-  font-size: 13px; font-weight: 700; color: #ffffff; margin-bottom: 10px;
+  font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 10px;
   display: flex; align-items: center; gap: 8px;
 }
 .rel-group-badge {
@@ -156,8 +156,8 @@
 .rel-items { display: flex; flex-direction: column; gap: 6px; }
 .rel-item {
   display: flex; align-items: center; gap: 10px;
-  background: #1e1e1e; border-radius: 6px; padding: 10px 14px;
-  border: 1px solid #333;
+  background: #f8fafc; border-radius: 6px; padding: 10px 14px;
+  border: 1px solid #e2e8f0;
 }
 .rel-arrow { font-size: 11px; color: #6b7280; flex-shrink: 0; }
 .rel-entity-link {
@@ -168,16 +168,16 @@
   font-size: 11px; padding: 1px 8px; border-radius: 8px;
   background: rgba(59,130,246,0.1); color: #93c5fd; flex-shrink: 0;
 }
-.rel-empty { color: #4b4b4b; font-size: 13px; text-align: center; padding: 32px; }
+.rel-empty { color: #94a3b8; font-size: 13px; text-align: center; padding: 32px; }
 
 /* Timeline filter */
 .tl-filter {
-  background: #2a2a2a; border-radius: 8px; padding: 12px 16px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3); margin-bottom: 20px;
+  background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px;
   display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
 }
-.tl-filter label { font-size: 12px; color: #a0a0a0; white-space: nowrap; font-weight: 500; }
-.tl-filter select { padding: 6px 10px; border: 1px solid #505050; border-radius: 4px; font-size: 13px; color: #ffffff; background: #323232; }
+.tl-filter label { font-size: 12px; color: #64748b; white-space: nowrap; font-weight: 500; }
+.tl-filter select { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; color: #0f172a; background: #ffffff; }
 
 /* Qualifier tags in card */
 .tl-qual-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
@@ -194,16 +194,16 @@
   padding: 8px 0;
 }
 .tl-qual-filter select {
-  padding: 5px 8px; border: 1px solid #505050; border-radius: 4px;
-  font-size: 12px; color: #ffffff; background: #323232; max-width: 180px;
+  padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 4px;
+  font-size: 12px; color: #0f172a; background: #ffffff; max-width: 180px;
 }
-.tl-qual-filter label { font-size: 11px; color: #6b7280; white-space: nowrap; }
+.tl-qual-filter label { font-size: 11px; color: #94a3b8; white-space: nowrap; }
 .tl-filter-reset {
   font-size: 11px; color: #3b82f6; cursor: pointer; background: none; border: none;
   padding: 4px 8px;
 }
 .tl-filter-reset:hover { text-decoration: underline; }
-.tl-filter-count { font-size: 11px; color: #6b7280; margin-left: auto; }
+.tl-filter-count { font-size: 11px; color: #94a3b8; margin-left: auto; }
 
 /* Timeline layout */
 .timeline {
@@ -211,7 +211,7 @@
 }
 .timeline::before {
   content: ''; position: absolute; left: 130px; top: 0; bottom: 0;
-  width: 3px; background: linear-gradient(to bottom, #3b82f6, #333);
+  width: 3px; background: linear-gradient(to bottom, #3b82f6, #e2e8f0);
   border-radius: 2px;
 }
 
@@ -219,14 +219,14 @@
 .tl-group { margin-bottom: 28px; }
 .tl-group-label {
   position: absolute; left: 0; width: 120px; text-align: right;
-  font-size: 14px; font-weight: 700; color: #fafafa;
+  font-size: 14px; font-weight: 700; color: #0f172a;
   padding-right: 16px;
 }
 
 /* Timeline dot */
 .tl-dot {
   position: absolute; left: 125px; width: 13px; height: 13px;
-  border-radius: 50%; background: #3b82f6; border: 3px solid #080808;
+  border-radius: 50%; background: #3b82f6; border: 3px solid #ffffff;
   box-shadow: 0 0 0 2px #3b82f6;
   margin-top: 6px;
 }
@@ -245,12 +245,12 @@
   position: relative; margin-bottom: 16px; padding-left: 24px;
 }
 .tl-card {
-  background: #2a2a2a; border-radius: 8px; padding: 14px 18px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  background: #ffffff; border-radius: 8px; padding: 14px 18px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   border-left: 4px solid #3b82f6;
   transition: box-shadow 0.15s;
 }
-.tl-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+.tl-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 .tl-card.type-FINANCIAL_METRIC { border-left-color: #f59e0b; }
 .tl-card.type-SALES_VOLUME { border-left-color: #10b981; }
 .tl-card.type-CAPACITY { border-left-color: #3b82f6; }
@@ -263,24 +263,24 @@
 
 .tl-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
 .tl-card-type { font-size: 11px; }
-.tl-card-predicate { font-size: 13px; color: #a1a1a1; font-weight: 500; }
-.tl-card-object { font-size: 13px; color: #6b6b6b; }
+.tl-card-predicate { font-size: 13px; color: #475569; font-weight: 500; }
+.tl-card-object { font-size: 13px; color: #64748b; }
 .tl-card-value {
   font-size: 22px; font-weight: 800; color: #3b82f6;
   letter-spacing: -0.5px; line-height: 1.2; margin: 6px 0;
 }
-.tl-card-unit { font-size: 12px; color: #6b6b6b; margin-left: 3px; font-weight: 400; }
-.tl-card-value-text { font-size: 15px; font-weight: 700; color: #fafafa; margin: 4px 0; }
+.tl-card-unit { font-size: 12px; color: #94a3b8; margin-left: 3px; font-weight: 400; }
+.tl-card-value-text { font-size: 15px; font-weight: 700; color: #0f172a; margin: 4px 0; }
 .tl-card-meta {
   display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px;
-  font-size: 11px; color: #6b6b6b;
+  font-size: 11px; color: #94a3b8;
 }
 .tl-card-meta span { display: flex; align-items: center; gap: 3px; }
 
 .tl-evidence {
   margin-top: 8px; padding: 8px 10px;
-  background: #323232; border-radius: 4px; border-left: 3px solid #505050;
-  font-size: 12px; color: #e0e0e0; line-height: 1.6;
+  background: #f8fafc; border-radius: 4px; border-left: 3px solid #cbd5e1;
+  font-size: 12px; color: #374151; line-height: 1.6;
   max-height: 3.6em; overflow: hidden; cursor: pointer;
   transition: max-height 0.3s;
 }
@@ -289,13 +289,13 @@
 /* Time label inline */
 .tl-time-label {
   position: absolute; left: -140px; width: 120px; text-align: right;
-  font-size: 12px; color: #6b6b6b; padding-right: 16px; top: 4px;
+  font-size: 12px; color: #94a3b8; padding-right: 16px; top: 4px;
   white-space: nowrap;
 }
 
 /* Empty state */
 .tl-empty {
-  text-align: center; padding: 48px; color: #6b6b6b;
+  text-align: center; padding: 48px; color: #94a3b8;
 }
 
 </style>
@@ -455,7 +455,7 @@
       {% endfor %}
     </select>
     {% if qualifier_options %}
-    <span style="width:1px;height:20px;background:#404040;"></span>
+    <span style="width:1px;height:20px;background:#e2e8f0;"></span>
     <div class="tl-qual-filter">
       {% for key, values in qualifier_options.items() %}
       {% if key not in ('is_forecast','is_approximate','equivalent_usd','equivalent_rmb','equivalent_cny','equivalent_cny_unit','equivalent_weight','change_amount','change_from_previous_year','change_pct','stake_percentage','capacity_related','investment_related') %}
@@ -493,7 +493,7 @@
             <span class="tl-card-predicate">{{ fact.predicate or '' }}</span>
             {% if fact.object_text %}
               {% if fact.object_entity_id %}
-              <span class="tl-card-object">← <a href="/entity/{{ fact.object_entity_id }}" style="color:#60a5fa;text-decoration:none;">{{ fact.object_text }}</a></span>
+              <span class="tl-card-object">← <a href="/entity/{{ fact.object_entity_id }}" style="color:#2563eb;text-decoration:none;">{{ fact.object_text }}</a></span>
               {% else %}
               <span class="tl-card-object">← {{ fact.object_text }}</span>
               {% endif %}
@@ -508,12 +508,12 @@
           <div class="tl-card-value-text">{{ fact.value_text }}</div>
           {% endif %}
           {% if fact.subject_text and fact.subject_text != entity.name %}
-          <div style="font-size:12px;color:#a0a0a0;margin-top:2px;">
+          <div style="font-size:12px;color:#64748b;margin-top:2px;">
             主体:
             {% if fact.subject_entity_id %}
-            <a href="/entity/{{ fact.subject_entity_id }}" style="color:#60a5fa;text-decoration:none;font-weight:600;">{{ fact.subject_text }}</a>
+            <a href="/entity/{{ fact.subject_entity_id }}" style="color:#2563eb;text-decoration:none;font-weight:600;">{{ fact.subject_text }}</a>
             {% else %}
-            <strong style="color:#e0e0e0;">{{ fact.subject_text }}</strong>
+            <strong style="color:#374151;">{{ fact.subject_text }}</strong>
             {% endif %}
           </div>
           {% endif %}

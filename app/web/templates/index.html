@@ -32,19 +32,22 @@
 
   {# 核心指标卡片 #}
   <div class="grid grid-4" style="margin-bottom:20px;">
-    <div class="card metric-card">
+    <div class="card metric-card metric-card-blue">
+      <div class="metric-icon" style="font-size:22px;margin-bottom:6px;">📄</div>
       <div class="metric-value">{{ stats.document_count }}</div>
       <div class="metric-label">已处理文档</div>
       <div class="metric-footer"><a href="/documents">查看全部 →</a></div>
     </div>
-    <div class="card metric-card">
+    <div class="card metric-card metric-card-purple">
+      <div class="metric-icon" style="font-size:22px;margin-bottom:6px;">⚡</div>
       <div class="metric-value">{{ stats.fact_count }}</div>
       <div class="metric-label">事实原子总数</div>
       <div class="metric-footer"><a href="/passed">查看结果 →</a></div>
     </div>
-    <div class="card metric-card">
+    <div class="card metric-card metric-card-green">
+      <div class="metric-icon" style="font-size:22px;margin-bottom:6px;">✅</div>
       {% set auto_pass = stats.review_status_distribution | selectattr('review_status','eq','AUTO_PASS') | list %}
-      <div class="metric-value text-success">{{ auto_pass[0].cnt if auto_pass else 0 }}</div>
+      <div class="metric-value">{{ auto_pass[0].cnt if auto_pass else 0 }}</div>
       <div class="metric-label">自动通过</div>
       <div class="metric-footer">
         {% if stats.fact_count %}
@@ -52,11 +55,12 @@
         {% endif %}
       </div>
     </div>
-    <div class="card metric-card">
+    <div class="card metric-card metric-card-orange">
+      <div class="metric-icon" style="font-size:22px;margin-bottom:6px;">⏳</div>
       {% set human = stats.review_status_distribution | selectattr('review_status','eq','HUMAN_REVIEW_REQUIRED') | list %}
-      <div class="metric-value text-warning">{{ human[0].cnt if human else 0 }}</div>
+      <div class="metric-value">{{ human[0].cnt if human else 0 }}</div>
       <div class="metric-label">待人工审核</div>
-      <div class="metric-footer"><a href="/review" style="color:#d97706;">前往审核 →</a></div>
+      <div class="metric-footer"><a href="/review" style="color:var(--color-warning);">前往审核 →</a></div>
     </div>
   </div>
 
@@ -161,21 +165,21 @@
       <span>实体图谱概览</span>
       <a href="/graph" class="btn btn-sm btn-secondary" style="font-size:12px;">打开图谱 →</a>
     </div>
-    <div style="padding:16px 20px 4px;display:flex;gap:28px;flex-wrap:wrap;border-bottom:1px solid #404040;">
+    <div style="padding:16px 20px 4px;display:flex;gap:28px;flex-wrap:wrap;border-bottom:1px solid var(--border-subtle);">
       <div>
         <span style="font-size:28px;font-weight:800;color:#3b82f6;">{{ entity_overview.entity_count }}</span>
-        <span style="font-size:12px;color:#a0a0a0;margin-left:4px;">个实体节点</span>
+        <span style="font-size:12px;color:var(--text-muted);margin-left:4px;">个实体节点</span>
       </div>
       <div>
         <span style="font-size:28px;font-weight:800;color:#10b981;">{{ entity_overview.linked_fact_count }}</span>
-        <span style="font-size:12px;color:#a0a0a0;margin-left:4px;">条已链接事实</span>
+        <span style="font-size:12px;color:var(--text-muted);margin-left:4px;">条已链接事实</span>
         {% if entity_overview.total_passed %}
-        <span style="font-size:11px;color:#808080;margin-left:2px;">/ {{ entity_overview.total_passed }} ({{ (entity_overview.linked_fact_count / entity_overview.total_passed * 100)|int }}%)</span>
+        <span style="font-size:11px;color:var(--text-muted);margin-left:2px;">/ {{ entity_overview.total_passed }} ({{ (entity_overview.linked_fact_count / entity_overview.total_passed * 100)|int }}%)</span>
         {% endif %}
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         {% for td in entity_overview.type_dist %}
-        <span style="font-size:11px;background:#404040;border-radius:4px;padding:3px 8px;color:#e0e0e0;">
+        <span style="font-size:11px;background:#f1f5f9;border-radius:4px;padding:3px 8px;color:#475569;">
           {{ ENTITY_TYPE_ZH.get(td.entity_type, td.entity_type) }}: {{ td.cnt }}
         </span>
         {% endfor %}
@@ -188,8 +192,8 @@
           {% set max_fc = entity_overview.top_entities[0].fact_count if entity_overview.top_entities else 1 %}
           {% for e in entity_overview.top_entities %}
           <tr>
-            <td class="font-bold"><a href="/entity/{{ e.id }}" style="color:#ffffff;text-decoration:none;">{{ e.canonical_name }}</a></td>
-            <td><span style="font-size:11px;background:rgba(139,92,246,0.2);color:#a78bfa;padding:2px 7px;border-radius:10px;">{{ ENTITY_TYPE_ZH.get(e.entity_type, e.entity_type) }}</span></td>
+            <td class="font-bold"><a href="/entity/{{ e.id }}" style="color:var(--text-primary);text-decoration:none;">{{ e.canonical_name }}</a></td>
+            <td><span style="font-size:11px;background:rgba(109,40,217,0.08);color:#5b21b6;padding:2px 7px;border-radius:10px;">{{ ENTITY_TYPE_ZH.get(e.entity_type, e.entity_type) }}</span></td>
             <td>{{ e.fact_count }}</td>
             <td>
               <div class="bar-bg">

@@ -44,17 +44,17 @@
             <td>
               <div class="pipeline">
                 <div class="pipeline-step">
-                  <div class="num">{{ doc.chunk_count }}</div>
+                  <div class="num pipeline-chunks {% if doc.chunk_count == 0 %}dim{% endif %}">{{ doc.chunk_count }}</div>
                   <div class="label">文本块</div>
                 </div>
                 <div class="pipeline-arrow">→</div>
                 <div class="pipeline-step">
-                  <div class="num">{{ doc.evidence_count }}</div>
+                  <div class="num pipeline-evidence {% if doc.evidence_count == 0 %}dim{% endif %}">{{ doc.evidence_count }}</div>
                   <div class="label">证据</div>
                 </div>
                 <div class="pipeline-arrow">→</div>
                 <div class="pipeline-step">
-                  <div class="num">{{ doc.fact_count }}</div>
+                  <div class="num pipeline-facts {% if doc.fact_count == 0 %}dim{% endif %}">{{ doc.fact_count }}</div>
                   <div class="label">事实</div>
                 </div>
               </div>
