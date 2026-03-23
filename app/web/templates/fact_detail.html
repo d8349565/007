@@ -1,0 +1,413 @@
+{% extends "_base.html" %}
+
+{% set active = 'graph' %}
+
+{% block title %}事实详情 — {{ fact.summary }}{% endblock %}
+
+{% block head %}
+<style>
+.fd-page { max-width: 720px; margin: 0 auto; }
+
+.fd-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; color: #3b82f6; text-decoration: none; margin-bottom: 16px;
+}
+.fd-back:hover { text-decoration: underline; }
+
+.fd-card {
+  background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.fd-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px; border-bottom: 1px solid #f1f5f9;
+  background: #f8fafc;
+}
+.fd-type-badge {
+  display: inline-block; padding: 4px 12px; border-radius: 12px;
+  font-size: 12px; font-weight: 600; color: #fff;
+}
+.fd-review-badge {
+  font-size: 12px; padding: 3px 10px; border-radius: 12px; font-weight: 500;
+}
+.fd-review-badge.pass { background: rgba(16,185,129,0.1); color: #059669; }
+.fd-review-badge.human { background: rgba(59,130,246,0.1); color: #2563eb; }
+.fd-review-badge.pending { background: rgba(245,158,11,0.1); color: #d97706; }
+
+.fd-body { padding: 24px; }
+
+.fd-summary {
+  font-size: 18px; font-weight: 700; color: #0f172a; line-height: 1.4;
+  margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #f1f5f9;
+}
+
+.fd-fields { display: flex; flex-direction: column; gap: 12px; }
+.fd-field { display: flex; gap: 12px; font-size: 14px; line-height: 1.5; }
+.fd-field-label {
+  width: 80px; flex-shrink: 0; color: #94a3b8; font-size: 13px;
+  text-align: right; padding-top: 1px;
+}
+.fd-field-value { color: #374151; flex: 1; }
+.fd-field-value a { color: #2563eb; text-decoration: none; }
+.fd-field-value a:hover { text-decoration: underline; }
+
+.fd-value-box {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  font-size: 22px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.2;
+}
+.fd-value-unit { font-size: 13px; font-weight: 400; color: #64748b; }
+
+.fd-quals { display: flex; flex-wrap: wrap; gap: 6px; }
+.fd-qual-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; padding: 3px 10px; border-radius: 12px;
+  background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;
+}
+.fd-qual-key { color: #94a3b8; }
+
+.fd-evidence {
+  margin-top: 20px; padding: 14px 16px;
+  background: #f8fafc; border-radius: 8px; border-left: 4px solid #cbd5e1;
+  font-size: 13px; color: #374151; line-height: 1.7;
+}
+.fd-evidence-label {
+  font-size: 11px; color: #94a3b8; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+}
+
+.fd-meta {
+  margin-top: 16px; padding-top: 16px; border-top: 1px solid #f1f5f9;
+  display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: #94a3b8;
+}
+.fd-meta a { color: #2563eb; text-decoration: none; }
+.fd-meta a:hover { text-decoration: underline; }
+
+/* ── 操作按钮 ── */
+.fd-actions {
+  display: flex; gap: 8px; margin-top: 20px; padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+.fd-btn {
+  padding: 7px 16px; border-radius: 6px; font-size: 13px;
+  font-weight: 500; cursor: pointer; border: 1px solid #e2e8f0;
+  background: #fff; color: #374151; transition: all 0.15s;
+}
+.fd-btn:hover { background: #f8fafc; }
+.fd-btn-primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+.fd-btn-primary:hover { background: #1d4ed8; }
+.fd-btn-danger { color: #ef4444; border-color: #fecaca; }
+.fd-btn-danger:hover { background: #fef2f2; }
+
+/* ── 编辑模式 ── */
+.fd-edit-panel { display: none; margin-top: 20px; }
+.fd-edit-panel.open { display: block; }
+.fd-edit-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.fd-edit-field { display: flex; flex-direction: column; gap: 4px; }
+.fd-edit-field.full { grid-column: 1 / -1; }
+.fd-edit-field label {
+  font-size: 12px; color: #64748b; font-weight: 500;
+}
+.fd-edit-field input, .fd-edit-field textarea {
+  padding: 7px 10px; border: 1px solid #e2e8f0; border-radius: 6px;
+  font-size: 13px; color: #0f172a; background: #f8fafc;
+}
+.fd-edit-field input:focus, .fd-edit-field textarea:focus {
+  outline: none; border-color: #93c5fd; box-shadow: 0 0 0 2px rgba(59,130,246,0.1);
+}
+.fd-edit-field textarea { resize: vertical; min-height: 60px; }
+.fd-edit-actions {
+  display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end;
+}
+.fd-msg {
+  font-size: 12px; margin-top: 8px; min-height: 18px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% set FT_COLORS = {
+  'FINANCIAL_METRIC': '#f59e0b', 'SALES_VOLUME': '#10b981', 'CAPACITY': '#3b82f6',
+  'INVESTMENT': '#ec4899', 'EXPANSION': '#a855f7', 'MARKET_SHARE': '#14b8a6',
+  'COMPETITIVE_RANKING': '#eab308', 'COOPERATION': '#8b5cf6', 'PRICE_CHANGE': '#ef4444',
+} %}
+
+<div class="fd-page">
+  <a class="fd-back" href="javascript:history.back()">← 返回</a>
+
+  <div class="fd-card">
+    {# Header #}
+    <div class="fd-header">
+      <span class="fd-type-badge" style="background:{{ FT_COLORS.get(fact.fact_type, '#3b82f6') }};">
+        {{ FACT_TYPE_NAMES.get(fact.fact_type, fact.fact_type) }}
+      </span>
+      {% if fact.review_status == 'AUTO_PASS' %}
+      <span class="fd-review-badge pass">✓ 自动通过</span>
+      {% elif fact.review_status == 'HUMAN_PASS' %}
+      <span class="fd-review-badge human">✓ 人工通过</span>
+      {% elif fact.review_status == 'PENDING' %}
+      <span class="fd-review-badge pending">待审核</span>
+      {% else %}
+      <span class="fd-review-badge" style="background:#f1f5f9;color:#64748b;">{{ fact.review_status or '未知' }}</span>
+      {% endif %}
+    </div>
+
+    {# Body #}
+    <div class="fd-body">
+      {# ── 展示模式 ── #}
+      <div id="fd-view">
+        <div class="fd-summary">{{ fact.summary }}</div>
+
+        <div class="fd-fields">
+          <div class="fd-field">
+            <span class="fd-field-label">主体</span>
+            <span class="fd-field-value">
+              {% if fact.subject_entity_id %}
+              <a href="/entity/{{ fact.subject_entity_id }}">{{ fact.subject_text }}</a>
+              {% else %}{{ fact.subject_text or '—' }}{% endif %}
+            </span>
+          </div>
+
+          {% if fact.predicate %}
+          <div class="fd-field">
+            <span class="fd-field-label">谓词</span>
+            <span class="fd-field-value">{{ fact.predicate }}</span>
+          </div>
+          {% endif %}
+
+          {% if fact.object_text %}
+          <div class="fd-field">
+            <span class="fd-field-label">客体</span>
+            <span class="fd-field-value">
+              {% if fact.object_entity_id %}
+              <a href="/entity/{{ fact.object_entity_id }}">{{ fact.object_text }}</a>
+              {% else %}{{ fact.object_text }}{% endif %}
+            </span>
+          </div>
+          {% endif %}
+
+          {% if fact.value_num is not none %}
+          <div class="fd-field">
+            <span class="fd-field-label">数值</span>
+            <span class="fd-field-value">
+              <span class="fd-value-box" style="color:{{ FT_COLORS.get(fact.fact_type, '#3b82f6') }};">
+                {{ fact.value_num }}
+                {% if fact.unit %}<span class="fd-value-unit">{{ fact.unit }}</span>{% endif %}
+                {% if fact.currency %}<span class="fd-value-unit">({{ fact.currency }})</span>{% endif %}
+              </span>
+            </span>
+          </div>
+          {% elif fact.value_text %}
+          <div class="fd-field">
+            <span class="fd-field-label">值</span>
+            <span class="fd-field-value" style="font-weight:600;">{{ fact.value_text }}</span>
+          </div>
+          {% endif %}
+
+          {% if fact.time_expr %}
+          <div class="fd-field">
+            <span class="fd-field-label">时间</span>
+            <span class="fd-field-value">{{ fact.time_expr }}</span>
+          </div>
+          {% endif %}
+
+          {% if fact.location_text %}
+          <div class="fd-field">
+            <span class="fd-field-label">地点</span>
+            <span class="fd-field-value">📍 {{ fact.location_text }}</span>
+          </div>
+          {% endif %}
+
+          {% set skip_keys = ('is_approximate','equivalent_usd','equivalent_rmb','equivalent_cny','equivalent_cny_unit','equivalent_weight','change_amount','change_from_previous_year','change_pct','stake_percentage','capacity_related','investment_related') %}
+          {% set display_quals = [] %}
+          {% for k, v in fact.qualifiers_display.items() if k not in skip_keys and v is not none and v != '' %}
+          {% if v is not mapping and (v is not iterable or v is string) %}
+          {% if display_quals.append((k, v)) %}{% endif %}
+          {% endif %}
+          {% endfor %}
+          {% if display_quals %}
+          <div class="fd-field">
+            <span class="fd-field-label">限定项</span>
+            <span class="fd-field-value">
+              <div class="fd-quals">
+                {% for k, v in display_quals %}
+                <span class="fd-qual-tag">
+                  <span class="fd-qual-key">{{ QUAL_KEY_ZH.get(k, k) }}:</span> {{ QUALIFIER_VALUE_ZH.get(v, v) if v is string else v }}
+                </span>
+                {% endfor %}
+              </div>
+            </span>
+          </div>
+          {% endif %}
+
+          {% if fact.confidence_score is not none %}
+          <div class="fd-field">
+            <span class="fd-field-label">置信度</span>
+            <span class="fd-field-value">{{ "%.2f"|format(fact.confidence_score) }}</span>
+          </div>
+          {% endif %}
+        </div>
+
+        {% if fact.evidence_text %}
+        <div class="fd-evidence">
+          <div class="fd-evidence-label">📋 证据原文</div>
+          {{ fact.evidence_text }}
+        </div>
+        {% endif %}
+
+        <div class="fd-meta">
+          {% if fact.document_title %}
+          <span>📄 来源: <a href="/documents/{{ fact.document_id }}">{{ fact.document_title }}</a></span>
+          {% endif %}
+          {% if fact.qualifiers_display.get('is_forecast') %}
+          <span style="color:#f59e0b;">⚠ 预测数据</span>
+          {% endif %}
+          <span>ID: {{ fact.id[:8] }}…</span>
+        </div>
+
+        {# 操作按钮 #}
+        <div class="fd-actions">
+          <button class="fd-btn fd-btn-primary" onclick="toggleEdit()">✏ 编辑</button>
+          <button class="fd-btn fd-btn-danger" onclick="deleteFact()">🗑 删除</button>
+        </div>
+      </div>
+
+      {# ── 编辑模式面板 ── #}
+      <div class="fd-edit-panel" id="fd-edit">
+        <div class="fd-edit-grid">
+          <div class="fd-edit-field">
+            <label>主体 (subject)</label>
+            <input type="text" id="ed-subject" value="{{ fact.subject_text or '' }}">
+          </div>
+          <div class="fd-edit-field">
+            <label>谓词 (predicate)</label>
+            <input type="text" id="ed-predicate" value="{{ fact.predicate or '' }}">
+          </div>
+          <div class="fd-edit-field">
+            <label>客体 (object)</label>
+            <input type="text" id="ed-object" value="{{ fact.object_text or '' }}">
+          </div>
+          <div class="fd-edit-field">
+            <label>数值 (value_num)</label>
+            <input type="text" id="ed-value-num" value="{{ fact.value_num if fact.value_num is not none else '' }}">
+          </div>
+          <div class="fd-edit-field">
+            <label>值文本 (value_text)</label>
+            <input type="text" id="ed-value-text" value="{{ fact.value_text or '' }}">
+          </div>
+          <div class="fd-edit-field">
+            <label>单位 (unit)</label>
+            <input type="text" id="ed-unit" value="{{ fact.unit or '' }}">
+          </div>
+          <div class="fd-edit-field">
+            <label>货币 (currency)</label>
+            <input type="text" id="ed-currency" value="{{ fact.currency or '' }}">
+          </div>
+          <div class="fd-edit-field">
+            <label>时间 (time_expr)</label>
+            <input type="text" id="ed-time" value="{{ fact.time_expr or '' }}">
+          </div>
+          <div class="fd-edit-field full">
+            <label>地点 (location_text)</label>
+            <input type="text" id="ed-location" value="{{ fact.location_text or '' }}">
+          </div>
+          <div class="fd-edit-field full">
+            <label>限定项 JSON (qualifier_json)</label>
+            <textarea id="ed-quals">{{ fact.qualifier_json or '{}' }}</textarea>
+          </div>
+          <div class="fd-edit-field full">
+            <label>审核备注</label>
+            <input type="text" id="ed-note" placeholder="可选，说明修改原因">
+          </div>
+        </div>
+        <div class="fd-edit-actions">
+          <button class="fd-btn" onclick="toggleEdit()">取消</button>
+          <button class="fd-btn fd-btn-primary" onclick="saveFact('save_only')">保存</button>
+          <button class="fd-btn" style="background:#059669;color:#fff;border-color:#059669;" onclick="saveFact('save_and_pass')">保存并通过</button>
+        </div>
+        <div class="fd-msg" id="fd-msg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const FACT_ID = '{{ fact.id }}';
+
+function toggleEdit() {
+  const view = document.getElementById('fd-view');
+  const edit = document.getElementById('fd-edit');
+  const isOpen = edit.classList.contains('open');
+  if (isOpen) {
+    edit.classList.remove('open');
+    view.style.display = '';
+  } else {
+    edit.classList.add('open');
+    view.style.display = 'none';
+  }
+}
+
+async function saveFact(action) {
+  const msg = document.getElementById('fd-msg');
+  const valNum = document.getElementById('ed-value-num').value.trim();
+
+  const body = {
+    action: action,
+    subject_text: document.getElementById('ed-subject').value.trim(),
+    predicate: document.getElementById('ed-predicate').value.trim(),
+    object_text: document.getElementById('ed-object').value.trim(),
+    value_num: valNum ? parseFloat(valNum) : null,
+    value_text: document.getElementById('ed-value-text').value.trim(),
+    unit: document.getElementById('ed-unit').value.trim(),
+    currency: document.getElementById('ed-currency').value.trim(),
+    time_expr: document.getElementById('ed-time').value.trim(),
+    location_text: document.getElementById('ed-location').value.trim(),
+    qualifier_json: document.getElementById('ed-quals').value.trim(),
+    review_note: document.getElementById('ed-note').value.trim(),
+  };
+
+  try {
+    const res = await fetch('/review/' + FACT_ID + '/edit', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      msg.style.color = '#059669';
+      msg.textContent = '保存成功，正在刷新…';
+      setTimeout(() => window.location.reload(), 800);
+    } else {
+      msg.style.color = '#ef4444';
+      msg.textContent = data.error || '保存失败';
+    }
+  } catch (e) {
+    msg.style.color = '#ef4444';
+    msg.textContent = '网络错误';
+  }
+}
+
+async function deleteFact() {
+  if (!confirm('确定要删除这条事实吗？此操作不可撤销。')) return;
+  try {
+    const res = await fetch('/fact/' + FACT_ID + '/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      alert('已删除');
+      history.back();
+    } else {
+      alert(data.error || '删除失败');
+    }
+  } catch (e) {
+    alert('网络错误');
+  }
+}
+</script>
+{% endblock %}

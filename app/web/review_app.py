@@ -51,12 +51,14 @@ QUALIFIER_VALUE_ZH = {
     "co_development": "联合开发",
     "joint_development": "联合开发",
     "equity_investment": "股权投资",
+    "equity_cooperation": "股权合作",
     "equity": "股权合作",
     "distribution": "销售合作",
     "sales_coop": "销售合作",
     "licensing": "许可授权",
     "franchise": "特许经营",
     "investment": "投资合作",
+    "strategic_investment": "战略投资",
     "partnership": "合作共建",
     # phase（阶段）
     "planned": "规划中",
@@ -85,6 +87,107 @@ QUALIFIER_VALUE_ZH = {
     "wholesale": "批发价",
     "market": "市场价",
 }
+
+
+def _build_fact_summary(fact: dict) -> str:
+    """为事实生成一行式摘要文本，包含关键限定信息。"""
+    # 解析 qualifiers
+    quals = {}
+    qj = fact.get("qualifier_json")
+    if qj and isinstance(qj, str):
+        try:
+            quals = json.loads(qj)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    elif isinstance(qj, dict):
+        quals = qj
+
+    parts = []
+
+    # 主谓宾
+    pred = fact.get("predicate") or ""
+    obj = fact.get("object_text") or ""
+    ft = fact.get("fact_type") or ""
+
+    if pred:
+        parts.append(pred)
+    if obj:
+        parts.append("→ " + obj)
+
+    # 数值：优先使用 value_text（已格式化），否则用 value_num
+    # 竞争排名特殊处理：谓词已含"第"时用整数避免"排名第 第9位"冗余
+    vn = fact.get("value_num")
+    vt = fact.get("value_text") or ""
+    if ft == "COMPETITIVE_RANKING" and vn is not None and pred.endswith("第"):
+        parts.append(str(int(vn)) if vn == int(vn) else str(vn))
+    elif vt:
+        parts.append(vt)
+    elif vn is not None:
+        val_str = str(fact["value_num"])
+        if fact.get("unit"):
+            val_str += " " + fact["unit"]
+        if fact.get("currency"):
+            val_str += f"({fact['currency']})"
+        parts.append(val_str)
+
+    # 按事实类型附加关键限定词
+    ctx_parts = []
+    if ft == "COMPETITIVE_RANKING":
+        rn = quals.get("ranking_name") or ""
+        seg = quals.get("segment") or ""
+        if rn:
+            ctx_parts.append(rn)
+        elif seg:
+            ctx_parts.append(seg)
+    elif ft == "CAPACITY":
+        pt = quals.get("product_type") or ""
+        ph = quals.get("phase") or ""
+        if pt:
+            ctx_parts.append(pt)
+        if ph:
+            ctx_parts.append(QUALIFIER_VALUE_ZH.get(ph, ph))
+    elif ft == "COOPERATION":
+        ct = quals.get("cooperation_type") or ""
+        scope = quals.get("scope") or ""
+        if ct:
+            ctx_parts.append(QUALIFIER_VALUE_ZH.get(ct, ct))
+        if scope and len(scope) <= 20:
+            ctx_parts.append(scope)
+    elif ft == "EXPANSION":
+        scope = quals.get("scope") or quals.get("purpose") or ""
+        pn = quals.get("project_name") or ""
+        if pn:
+            ctx_parts.append(pn)
+        elif scope and len(scope) <= 20:
+            ctx_parts.append(scope)
+    elif ft == "FINANCIAL_METRIC":
+        mn = quals.get("metric_name") or ""
+        if mn:
+            ctx_parts.append(mn)
+    elif ft == "SALES_VOLUME":
+        pt = quals.get("product_type") or quals.get("product_name") or ""
+        if pt:
+            ctx_parts.append(pt)
+    elif ft == "INVESTMENT":
+        pn = quals.get("project_name") or quals.get("purpose") or ""
+        if pn and len(pn) <= 20:
+            ctx_parts.append(pn)
+    elif ft == "MARKET_SHARE":
+        ms = quals.get("market_scope") or quals.get("segment") or ""
+        if ms:
+            ctx_parts.append(ms)
+    elif ft == "PRICE_CHANGE":
+        pn = quals.get("product_name") or quals.get("product_type") or ""
+        prt = quals.get("price_type") or ""
+        if pn:
+            ctx_parts.append(pn)
+        if prt:
+            ctx_parts.append(QUALIFIER_VALUE_ZH.get(prt, prt))
+
+    if ctx_parts:
+        parts.append("（" + "·".join(ctx_parts) + "）")
+
+    return " ".join(parts) if parts else "—"
 
 
 def create_app() -> Flask:
@@ -1261,18 +1364,17 @@ def create_app() -> Flask:
     @app.route("/entity/<entity_id>")
     def entity_timeline_page(entity_id):
         """实体详情页面（含基础信息、关系、时间轴）"""
-        fact_type = request.args.get("fact_type", "")
-        tab = request.args.get("tab", "overview")  # overview | timeline | relations
+        tab = request.args.get("tab", "overview")
+        initial_type = request.args.get("fact_type", "")
+        active_types = [t for t in initial_type.split(",") if t] if initial_type else []
 
-        # 获取详情（基础信息+别名+关系+统计）
         detail = get_entity_detail(entity_id)
 
-        # 获取时间轴数据
-        data = get_entity_timeline(entity_id=entity_id, fact_type=fact_type)
+        # 始终加载全部事实，由前端分类显示
+        data = get_entity_timeline(entity_id=entity_id, fact_type="")
         if not detail and not data["facts"]:
             return "Entity not found", 404
 
-        # 若 detail 为 None（文本搜索场景），用 timeline data 构建最小 detail
         if not detail:
             detail = {
                 "id": entity_id,
@@ -1289,9 +1391,11 @@ def create_app() -> Flask:
                 "time_latest": None,
             }
 
-        # 解析 qualifier_json 并收集筛选选项
-        qualifier_options = {}
+        # 为每条事实生成摘要，解析 qualifier，统计分类计数
+        from collections import defaultdict
+        type_counts = defaultdict(int)
         for f in data["facts"]:
+            type_counts[f["fact_type"]] += 1
             qd = {}
             if f.get("qualifier_json"):
                 try:
@@ -1299,11 +1403,7 @@ def create_app() -> Flask:
                 except (json.JSONDecodeError, TypeError):
                     qd = {}
             f["qualifiers_display"] = qd
-            for k, v in qd.items():
-                if v is not None and v != "" and not isinstance(v, (dict, list, bool)):
-                    qualifier_options.setdefault(k, set()).add(str(v))
-
-        qualifier_options = {k: sorted(v) for k, v in qualifier_options.items() if len(v) >= 1}
+            f["summary"] = _build_fact_summary(f)
 
         valid_types = cfg.get("fact_types", [])
 
@@ -1319,10 +1419,10 @@ def create_app() -> Flask:
             facts=data["facts"],
             available_types=data["available_types"],
             total_count=data["total_count"],
-            current_type=fact_type,
+            active_types=active_types,
             current_tab=tab,
             fact_types=valid_types,
-            qualifier_options=qualifier_options,
+            type_counts=dict(type_counts),
             REL_TYPE_ZH=REL_TYPE_ZH,
         )
 
@@ -1431,17 +1531,74 @@ def create_app() -> Flask:
         data = get_entity_timeline(entity_id=entity_id, fact_type=fact_type)
         return jsonify(data)
 
+    @app.route("/fact/<fact_id>")
+    def fact_detail_page(fact_id):
+        """事实详情页面"""
+        fact = get_fact_detail(fact_id)
+        if not fact:
+            return "Fact not found", 404
+        qd = {}
+        if fact.get("qualifier_json"):
+            try:
+                qd = json.loads(fact["qualifier_json"])
+            except (json.JSONDecodeError, TypeError):
+                qd = {}
+        fact["qualifiers_display"] = qd
+        fact["summary"] = _build_fact_summary(fact)
+
+        QUAL_KEY_ZH = {
+            'metric_name': '指标', 'segment': '细分领域', 'yoy': '同比',
+            'qoq': '环比', 'report_scope': '报告范围', 'product_type': '产品类型',
+            'project_name': '项目名称', 'investment_type': '投资类型',
+            'market_scope': '市场范围', 'ranking_name': '排名名称',
+            'ranking_scope': '排名范围', 'cooperation_type': '合作类型',
+            'product_name': '产品名称', 'price_type': '价格类型',
+            'stage': '阶段', 'scope': '范围', 'purpose': '目的',
+            'phase': '期次', 'duration': '期限', 'reason': '原因',
+            'rank': '排名', 'ranking_year': '排名年份',
+        }
+        return render_template(
+            "fact_detail.html",
+            fact=fact,
+            QUAL_KEY_ZH=QUAL_KEY_ZH,
+        )
+
+    @app.route("/fact/<fact_id>/delete", methods=["POST"])
+    def fact_delete(fact_id):
+        """删除事实原子"""
+        conn = get_connection()
+        try:
+            row = conn.execute(
+                "SELECT id FROM fact_atom WHERE id=?", (fact_id,)
+            ).fetchone()
+            if not row:
+                return jsonify({"error": "not found"}), 404
+            conn.execute("DELETE FROM fact_atom WHERE id=?", (fact_id,))
+            import uuid
+            conn.execute(
+                """INSERT INTO review_log
+                (id, target_type, target_id, old_status, new_status,
+                 reviewer, review_action, review_note)
+                VALUES (?, 'fact_atom', ?, 'DELETED', 'DELETED', 'human', 'delete', '')""",
+                (str(uuid.uuid4()), fact_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        logger.info("人工删除事实 [%s]", fact_id[:8])
+        return jsonify({"ok": True})
+
     @app.route("/entity/search")
     def entity_search_page():
         """按名称搜索实体的时间轴页面"""
         subject = request.args.get("subject", "")
-        fact_type = request.args.get("fact_type", "")
-        tab = request.args.get("tab", "timeline")  # 搜索结果默认显示时间轴
+        initial_type = request.args.get("fact_type", "")
+        active_types = [t for t in initial_type.split(",") if t] if initial_type else []
+        tab = request.args.get("tab", "timeline")
         if not subject:
             return redirect(url_for("graph_page"))
-        data = get_entity_timeline(subject_text=subject, fact_type=fact_type)
+        data = get_entity_timeline(subject_text=subject, fact_type="")
 
-        # 尝试通过 entity_info 获取 detail
         entity_info = data.get("entity_info", {})
         eid = entity_info.get("id")
         detail = get_entity_detail(eid) if eid else None
@@ -1461,9 +1618,10 @@ def create_app() -> Flask:
                 "time_latest": None,
             }
 
-        # 解析 qualifier_json 并收集筛选选项
-        qualifier_options = {}
+        from collections import defaultdict
+        type_counts = defaultdict(int)
         for f in data["facts"]:
+            type_counts[f["fact_type"]] += 1
             qd = {}
             if f.get("qualifier_json"):
                 try:
@@ -1471,11 +1629,7 @@ def create_app() -> Flask:
                 except (json.JSONDecodeError, TypeError):
                     qd = {}
             f["qualifiers_display"] = qd
-            for k, v in qd.items():
-                if v is not None and v != "" and not isinstance(v, (dict, list, bool)):
-                    qualifier_options.setdefault(k, set()).add(str(v))
-
-        qualifier_options = {k: sorted(v) for k, v in qualifier_options.items() if len(v) >= 1}
+            f["summary"] = _build_fact_summary(f)
 
         valid_types = cfg.get("fact_types", [])
 
@@ -1491,10 +1645,10 @@ def create_app() -> Flask:
             facts=data["facts"],
             available_types=data["available_types"],
             total_count=data["total_count"],
-            current_type=fact_type,
+            active_types=active_types,
             current_tab=tab,
             fact_types=valid_types,
-            qualifier_options=qualifier_options,
+            type_counts=dict(type_counts),
             REL_TYPE_ZH=REL_TYPE_ZH,
         )
 

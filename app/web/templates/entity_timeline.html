@@ -170,127 +170,66 @@
 }
 .rel-empty { color: #94a3b8; font-size: 13px; text-align: center; padding: 32px; }
 
-/* Timeline filter */
-.tl-filter {
-  background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px;
-  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+/* Timeline: type chips filter bar */
+.tl-type-bar {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;
+  align-items: center;
 }
-.tl-filter label { font-size: 12px; color: #64748b; white-space: nowrap; font-weight: 500; }
-.tl-filter select { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; color: #0f172a; background: #ffffff; }
+.tl-type-chip {
+  padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 500;
+  cursor: pointer; border: 1px solid #e2e8f0; background: #ffffff; color: #475569;
+  transition: all 0.15s; white-space: nowrap; user-select: none;
+}
+.tl-type-chip:hover { border-color: #cbd5e1; background: #f8fafc; }
+.tl-type-chip.active { color: #fff; border-color: transparent; }
 
-/* Qualifier tags in card */
-.tl-qual-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
-.tl-qual-tag {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: 11px; padding: 2px 7px; border-radius: 10px;
-  background: rgba(59,130,246,0.12); color: #93c5fd; border: 1px solid rgba(59,130,246,0.2);
+/* Category grid */
+.tl-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px; align-items: start;
 }
-.tl-qual-tag .qual-key { color: #6b7280; }
+.tl-column {
+  background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0;
+  overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.tl-col-header {
+  display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+  border-bottom: 2px solid var(--col-color, #3b82f6);
+  background: #f8fafc;
+}
+.tl-col-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--col-color, #3b82f6); flex-shrink: 0;
+}
+.tl-col-title { font-size: 14px; font-weight: 700; color: #0f172a; flex: 1; }
+.tl-col-count {
+  font-size: 12px; color: #64748b; background: #f1f5f9;
+  padding: 2px 8px; border-radius: 10px;
+}
+.tl-col-body {
+  max-height: 520px; overflow-y: auto;
+}
+.tl-col-body::-webkit-scrollbar { width: 4px; }
+.tl-col-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
 
-/* Qualifier filter section */
-.tl-qual-filter {
-  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
-  padding: 8px 0;
+/* Fact row */
+.tl-fact-row {
+  display: flex; gap: 10px; padding: 10px 16px; align-items: baseline;
+  border-bottom: 1px solid #f1f5f9; text-decoration: none; color: inherit;
+  cursor: pointer; transition: background 0.1s;
 }
-.tl-qual-filter select {
-  padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 4px;
-  font-size: 12px; color: #0f172a; background: #ffffff; max-width: 180px;
+.tl-fact-row:hover { background: #f8fafc; }
+.tl-fact-row:last-child { border-bottom: none; }
+.tl-fact-time {
+  font-size: 11px; color: #94a3b8; white-space: nowrap; flex-shrink: 0;
+  min-width: 56px;
 }
-.tl-qual-filter label { font-size: 11px; color: #94a3b8; white-space: nowrap; }
-.tl-filter-reset {
-  font-size: 11px; color: #3b82f6; cursor: pointer; background: none; border: none;
-  padding: 4px 8px;
+.tl-fact-summary {
+  font-size: 13px; color: #374151; flex: 1; line-height: 1.5;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.tl-filter-reset:hover { text-decoration: underline; }
-.tl-filter-count { font-size: 11px; color: #94a3b8; margin-left: auto; }
-
-/* Timeline layout */
-.timeline {
-  position: relative; padding-left: 140px; padding-bottom: 40px;
-}
-.timeline::before {
-  content: ''; position: absolute; left: 130px; top: 0; bottom: 0;
-  width: 3px; background: linear-gradient(to bottom, #3b82f6, #e2e8f0);
-  border-radius: 2px;
-}
-
-/* Time group */
-.tl-group { margin-bottom: 28px; }
-.tl-group-label {
-  position: absolute; left: 0; width: 120px; text-align: right;
-  font-size: 14px; font-weight: 700; color: #0f172a;
-  padding-right: 16px;
-}
-
-/* Timeline dot */
-.tl-dot {
-  position: absolute; left: 125px; width: 13px; height: 13px;
-  border-radius: 50%; background: #3b82f6; border: 3px solid #ffffff;
-  box-shadow: 0 0 0 2px #3b82f6;
-  margin-top: 6px;
-}
-.tl-dot.dot-FINANCIAL_METRIC { background: #f59e0b; box-shadow: 0 0 0 2px #f59e0b; }
-.tl-dot.dot-SALES_VOLUME { background: #10b981; box-shadow: 0 0 0 2px #10b981; }
-.tl-dot.dot-CAPACITY { background: #3b82f6; box-shadow: 0 0 0 2px #3b82f6; }
-.tl-dot.dot-INVESTMENT { background: #ec4899; box-shadow: 0 0 0 2px #ec4899; }
-.tl-dot.dot-EXPANSION { background: #a855f7; box-shadow: 0 0 0 2px #a855f7; }
-.tl-dot.dot-MARKET_SHARE { background: #14b8a6; box-shadow: 0 0 0 2px #14b8a6; }
-.tl-dot.dot-COMPETITIVE_RANKING { background: #eab308; box-shadow: 0 0 0 2px #eab308; }
-.tl-dot.dot-COOPERATION { background: #8b5cf6; box-shadow: 0 0 0 2px #8b5cf6; }
-.tl-dot.dot-PRICE_CHANGE { background: #ef4444; box-shadow: 0 0 0 2px #ef4444; }
-
-/* Timeline item (card) */
-.tl-item {
-  position: relative; margin-bottom: 16px; padding-left: 24px;
-}
-.tl-card {
-  background: #ffffff; border-radius: 8px; padding: 14px 18px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  border-left: 4px solid #3b82f6;
-  transition: box-shadow 0.15s;
-}
-.tl-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-.tl-card.type-FINANCIAL_METRIC { border-left-color: #f59e0b; }
-.tl-card.type-SALES_VOLUME { border-left-color: #10b981; }
-.tl-card.type-CAPACITY { border-left-color: #3b82f6; }
-.tl-card.type-INVESTMENT { border-left-color: #ec4899; }
-.tl-card.type-EXPANSION { border-left-color: #a855f7; }
-.tl-card.type-MARKET_SHARE { border-left-color: #14b8a6; }
-.tl-card.type-COMPETITIVE_RANKING { border-left-color: #eab308; }
-.tl-card.type-COOPERATION { border-left-color: #8b5cf6; }
-.tl-card.type-PRICE_CHANGE { border-left-color: #ef4444; }
-
-.tl-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
-.tl-card-type { font-size: 11px; }
-.tl-card-predicate { font-size: 13px; color: #475569; font-weight: 500; }
-.tl-card-object { font-size: 13px; color: #64748b; }
-.tl-card-value {
-  font-size: 22px; font-weight: 800; color: #3b82f6;
-  letter-spacing: -0.5px; line-height: 1.2; margin: 6px 0;
-}
-.tl-card-unit { font-size: 12px; color: #94a3b8; margin-left: 3px; font-weight: 400; }
-.tl-card-value-text { font-size: 15px; font-weight: 700; color: #0f172a; margin: 4px 0; }
-.tl-card-meta {
-  display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px;
-  font-size: 11px; color: #94a3b8;
-}
-.tl-card-meta span { display: flex; align-items: center; gap: 3px; }
-
-.tl-evidence {
-  margin-top: 8px; padding: 8px 10px;
-  background: #f8fafc; border-radius: 4px; border-left: 3px solid #cbd5e1;
-  font-size: 12px; color: #374151; line-height: 1.6;
-  max-height: 3.6em; overflow: hidden; cursor: pointer;
-  transition: max-height 0.3s;
-}
-.tl-evidence.expanded { max-height: none; }
-
-/* Time label inline */
-.tl-time-label {
-  position: absolute; left: -140px; width: 120px; text-align: right;
-  font-size: 12px; color: #94a3b8; padding-right: 16px; top: 4px;
-  white-space: nowrap;
+.tl-fact-arrow {
+  font-size: 11px; color: #cbd5e1; flex-shrink: 0;
 }
 
 /* Empty state */
@@ -302,15 +241,6 @@
 {% endblock %}
 
 {% block content %}
-{% set QUAL_KEY_ZH = {
-  'metric_name': '指标', 'segment': '细分领域', 'yoy': '同比', 'qoq': '环比',
-  'report_scope': '报告范围', 'product_type': '产品类型', 'project_name': '项目名称',
-  'investment_type': '投资类型', 'market_scope': '市场范围', 'ranking_name': '排名名称',
-  'ranking_scope': '排名范围', 'cooperation_type': '合作类型', 'product_name': '产品名称',
-  'price_type': '价格类型', 'stage': '阶段', 'scope': '范围', 'purpose': '目的',
-  'phase': '期次', 'duration': '期限', 'reason': '原因', 'rank': '排名',
-  'ranking_year': '排名年份',
-} %}
 {% set FT_COLORS = {
   'FINANCIAL_METRIC': '#f59e0b', 'SALES_VOLUME': '#10b981', 'CAPACITY': '#3b82f6',
   'INVESTMENT': '#ec4899', 'EXPANSION': '#a855f7', 'MARKET_SHARE': '#14b8a6',
@@ -446,104 +376,49 @@
 
 <!-- ======= TAB: 时间轴 ======= -->
 <div class="ed-tab-panel {% if current_tab == 'timeline' %}active{% endif %}" id="tab-timeline">
-  <div class="tl-filter">
-    <label>事实类型</label>
-    <select onchange="filterTimeline(this.value)">
-      <option value="">全部类型</option>
-      {% for ft in available_types %}
-      <option value="{{ ft }}" {% if ft == current_type %}selected{% endif %}>{{ FACT_TYPE_NAMES.get(ft, ft) }}</option>
-      {% endfor %}
-    </select>
-    {% if qualifier_options %}
-    <span style="width:1px;height:20px;background:#e2e8f0;"></span>
-    <div class="tl-qual-filter">
-      {% for key, values in qualifier_options.items() %}
-      {% if key not in ('is_forecast','is_approximate','equivalent_usd','equivalent_rmb','equivalent_cny','equivalent_cny_unit','equivalent_weight','change_amount','change_from_previous_year','change_pct','stake_percentage','capacity_related','investment_related') %}
-      <label>{{ QUAL_KEY_ZH.get(key, key) }}</label>
-      <select class="qual-filter-select" data-qual-key="{{ key }}" onchange="applyQualFilter()">
-        <option value="">全部</option>
-        {% for v in values %}<option value="{{ v }}">{{ v }}</option>{% endfor %}
-      </select>
-      {% endif %}
-      {% endfor %}
-      <button class="tl-filter-reset" onclick="resetQualFilters()">重置筛选</button>
-    </div>
-    {% endif %}
-    <span class="tl-filter-count" id="filter-count"></span>
-    <span style="flex:1;"></span>
-    <span style="font-size:12px;color:#94a3b8;">时间轴按时间倒序排列</span>
+
+  {# ── 类型筛选芯片（支持多选） ── #}
+  <div class="tl-type-bar">
+    <span class="tl-type-chip {% if not active_types %}active{% endif %}"
+          style="{% if not active_types %}background:#3b82f6;{% endif %}"
+          onclick="toggleTypeFilter('')">全部 <span style="font-size:11px;opacity:0.8;">({{ total_count }})</span></span>
+    {% for ft in available_types %}
+    {% set ft_color = FT_COLORS.get(ft, '#3b82f6') %}
+    <span class="tl-type-chip {% if ft in active_types %}active{% endif %}"
+          data-type="{{ ft }}"
+          style="{% if ft in active_types %}background:{{ ft_color }};{% endif %}--chip-color:{{ ft_color }};"
+          onclick="toggleTypeFilter('{{ ft }}')">{{ FACT_TYPE_NAMES.get(ft, ft) }} <span style="font-size:11px;opacity:0.8;">({{ type_counts.get(ft, 0) }})</span></span>
+    {% endfor %}
   </div>
 
   {% if facts %}
-  <div class="timeline" id="timeline">
-    {% set ns = namespace(current_group='') %}
-    {% for fact in facts %}
-      {% set time_group = fact.time_expr or '时间不明' %}
-      {% set show_group = (time_group != ns.current_group) %}
-      {% if show_group %}{% set ns.current_group = time_group %}{% endif %}
-      <div class="tl-item" data-qualifiers='{{ fact.qualifiers_display | tojson }}'>
-        <span class="tl-time-label">{% if show_group %}{{ time_group }}{% endif %}</span>
-        <span class="tl-dot dot-{{ fact.fact_type }}"></span>
-        <div class="tl-card type-{{ fact.fact_type }}">
-          <div class="tl-card-head">
-            <span class="badge badge-{{ fact.fact_type }} tl-card-type">{{ FACT_TYPE_NAMES.get(fact.fact_type, fact.fact_type) }}</span>
-            {% if fact.qualifiers_display.get('metric_name') %}
-            <span style="font-size:12px;color:#93c5fd;font-weight:600;">{{ fact.qualifiers_display['metric_name'] }}</span>
-            {% endif %}
-            <span class="tl-card-predicate">{{ fact.predicate or '' }}</span>
-            {% if fact.object_text %}
-              {% if fact.object_entity_id %}
-              <span class="tl-card-object">← <a href="/entity/{{ fact.object_entity_id }}" style="color:#2563eb;text-decoration:none;">{{ fact.object_text }}</a></span>
-              {% else %}
-              <span class="tl-card-object">← {{ fact.object_text }}</span>
-              {% endif %}
-            {% endif %}
-            {% if fact.qualifiers_display.get('segment') %}
-            <span style="font-size:11px;color:#a78bfa;background:rgba(139,92,246,0.12);padding:1px 7px;border-radius:10px;">{{ fact.qualifiers_display['segment'] }}</span>
-            {% endif %}
-          </div>
-          {% if fact.value_num is not none %}
-          <div class="tl-card-value">{{ fact.value_num }}<span class="tl-card-unit">{{ fact.unit or '' }}{% if fact.currency %} ({{ fact.currency }}){% endif %}</span></div>
-          {% elif fact.value_text %}
-          <div class="tl-card-value-text">{{ fact.value_text }}</div>
-          {% endif %}
-          {% if fact.subject_text and fact.subject_text != entity.name %}
-          <div style="font-size:12px;color:#64748b;margin-top:2px;">
-            主体:
-            {% if fact.subject_entity_id %}
-            <a href="/entity/{{ fact.subject_entity_id }}" style="color:#2563eb;text-decoration:none;font-weight:600;">{{ fact.subject_text }}</a>
-            {% else %}
-            <strong style="color:#374151;">{{ fact.subject_text }}</strong>
-            {% endif %}
-          </div>
-          {% endif %}
-          <div class="tl-card-meta">
-            {% if fact.qualifiers_display.get('is_forecast') %}<span style="color:#f59e0b;">⚠ 预测</span>{% endif %}
-            {% if fact.location_text %}<span>📍 {{ fact.location_text }}</span>{% endif %}
-            {% if fact.confidence_score is not none %}<span>信度: {{ "%.2f"|format(fact.confidence_score) }}</span>{% endif %}
-            {% if fact.document_title %}<span>📄 <a href="/documents/{{ fact.document_id }}" style="color:#2563eb;font-size:11px;">{{ fact.document_title }}</a></span>{% endif %}
-            {% if fact.review_status == 'AUTO_PASS' %}<span class="badge badge-pass" style="font-size:10px;">自动✓</span>
-            {% elif fact.review_status == 'HUMAN_PASS' %}<span class="badge badge-info" style="font-size:10px;">人工✓</span>{% endif %}
-          </div>
-          {% set skip_keys = ('metric_name','segment','is_forecast','is_approximate','equivalent_usd','equivalent_rmb','equivalent_cny','equivalent_cny_unit','equivalent_weight') %}
-          {% set shown_quals = [] %}
-          {% for k, v in fact.qualifiers_display.items() if k not in skip_keys and v is not none and v != '' and v is not mapping and v is not iterable or v is string %}
-          {% if shown_quals.append(1) %}{% endif %}
-          {% endfor %}
-          {% if shown_quals %}
-          <div class="tl-qual-tags">
-            {% for k, v in fact.qualifiers_display.items() if k not in skip_keys and v is not none and v != '' %}
-            {% if v is not mapping and (v is not iterable or v is string) %}
-            <span class="tl-qual-tag"><span class="qual-key">{{ k }}:</span> {{ v }}</span>
-            {% endif %}
-            {% endfor %}
-          </div>
-          {% endif %}
-          {% if fact.evidence_text %}
-          <div class="tl-evidence" onclick="this.classList.toggle('expanded')">{{ fact.evidence_text }}</div>
-          {% endif %}
-        </div>
+  {# ── 按类型分列的卡片网格 ── #}
+  <div class="tl-grid" id="tl-grid">
+    {% for ft in available_types %}
+    {% set ft_facts = [] %}
+    {% for f in facts if f.fact_type == ft %}{% if ft_facts.append(f) %}{% endif %}{% endfor %}
+    {% if ft_facts %}
+    <div class="tl-column" data-type="{{ ft }}" {% if active_types and ft not in active_types %}style="display:none;"{% endif %}>
+      <div class="tl-col-header" style="--col-color: {{ FT_COLORS.get(ft, '#3b82f6') }};">
+        <span class="tl-col-dot"></span>
+        <span class="tl-col-title">{{ FACT_TYPE_NAMES.get(ft, ft) }}</span>
+        <span class="tl-col-count">{{ ft_facts | length }}</span>
       </div>
+      <div class="tl-col-body">
+        {% for fact in ft_facts %}
+        <a class="tl-fact-row" href="/fact/{{ fact.id }}">
+          {% if fact.time_expr %}
+          <span class="tl-fact-time">{{ fact.time_expr }}</span>
+          {% else %}
+          <span class="tl-fact-time" style="color:#cbd5e1;">—</span>
+          {% endif %}
+          <span class="tl-fact-summary" title="{{ fact.summary }}">{{ fact.summary }}</span>
+          <span class="tl-fact-arrow">›</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
     {% endfor %}
   </div>
   {% else %}
@@ -638,31 +513,55 @@ function filterTimeline(type) {
   window.location.href = url.toString();
 }
 
-/* ===== Qualifier client-side filter ===== */
-function applyQualFilter() {
-  const filters = {};
-  document.querySelectorAll('.qual-filter-select').forEach(sel => {
-    if (sel.value) filters[sel.dataset.qualKey] = sel.value;
-  });
-  const items = document.querySelectorAll('.tl-item');
-  let shown = 0;
-  items.forEach(item => {
-    const qualData = JSON.parse(item.dataset.qualifiers || '{}');
-    let match = true;
-    for (const [key, val] of Object.entries(filters)) {
-      if (String(qualData[key] || '') !== val) { match = false; break; }
-    }
-    item.style.display = match ? '' : 'none';
-    if (match) shown++;
-  });
-  const countEl = document.getElementById('filter-count');
-  countEl.textContent = Object.keys(filters).length > 0 ? '显示 ' + shown + ' 条' : '';
-}
+/* ===== Type chip toggle (client-side, multi-select) ===== */
+const _activeTypes = new Set({{ active_types | tojson }});
 
-function resetQualFilters() {
-  document.querySelectorAll('.qual-filter-select').forEach(sel => { sel.value = ''; });
-  document.querySelectorAll('.tl-item').forEach(item => { item.style.display = ''; });
-  document.getElementById('filter-count').textContent = '';
+function toggleTypeFilter(type) {
+  const FT_COLORS = {
+    'FINANCIAL_METRIC': '#f59e0b', 'SALES_VOLUME': '#10b981', 'CAPACITY': '#3b82f6',
+    'INVESTMENT': '#ec4899', 'EXPANSION': '#a855f7', 'MARKET_SHARE': '#14b8a6',
+    'COMPETITIVE_RANKING': '#eab308', 'COOPERATION': '#8b5cf6', 'PRICE_CHANGE': '#ef4444',
+  };
+
+  if (!type) {
+    // "全部" → 清空选择，显示全部
+    _activeTypes.clear();
+  } else if (_activeTypes.has(type)) {
+    _activeTypes.delete(type);
+  } else {
+    _activeTypes.add(type);
+  }
+
+  const showAll = _activeTypes.size === 0;
+
+  // 更新芯片样式
+  document.querySelectorAll('.tl-type-chip').forEach(c => {
+    const ct = c.dataset.type || '';
+    if (!ct) {
+      // "全部" 芯片
+      c.classList.toggle('active', showAll);
+      c.style.background = showAll ? '#3b82f6' : '';
+    } else {
+      const isActive = _activeTypes.has(ct);
+      c.classList.toggle('active', isActive);
+      c.style.background = isActive ? (FT_COLORS[ct] || '#3b82f6') : '';
+    }
+  });
+
+  // 显示/隐藏列
+  document.querySelectorAll('.tl-column').forEach(col => {
+    col.style.display = (showAll || _activeTypes.has(col.dataset.type)) ? '' : 'none';
+  });
+
+  // Update URL without reload
+  const url = new URL(window.location.href);
+  if (_activeTypes.size > 0) {
+    url.searchParams.set('fact_type', Array.from(_activeTypes).join(','));
+  } else {
+    url.searchParams.delete('fact_type');
+  }
+  url.searchParams.set('tab', 'timeline');
+  history.replaceState(null, '', url.toString());
 }
 
 /* ===== Edit panel ===== */
