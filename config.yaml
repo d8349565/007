@@ -62,6 +62,12 @@ cleaner:
   strip_html_tags: true
   normalize_whitespace: true
 
+# --- 处理管线 ---
+pipeline:
+  min_clean_chars: 100              # 清洗后文本低于此字数跳过
+  enable_complementation: true      # 是否启用阶段2上下文补全（关闭可省 token）
+  max_concurrent_docs: 10            # 后台最多同时处理几篇文档
+
 # --- fact_type 白名单（第一批 9 类） ---
 fact_types:
   - FINANCIAL_METRIC

@@ -60,23 +60,31 @@ def process_document(document_id: str) -> dict:
 
     if not raw_text.strip():
         logger.warning("文档内容为空: %s", document_id)
-        _mark_document_status(document_id, "empty")
+        _mark_document_status(document_id, "内容为空")
         return stats
 
     logger.info("开始处理文档: %s [%s]", doc_title, document_id[:8])
 
     # 标记为处理中（在开始处理时立即设置，便于 Web 端识别）
-    _mark_document_status(document_id, "processing")
+    _mark_document_status(document_id, "处理中")
 
     # 幂等性保护：清除此文档的旧处理结果，防止重跑产生重复
     clear_document_results(document_id)
 
     # 2. 文本清洗
-    _mark_document_status(document_id, "cleaning")
+    _mark_document_status(document_id, "清洗中")
     cleaned = clean_text(raw_text)
     if not cleaned.strip():
         logger.warning("清洗后内容为空: %s", document_id)
-        _mark_document_status(document_id, "empty_after_clean")
+        _mark_document_status(document_id, "清洗后为空")
+        return stats
+
+    # 内容质量检查：清洗后文本过短则跳过 LLM 抽取
+    min_chars = get_config().get("pipeline", {}).get("min_clean_chars", 100)
+    if len(cleaned.strip()) < min_chars:
+        logger.warning("清洗后内容过短(%d < %d)，跳过: %s", len(cleaned.strip()), min_chars, document_id)
+        _mark_document_status(document_id, "内容过短",
+                              error_message=f"清洗后仅 {len(cleaned.strip())} 字符，低于阈值 {min_chars}")
         return stats
 
     # 3. 存储全文为单个 chunk（DB 兼容）
@@ -94,7 +102,7 @@ def process_document(document_id: str) -> dict:
         conn.close()
 
     # 4. 全文抽取（Agent 1+2 合并：一次 LLM 调用完成证据发现 + 事实抽取）
-    _mark_document_status(document_id, "extracting")
+    _mark_document_status(document_id, "抽取中")
     fact_results = extract_facts_full_text(
         cleaned_text=cleaned,
         document_id=document_id,
@@ -113,7 +121,7 @@ def process_document(document_id: str) -> dict:
     all_fact_atom_ids = []
 
     if fact_results:
-        _mark_document_status(document_id, "reviewing")
+        _mark_document_status(document_id, "审核中")
         facts_with_ids = [
             (fr["fact_atom_id"], fr["fact_record"]) for fr in fact_results
         ]
@@ -133,13 +141,13 @@ def process_document(document_id: str) -> dict:
 
     # 6. 自动去重（同文档 + 跨文档 + 跨类型）
     if fact_results:
-        _mark_document_status(document_id, "deduplicating")
+        _mark_document_status(document_id, "去重中")
         dedup_stats = deduplicate_facts(document_id)
         stats["duplicates"] = sum(dedup_stats.values())
 
     # 7. 实体链接（排除已标记 DUPLICATE / REJECTED 的事实）
     if all_fact_atom_ids:
-        _mark_document_status(document_id, "linking")
+        _mark_document_status(document_id, "链接中")
         conn = get_connection()
         try:
             placeholders = ",".join("?" * len(all_fact_atom_ids))
@@ -148,7 +156,7 @@ def process_document(document_id: str) -> dict:
                 conn.execute(
                     f"""SELECT id FROM fact_atom
                     WHERE id IN ({placeholders})
-                      AND review_status NOT IN ('DUPLICATE', 'REJECTED')""",
+                      AND review_status NOT IN ('重复', '已拒绝')""",
                     all_fact_atom_ids,
                 ).fetchall()
             ]
@@ -158,7 +166,7 @@ def process_document(document_id: str) -> dict:
             batch_link_fact_atoms(active_ids)
 
     # 8. 更新文档状态
-    _mark_document_status(document_id, "processed")
+    _mark_document_status(document_id, "已完成")
 
     logger.info(
         "文档处理完成: %s — evidences=%d, facts=%d, pass=%d, reject=%d, uncertain=%d, dup=%d",
@@ -190,7 +198,7 @@ def process_batch(document_ids: list[str], show_progress: bool = True) -> list[d
             results.append(result)
         except Exception as e:
             logger.error("处理文档失败 [%s]: %s", doc_id[:8], e)
-            _mark_document_status(doc_id, "failed", error_message=str(e)[:500])
+            _mark_document_status(doc_id, "失败", error_message=str(e)[:500])
             results.append({
                 "document_id": doc_id,
                 "error": str(e),

@@ -5,7 +5,10 @@
 {% block content %}
   <div class="page-header">
     <div class="page-title">任务总览</div>
-    <div class="page-actions">
+    <div class="page-actions" style="display:flex;gap:8px;align-items:center;">
+      <button id="pause-btn" class="btn btn-sm btn-ghost" onclick="togglePause()" title="暂停/继续后台处理">
+        <span id="pause-icon">⏸</span> <span id="pause-text">暂停</span>
+      </button>
       <a class="btn btn-primary" href="/import">导入文章</a>
     </div>
   </div>
@@ -71,13 +74,13 @@
           <tr class="doc-row doc-status-{{ doc.status }}" style="cursor:pointer;" onclick="location.href='/documents/{{ doc.id }}'">
             <td class="cell-muted">{{ loop.index }}</td>
             <td>
-              {% if doc.status == 'failed' %}
+              {% if doc.status == '失败' %}
                 <span class="badge badge-reject" title="{{ doc.error_message or '未记录错误信息（历史数据）' }}">失败</span>
-              {% elif doc.status == 'processed' %}
+              {% elif doc.status == '已完成' %}
                 <span class="badge badge-pass">完成</span>
-              {% elif doc.status in ('processing', 'cleaning', 'extracting', 'reviewing', 'linking') %}
+              {% elif doc.status in ('处理中', '清洗中', '抽取中', '审核中', '链接中') %}
                 <span class="badge badge-running">{{ doc.status }}</span>
-              {% elif doc.status in ('empty', 'empty_after_clean') %}
+              {% elif doc.status in ('内容为空', '清洗后为空') %}
                 <span class="badge badge-pending">空内容</span>
               {% else %}
                 <span class="badge badge-pending">{{ doc.status }}</span>
@@ -92,16 +95,16 @@
                 {% endif %}
               </div>
               <div class="source-text">
-                {% if doc.source_type == 'url' %}网址{% elif doc.source_type == 'file' %}文件{% elif doc.source_type == 'paste' %}粘贴{% else %}{{ doc.source_type }}{% endif %}
+                {% if doc.source_type == '网址' %}网址{% elif doc.source_type == '文件' %}文件{% elif doc.source_type == '粘贴' %}粘贴{% else %}{{ doc.source_type }}{% endif %}
                 · {{ doc.source_name or '—' }}
               </div>
               {# 失败原因展示 #}
-              {% if doc.status == 'failed' %}
+              {% if doc.status == '失败' %}
                 {% if doc.error_message %}
                 <div class="error-hint" style="color:#ef4444;font-size:12px;margin-top:4px;line-height:1.4;">
                   ⚠ {{ doc.error_message[:150] }}{% if doc.error_message|length > 150 %}...{% endif %}
                 </div>
-                {% elif doc.fail_tasks > 0 %}
+                {% elif doc.fail_tasks and doc.fail_tasks > 0 %}
                   {% for err in doc.failed_task_errors %}
                   <div class="error-hint" style="color:#ef4444;font-size:12px;margin-top:4px;line-height:1.4;">
                     ⚠ [{{ err.task_type }}] {{ err.error[:120] }}{% if err.error|length > 120 %}...{% endif %}
@@ -112,7 +115,7 @@
                   ⚠ 异常中断（未记录错误，可重新处理）
                 </div>
                 {% endif %}
-              {% elif doc.fail_tasks > 0 %}
+              {% elif doc.fail_tasks and doc.fail_tasks > 0 %}
                 {% for err in doc.failed_task_errors %}
                 <div class="error-hint" style="color:#f59e0b;font-size:12px;margin-top:4px;line-height:1.4;">
                   ⚠ [{{ err.task_type }}] {{ err.error[:100] }}{% if err.error|length > 100 %}...{% endif %}
@@ -141,14 +144,14 @@
               {# review 分布小标签 #}
               {% if doc.review_dist %}
               <div style="margin-top:4px;display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">
-                {% if doc.review_dist.get('AUTO_PASS') %}
-                <span style="font-size:10px;color:#22c55e;">✓{{ doc.review_dist['AUTO_PASS'] }}</span>
+                {% if doc.review_dist.get('自动通过') %}
+                <span style="font-size:10px;color:#22c55e;">✓{{ doc.review_dist['自动通过'] }}</span>
                 {% endif %}
-                {% if doc.review_dist.get('HUMAN_REVIEW_REQUIRED') %}
-                <span style="font-size:10px;color:#f59e0b;">⏳{{ doc.review_dist['HUMAN_REVIEW_REQUIRED'] }}</span>
+                {% if doc.review_dist.get('待人工审核') %}
+                <span style="font-size:10px;color:#f59e0b;">⏳{{ doc.review_dist['待人工审核'] }}</span>
                 {% endif %}
-                {% if doc.review_dist.get('REJECTED') %}
-                <span style="font-size:10px;color:#ef4444;">✗{{ doc.review_dist['REJECTED'] }}</span>
+                {% if doc.review_dist.get('已拒绝') %}
+                <span style="font-size:10px;color:#ef4444;">✗{{ doc.review_dist['已拒绝'] }}</span>
                 {% endif %}
               </div>
               {% endif %}
@@ -199,5 +202,40 @@ function filterDocs(status) {
   event.target.classList.remove('btn-ghost');
   event.target.classList.add('btn-primary');
 }
+
+// ── 暂停/继续 ──
+let isPaused = false;
+
+function updatePauseUI(paused) {
+  isPaused = paused;
+  const btn = document.getElementById('pause-btn');
+  const icon = document.getElementById('pause-icon');
+  const text = document.getElementById('pause-text');
+  if (paused) {
+    icon.textContent = '▶';
+    text.textContent = '继续';
+    btn.classList.remove('btn-ghost');
+    btn.classList.add('btn-warning');
+  } else {
+    icon.textContent = '⏸';
+    text.textContent = '暂停';
+    btn.classList.remove('btn-warning');
+    btn.classList.add('btn-ghost');
+  }
+}
+
+function togglePause() {
+  const url = isPaused ? '/api/tasks/resume' : '/api/tasks/pause';
+  fetch(url, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => updatePauseUI(data.paused))
+    .catch(err => console.error('切换暂停状态失败:', err));
+}
+
+// 页面加载时获取当前暂停状态
+fetch('/api/tasks/pause-status')
+  .then(r => r.json())
+  .then(data => updatePauseUI(data.paused))
+  .catch(() => {});
 </script>
 {% endblock %}

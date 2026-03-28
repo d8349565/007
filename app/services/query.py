@@ -167,9 +167,9 @@ def get_documents(limit: int = 200, offset: int = 0) -> list[dict]:
                 task_stats = conn.execute(
                     """SELECT
                           COUNT(*) AS total_tasks,
-                          SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) AS ok_tasks,
-                          SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS fail_tasks,
-                          SUM(CASE WHEN status='running' THEN 1 ELSE 0 END) AS run_tasks
+                          SUM(CASE WHEN status='成功' THEN 1 ELSE 0 END) AS ok_tasks,
+                          SUM(CASE WHEN status='失败' THEN 1 ELSE 0 END) AS fail_tasks,
+                          SUM(CASE WHEN status='运行中' THEN 1 ELSE 0 END) AS run_tasks
                        FROM extraction_task WHERE document_id=?""",
                     (d["id"],),
                 ).fetchone()
@@ -181,7 +181,7 @@ def get_documents(limit: int = 200, offset: int = 0) -> list[dict]:
                 if task_stats["fail_tasks"]:
                     fail_rows = conn.execute(
                         """SELECT task_type, error_message FROM extraction_task
-                           WHERE document_id=? AND status='failed'""",
+                           WHERE document_id=? AND status='失败'""",
                         (d["id"],),
                     ).fetchall()
                     d["failed_task_errors"] = [
@@ -289,7 +289,7 @@ def get_passed_facts_stats(fact_type: str = "", document_id: str = "", pass_type
             conditions.append("f.review_status = ?")
             params.append(pass_type)
         else:
-            conditions.append("f.review_status IN ('AUTO_PASS','HUMAN_PASS')")
+            conditions.append("f.review_status IN ('自动通过','人工通过')")
         if fact_type:
             conditions.append("f.fact_type = ?")
             params.append(fact_type)
@@ -303,11 +303,11 @@ def get_passed_facts_stats(fact_type: str = "", document_id: str = "", pass_type
         ).fetchone()["cnt"]
 
         auto = conn.execute(
-            f"SELECT COUNT(*) AS cnt FROM fact_atom f WHERE {where} AND f.review_status='AUTO_PASS'", params
+            f"SELECT COUNT(*) AS cnt FROM fact_atom f WHERE {where} AND f.review_status='自动通过'", params
         ).fetchone()["cnt"]
 
         human = conn.execute(
-            f"SELECT COUNT(*) AS cnt FROM fact_atom f WHERE {where} AND f.review_status='HUMAN_PASS'", params
+            f"SELECT COUNT(*) AS cnt FROM fact_atom f WHERE {where} AND f.review_status='人工通过'", params
         ).fetchone()["cnt"]
 
         type_dist = conn.execute(
@@ -703,7 +703,7 @@ def get_graph_data(fact_type: str = "", doc_id: str = "") -> dict:
     conn = get_connection()
     try:
         # 基础过滤条件（按 fact_type / doc_id 筛选，可选）
-        base_cond = ["f.review_status IN ('AUTO_PASS','HUMAN_PASS')"]
+        base_cond = ["f.review_status IN ('自动通过','人工通过')"]
         base_params: list = []
         if fact_type:
             base_cond.append("f.fact_type = ?")
@@ -910,7 +910,7 @@ def get_entity_list(search: str = "", entity_type: str = "", limit: int = 200) -
                        COUNT(DISTINCT f.id) AS fact_count
                 FROM entity e
                 JOIN fact_atom f ON (f.subject_entity_id = e.id OR f.object_entity_id = e.id)
-                WHERE f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                WHERE f.review_status IN ('自动通过','人工通过')
                 {extra_where}
                 GROUP BY e.id
                 ORDER BY fact_count DESC
@@ -972,7 +972,7 @@ def get_entity_detail(entity_id: str) -> dict | None:
             """SELECT f.fact_type, COUNT(*) AS cnt
                FROM fact_atom f
                WHERE (f.subject_entity_id = ? OR f.object_entity_id = ?)
-                 AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                 AND f.review_status IN ('自动通过','人工通过')
                GROUP BY f.fact_type
                ORDER BY cnt DESC""",
             (entity_id, entity_id),
@@ -985,7 +985,7 @@ def get_entity_detail(entity_id: str) -> dict | None:
             """SELECT COUNT(DISTINCT f.document_id) AS cnt
                FROM fact_atom f
                WHERE (f.subject_entity_id = ? OR f.object_entity_id = ?)
-                 AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')""",
+                 AND f.review_status IN ('自动通过','人工通过')""",
             (entity_id, entity_id),
         ).fetchone()["cnt"]
         info["source_doc_count"] = doc_count
@@ -995,7 +995,7 @@ def get_entity_detail(entity_id: str) -> dict | None:
             """SELECT MIN(f.time_expr) AS earliest, MAX(f.time_expr) AS latest
                FROM fact_atom f
                WHERE (f.subject_entity_id = ? OR f.object_entity_id = ?)
-                 AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                 AND f.review_status IN ('自动通过','人工通过')
                  AND f.time_expr IS NOT NULL AND f.time_expr != ''""",
             (entity_id, entity_id),
         ).fetchone()
@@ -1035,7 +1035,7 @@ def get_entity_timeline(
                 }
 
         # 构建查询条件
-        conditions = ["f.review_status IN ('AUTO_PASS','HUMAN_PASS')"]
+        conditions = ["f.review_status IN ('自动通过','人工通过')"]
         params = []
         if entity_id:
             conditions.append("(f.subject_entity_id = ? OR f.object_entity_id = ?)")
@@ -1160,21 +1160,21 @@ def get_entity_overview(top_n: int = 10) -> dict:
         # 只统计有已通过事实关联的实体（与 linked_fact_count 逻辑一致）
         entity_count = conn.execute(
             "SELECT COUNT(DISTINCT subject_entity_id) FROM fact_atom "
-            "WHERE review_status IN ('AUTO_PASS','HUMAN_PASS') AND subject_entity_id IS NOT NULL"
+            "WHERE review_status IN ('自动通过','人工通过') AND subject_entity_id IS NOT NULL"
         ).fetchone()[0]
         linked_facts = conn.execute(
             "SELECT COUNT(*) FROM fact_atom "
-            "WHERE review_status IN ('AUTO_PASS','HUMAN_PASS') AND subject_entity_id IS NOT NULL"
+            "WHERE review_status IN ('自动通过','人工通过') AND subject_entity_id IS NOT NULL"
         ).fetchone()[0]
         total_passed = conn.execute(
-            "SELECT COUNT(*) FROM fact_atom WHERE review_status IN ('AUTO_PASS','HUMAN_PASS')"
+            "SELECT COUNT(*) FROM fact_atom WHERE review_status IN ('自动通过','人工通过')"
         ).fetchone()[0]
         # Top entities by fact count (subject side)
         top = conn.execute(
             """SELECT e.id, e.canonical_name, e.entity_type, COUNT(f.id) AS fact_count
                FROM entity e
                JOIN fact_atom f ON f.subject_entity_id = e.id
-               WHERE f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+               WHERE f.review_status IN ('自动通过','人工通过')
                GROUP BY e.id
                ORDER BY fact_count DESC
                LIMIT ?""",
@@ -1185,7 +1185,7 @@ def get_entity_overview(top_n: int = 10) -> dict:
             """SELECT e.entity_type, COUNT(DISTINCT e.id) AS cnt
                FROM entity e
                JOIN fact_atom f ON f.subject_entity_id = e.id
-               WHERE f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+               WHERE f.review_status IN ('自动通过','人工通过')
                GROUP BY e.entity_type ORDER BY cnt DESC"""
         ).fetchall()
         return {
@@ -1247,7 +1247,7 @@ def get_entity_hierarchy() -> dict:
             counts = conn.execute(
                 f"""SELECT subject_entity_id, COUNT(*) as cnt FROM fact_atom
                     WHERE subject_entity_id IN ({','.join('?' * len(all_entity_ids))})
-                    AND review_status IN ('AUTO_PASS','HUMAN_PASS')
+                    AND review_status IN ('自动通过','人工通过')
                     GROUP BY subject_entity_id""",
                 list(all_entity_ids),
             ).fetchall()

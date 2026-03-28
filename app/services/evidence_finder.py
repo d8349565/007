@@ -50,18 +50,18 @@ def find_evidence(
     # 调用 LLM
     client = get_llm_client()
     task_id = str(uuid.uuid4())
-    _record_task_start(task_id, document_id, chunk_id, "evidence_finder")
+    _record_task_start(task_id, document_id, chunk_id, "证据发现")
 
     try:
         result = client.chat_json(system_prompt, user_input)
         data = result["data"]
         _record_task_end(
-            task_id, "success",
+            task_id, "成功",
             result["input_tokens"], result["output_tokens"],
             result["model"],
         )
     except Exception as e:
-        _record_task_end(task_id, "failed", error=str(e))
+        _record_task_end(task_id, "失败", error=str(e))
         logger.error("Evidence Finder 调用失败 [chunk=%s]: %s", chunk_id[:8], e)
         return []
 
@@ -132,7 +132,7 @@ def _record_task_start(
         conn.execute(
             """INSERT INTO extraction_task
             (id, document_id, chunk_id, task_type, status, started_at)
-            VALUES (?, ?, ?, ?, 'running', CURRENT_TIMESTAMP)""",
+            VALUES (?, ?, ?, ?, '运行中', CURRENT_TIMESTAMP)""",
             (task_id, document_id, chunk_id, task_type),
         )
         conn.commit()

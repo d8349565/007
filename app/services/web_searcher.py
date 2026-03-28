@@ -53,7 +53,7 @@ class BackgroundResult:
     entity_name: str
     query: str
     summary_text: str
-    search_source: str   # 'cache' | 'duckduckgo' | 'llm_knowledge' | 'combined'
+    search_source: str   # 'cache' | '搜索引擎' | 'LLM知识' | '综合'
     raw_results: dict = field(default_factory=dict)
 
 

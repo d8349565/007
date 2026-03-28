@@ -5,7 +5,7 @@
 -- 原始文档表
 CREATE TABLE IF NOT EXISTS source_document (
     id           TEXT PRIMARY KEY,
-    source_type  TEXT NOT NULL,           -- 'file' | 'url' | 'paste'
+    source_type  TEXT NOT NULL,           -- '文件' | '网址' | '粘贴'
     source_name  TEXT,                    -- 文件名或来源域名
     title        TEXT,
     author       TEXT,
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS source_document (
     publish_time TEXT,                    -- 文章发布时间（原文）
     raw_text     TEXT NOT NULL,
     content_hash TEXT NOT NULL UNIQUE,    -- SHA256 去重键
-    status       TEXT NOT NULL DEFAULT 'ACTIVE',
+    status       TEXT NOT NULL DEFAULT '待处理',
     error_message TEXT,                   -- 处理失败时的错误信息
     crawl_time   TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
@@ -85,8 +85,8 @@ CREATE TABLE IF NOT EXISTS fact_atom (
     confidence_score    REAL DEFAULT 0.0,
     extraction_model    TEXT,
     extraction_version  TEXT,
-    review_status       TEXT NOT NULL DEFAULT 'PENDING',
-    -- PENDING | AUTO_PASS | HUMAN_REVIEW_REQUIRED | HUMAN_PASS | REJECTED | UNCERTAIN
+    review_status       TEXT NOT NULL DEFAULT '待处理',
+    -- 待处理 | 自动通过 | 待人工审核 | 人工通过 | 已拒绝 | 不确定
     review_note         TEXT,
     subject_entity_id   TEXT REFERENCES entity(id),
     object_entity_id    TEXT REFERENCES entity(id),
@@ -107,8 +107,8 @@ CREATE TABLE IF NOT EXISTS entity (
     id               TEXT PRIMARY KEY,
     canonical_name   TEXT NOT NULL,
     normalized_name  TEXT NOT NULL,
-    entity_type      TEXT NOT NULL DEFAULT 'UNKNOWN',
-    -- COMPANY | GROUP | PROJECT | REGION | COUNTRY | UNKNOWN
+    entity_type      TEXT NOT NULL DEFAULT '未知',
+    -- 企业 | 集团 | 项目 | 地区 | 国家 | 未知
     UNIQUE(canonical_name, entity_type)
 );
 
@@ -128,9 +128,9 @@ CREATE TABLE IF NOT EXISTS entity_relation (
     from_entity_id   TEXT NOT NULL REFERENCES entity(id),
     to_entity_id     TEXT NOT NULL REFERENCES entity(id),
     relation_type    TEXT NOT NULL,
-    -- SUBSIDIARY(子公司) | SHAREHOLDER(股东) | JV(合资) | BRAND(品牌归属) | PARTNER(合作方) | INVESTS_IN(投资/持有项目)
+    -- 子公司 | 股东 | 合资 | 品牌 | 合作方 | 投资
     detail_json      TEXT DEFAULT '{}',  -- 扩展信息，如 {"share_pct": 42.53}
-    source           TEXT NOT NULL DEFAULT 'manual',  -- manual | auto_extracted
+    source           TEXT NOT NULL DEFAULT '手动',  -- 手动 | 自动提取
     created_at       TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(from_entity_id, to_entity_id, relation_type)
 );
@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS review_log (
     target_id     TEXT NOT NULL,
     old_status    TEXT,
     new_status    TEXT NOT NULL,
-    reviewer      TEXT NOT NULL DEFAULT 'system',
+    reviewer      TEXT NOT NULL DEFAULT '系统',
     review_action TEXT,
     review_note   TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
@@ -161,8 +161,8 @@ CREATE TABLE IF NOT EXISTS extraction_task (
     id            TEXT PRIMARY KEY,
     document_id   TEXT NOT NULL REFERENCES source_document(id),
     chunk_id      TEXT,
-    task_type     TEXT NOT NULL,   -- 'evidence_finder' | 'fact_extractor' | 'reviewer'
-    status        TEXT NOT NULL DEFAULT 'running',
+    task_type     TEXT NOT NULL,   -- '证据发现' | '事实抽取' | '审核'
+    status        TEXT NOT NULL DEFAULT '运行中',
     started_at    TEXT NOT NULL DEFAULT (datetime('now')),
     finished_at   TEXT,
     input_tokens  INTEGER NOT NULL DEFAULT 0,
@@ -183,13 +183,13 @@ CREATE TABLE IF NOT EXISTS entity_merge_task (
     secondary_id   TEXT NOT NULL REFERENCES entity(id),
     rule_score     REAL NOT NULL DEFAULT 0.0,  -- 规则相似度 (0~1)
     rule_reason    TEXT,                        -- 规则初步理由
-    llm_verdict    TEXT,   -- 'merge' | 'keep' | 'uncertain' | NULL(未分析)
+    llm_verdict    TEXT,   -- '合并' | '保留' | '不确定' | NULL(未分析)
     llm_confidence REAL,   -- LLM 置信度 0~1
     llm_reason     TEXT,   -- LLM 分析理由
     llm_model      TEXT,   -- 调用的模型名
-    status         TEXT NOT NULL DEFAULT 'pending',
-    -- pending(待审核) | approved(已批准待执行) | rejected(已拒绝)
-    -- executed(已执行合并) | skipped(无需 LLM，规则确定)
+    status         TEXT NOT NULL DEFAULT '待处理',
+    -- 待处理 | 已批准 | 已拒绝
+    -- 已执行 | 已跳过
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     reviewed_at    TEXT,
     UNIQUE(primary_id, secondary_id)
@@ -204,7 +204,7 @@ CREATE TABLE IF NOT EXISTS entity_relation_suggestion (
     entity_id         TEXT NOT NULL REFERENCES entity(id),
     target_name       TEXT NOT NULL,
     target_entity_id  TEXT REFERENCES entity(id),
-    suggestion_type   TEXT NOT NULL,  -- 'merge' | 'relation' | 'alias'
+    suggestion_type   TEXT NOT NULL,  -- '合并' | '关系' | '别名'
     relation_type     TEXT,           -- 仅 suggestion_type='relation' 时填写
     evidence          TEXT,           -- 证据原文摘录
     evidence_fact_id  TEXT REFERENCES fact_atom(id),
@@ -212,8 +212,8 @@ CREATE TABLE IF NOT EXISTS entity_relation_suggestion (
     llm_reason        TEXT,
     search_evidence   TEXT,           -- 网络搜索/LLM知识查询得到的佐证文本
     auto_confirmed    INTEGER NOT NULL DEFAULT 0,  -- 1=高置信度自动入库，0=等待人工审核
-    status            TEXT NOT NULL DEFAULT 'pending',
-    -- pending(待审核) | confirmed(已确认) | rejected(已拒绝)
+    status            TEXT NOT NULL DEFAULT '待处理',
+    -- 待处理 | 已确认 | 已拒绝
     created_at        TEXT NOT NULL DEFAULT (datetime('now')),
     confirmed_at      TEXT
 );
@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS entity_search_cache (
     id           TEXT PRIMARY KEY,
     entity_name  TEXT NOT NULL,         -- 被搜索的实体名称
     query        TEXT NOT NULL UNIQUE,  -- 实际查询词（entity_name 或 "entity_a||entity_b"）
-    search_source TEXT NOT NULL DEFAULT 'llm',  -- 'duckduckgo' | 'llm_knowledge' | 'combined'
+    search_source TEXT NOT NULL DEFAULT 'LLM知识',  -- '搜索引擎' | 'LLM知识' | '综合'
     raw_results  TEXT,                  -- 原始返回内容 JSON
     summary_text TEXT,                  -- 提炼后摘要（直接喂给 prompt）
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))

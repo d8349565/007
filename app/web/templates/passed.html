@@ -41,8 +41,8 @@
       <label>通过方式</label>
       <select name="pass_type" onchange="this.form.submit()">
         <option value="" {% if not current_pass_type %}selected{% endif %}>全部</option>
-        <option value="AUTO_PASS" {% if current_pass_type == 'AUTO_PASS' %}selected{% endif %}>自动通过</option>
-        <option value="HUMAN_PASS" {% if current_pass_type == 'HUMAN_PASS' %}selected{% endif %}>人工通过</option>
+        <option value="自动通过" {% if current_pass_type == 'AUTO_PASS' %}selected{% endif %}>自动通过</option>
+        <option value="人工通过" {% if current_pass_type == 'HUMAN_PASS' %}selected{% endif %}>人工通过</option>
       </select>
       <label>主体搜索</label>
       <input type="text" name="subject_q" value="{{ current_subject_q or '' }}"
@@ -201,7 +201,7 @@
               {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
             <td>
-              {% if f.review_status == 'AUTO_PASS' %}
+              {% if f.review_status == '自动通过' %}
               <span class="badge badge-pass" style="font-size:10px;">自动</span>
               {% else %}
               <span class="badge badge-info" style="font-size:10px;">人工</span>

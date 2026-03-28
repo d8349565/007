@@ -62,18 +62,18 @@ def extract_facts(
 
     client = get_llm_client()
     task_id = str(uuid.uuid4())
-    _record_task_start(task_id, document_id, "fact_extractor")
+    _record_task_start(task_id, document_id, "事实抽取")
 
     try:
         result = client.chat_json(system_prompt, user_input)
         raw_data = result["data"]
         _record_task_end(
-            task_id, "success",
+            task_id, "成功",
             result["input_tokens"], result["output_tokens"],
             result["model"],
         )
     except Exception as e:
-        _record_task_end(task_id, "failed", error=str(e))
+        _record_task_end(task_id, "失败", error=str(e))
         logger.error("Fact Extractor 调用失败 [evidence=%s]: %s", evidence_id[:8], e)
         return []
 
@@ -99,7 +99,7 @@ def extract_facts(
                  time_expr, location_text, qualifier_json,
                  confidence_score, extraction_model, extraction_version,
                  review_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')""",
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '待处理')""",
                 (
                     fact_atom_id,
                     document_id,
@@ -226,7 +226,7 @@ def _record_task_start(task_id: str, document_id: str, task_type: str) -> None:
         conn.execute(
             """INSERT INTO extraction_task
             (id, document_id, task_type, status, started_at)
-            VALUES (?, ?, ?, 'running', CURRENT_TIMESTAMP)""",
+            VALUES (?, ?, ?, '运行中', CURRENT_TIMESTAMP)""",
             (task_id, document_id, task_type),
         )
         conn.commit()

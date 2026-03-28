@@ -47,7 +47,7 @@ def _get_sample_facts(entity_id: str, conn, limit: int = 5) -> list[str]:
         """SELECT fact_type, predicate, object_text, value_num, value_text, unit, time_expr
            FROM fact_atom
            WHERE subject_entity_id = ?
-             AND review_status IN ('AUTO_PASS','HUMAN_PASS')
+             AND review_status IN ('自动通过','人工通过')
            LIMIT ?""",
         (entity_id, limit),
     ).fetchall()
@@ -77,7 +77,7 @@ def _extract_fact_driven_candidates(entity_id: str, conn) -> list[dict]:
              AND fact_type IN ('COOPERATION','INVESTMENT','EXPANSION')
              AND object_text IS NOT NULL
              AND object_text != ''
-             AND review_status IN ('AUTO_PASS','HUMAN_PASS')""",
+             AND review_status IN ('自动通过','人工通过')""",
         (entity_id,),
     ).fetchall()
 
@@ -100,15 +100,15 @@ def _extract_fact_driven_candidates(entity_id: str, conn) -> list[dict]:
                 linked_id = found["id"]
 
         # 推断关联类型（根据 fact_type）
-        rel_hint = "PARTNER"
+        rel_hint = "合作方"
         if r["fact_type"] == "INVESTMENT":
-            rel_hint = "INVESTS_IN"
+            rel_hint = "投资"
         elif r["fact_type"] == "COOPERATION":
             # 合作类型可能是合资 → JV
             try:
                 q = json.loads(r["qualifier_json"] or "{}")
                 if q.get("cooperation_type") in ("joint_venture", "合资"):
-                    rel_hint = "JV"
+                    rel_hint = "合资"
             except Exception:
                 pass
 
@@ -177,9 +177,9 @@ def _extract_name_similar_candidates(entity_id: str, conn) -> list[dict]:
         # 若 self 包含 other → other 可能是 self 的上级 → SUBSIDIARY（反向）
         entity_name_stripped = eu.normalize(entity["canonical_name"])
         if other_stripped and entity_name_stripped in other_stripped:
-            rel_hint = "SUBSIDIARY"  # other 可能是 self 子公司/工厂
+            rel_hint = "子公司"  # other 可能是 self 子公司/工厂
         elif other_stripped and other_stripped in entity_name_stripped:
-            rel_hint = "SUBSIDIARY"  # self 可能是 other 的子公司
+            rel_hint = "子公司"  # self 可能是 other 的子公司
         else:
             rel_hint = "merge"  # 名称高度相似 → 候选合并
 
@@ -229,7 +229,7 @@ def analyze_entity(
         existing_pending = set()
         existing_rows = conn.execute(
             """SELECT target_name FROM entity_relation_suggestion
-               WHERE entity_id=? AND status='pending'""",
+               WHERE entity_id=? AND status='待处理'""",
             (entity_id,),
         ).fetchall()
         for row in existing_rows:
@@ -291,31 +291,31 @@ def analyze_entity(
             # LLM 结果
             llm_info = llm_results.get(target, {})
             suggestion_type = llm_info.get("suggestion_type") or _infer_type(c)
-            if suggestion_type == "skip":
+            if suggestion_type == "跳过":
                 continue
             confidence = float(llm_info.get("confidence") or (
                 0.6 if c["source"] == "fact_driven" else c.get("score", 0.5)
             ))
             llm_reason = llm_info.get("reason")
             relation_type = llm_info.get("relation_type") or (
-                c.get("rel_hint") if suggestion_type == "relation" else None
+                c.get("rel_hint") if suggestion_type == "关系" else None
             )
             search_evidence = candidate_search_map.get(target) or entity_bg_summary or None
 
             # ─── 三层置信度决策 ───
             # 自动执行条件（三者需同时满足）：
             #   1. confidence >= 0.75（三重证据综合评分达标）
-            #   2. suggestion_type != "skip"
+            #   2. suggestion_type != "跳过"
             #   3. 有网络搜索证据（有外部知识确认）
             has_search_evidence = bool(search_evidence)
             should_auto_confirm = (
                 use_web_search
                 and has_search_evidence
                 and confidence >= _AUTO_CONFIRM_THRESHOLD
-                and suggestion_type != "skip"
+                and suggestion_type != "跳过"
             )
 
-            status = "pending"
+            status = "待处理"
             record_auto = 0
 
             sugg_id = str(uuid.uuid4())
@@ -354,7 +354,7 @@ def analyze_entity(
                     # 更新刚写入的记录为 confirmed
                     conn.execute(
                         """UPDATE entity_relation_suggestion
-                           SET status='confirmed', confirmed_at=datetime('now'), auto_confirmed=1
+                           SET status='已确认', confirmed_at=datetime('now'), auto_confirmed=1
                            WHERE id=?""",
                         (sugg_id,),
                     )
@@ -415,10 +415,10 @@ def _auto_confirm_suggestion(
       - alias     → 写 entity_alias
       - merge     → 写 entity_merge_task
     """
-    if suggestion_type == "relation":
+    if suggestion_type == "关系":
         if not target_entity_id:
-            raise ValueError(f"relation类型自动入库需要 target_entity_id: {target_name}")
-        rel_type = relation_type or "PARTNER"
+            raise ValueError(f"关系类型自动入库需要 target_entity_id: {target_name}")
+        rel_type = relation_type or "合作方"
         existing = conn.execute(
             "SELECT id FROM entity_relation WHERE from_entity_id=? AND to_entity_id=? AND relation_type=?",
             (entity_id, target_entity_id, rel_type),
@@ -429,7 +429,7 @@ def _auto_confirm_suggestion(
                 (str(uuid.uuid4()), entity_id, target_entity_id, rel_type),
             )
 
-    elif suggestion_type == "alias":
+    elif suggestion_type == "别名":
         existing = conn.execute(
             "SELECT id FROM entity_alias WHERE alias_name=? AND entity_id=?",
             (target_name, entity_id),
@@ -440,9 +440,9 @@ def _auto_confirm_suggestion(
                 (str(uuid.uuid4()), entity_id, target_name),
             )
 
-    elif suggestion_type == "merge":
+    elif suggestion_type == "合并":
         if not target_entity_id:
-            raise ValueError(f"merge类型自动入库需要 target_entity_id: {target_name}")
+            raise ValueError(f"合并类型自动入库需要 target_entity_id: {target_name}")
         existing = conn.execute(
             "SELECT id FROM entity_merge_task WHERE primary_id=? AND secondary_id=?",
             (entity_id, target_entity_id),
@@ -457,10 +457,10 @@ def _auto_confirm_suggestion(
                     str(uuid.uuid4()),
                     entity_id, target_entity_id,
                     0.9, "网络搜索自动确认",
-                    "merge", 0.9,
+                    "合并", 0.9,
                     "网络搜索与AI知识库共同确认",
-                    "auto_web",
-                    "pending",  # 合并仍需人工最终批准（不可逆操作）
+                    "自动网络",
+                    "待处理",  # 合并仍需人工最终批准（不可逆操作）
                 ),
             )
 
@@ -471,10 +471,10 @@ def _auto_confirm_suggestion(
 def _infer_type(candidate: dict) -> str:
     """没有 LLM 时，根据候选来源推断 suggestion_type"""
     if candidate["source"] == "fact_driven":
-        return "relation"
+        return "关系"
     if candidate.get("rel_hint") == "merge":
-        return "merge"
-    return "relation"
+        return "合并"
+    return "关系"
 
 
 def _call_llm(
@@ -540,7 +540,7 @@ def _call_llm(
         target = item.get("target", "")
         if target:
             output[target] = {
-                "suggestion_type": item.get("suggestion_type", "relation"),
+                "suggestion_type": item.get("suggestion_type", "关系"),
                 "confidence": float(item.get("confidence", 0.6)),
                 "reason": item.get("reason", ""),
                 "relation_type": item.get("relation_type"),
@@ -585,10 +585,10 @@ def get_suggestions(
 def confirm_suggestion(suggestion_id: str) -> dict:
     """
     确认建议：
-      - suggestion_type='relation' → 写入 entity_relation 表
-      - suggestion_type='alias'    → 写入 entity_alias 表
-      - suggestion_type='merge'    → 发起合并任务（写入 entity_merge_task）
-    更新 status='confirmed'
+      - suggestion_type='关系' → 写入 entity_relation 表
+      - suggestion_type='别名'    → 写入 entity_alias 表
+      - suggestion_type='合并'    → 发起合并任务（写入 entity_merge_task）
+    更新 status='已确认'
     """
     conn = get_connection()
     try:
@@ -602,13 +602,13 @@ def confirm_suggestion(suggestion_id: str) -> dict:
         s = dict(row)
         op_result: dict = {}
 
-        if s["suggestion_type"] == "relation":
+        if s["suggestion_type"] == "关系":
             # 在 entity_relation 中新建关系
             from_id = s["entity_id"]
             to_id = s.get("target_entity_id")
             if not to_id:
                 raise ValueError("目标实体 ID 未知，无法建立关系")
-            rel_type = s.get("relation_type") or "PARTNER"
+            rel_type = s.get("relation_type") or "合作方"
             # 检查是否已存在
             existing = conn.execute(
                 "SELECT id FROM entity_relation WHERE from_entity_id=? AND to_entity_id=? AND relation_type=?",
@@ -621,7 +621,7 @@ def confirm_suggestion(suggestion_id: str) -> dict:
                 )
             op_result = {"action": "relation_created", "relation_type": rel_type}
 
-        elif s["suggestion_type"] == "alias":
+        elif s["suggestion_type"] == "别名":
             entity_id = s["entity_id"]
             alias_name = s["target_name"]
             existing = conn.execute(
@@ -635,7 +635,7 @@ def confirm_suggestion(suggestion_id: str) -> dict:
                 )
             op_result = {"action": "alias_created", "alias": alias_name}
 
-        elif s["suggestion_type"] == "merge":
+        elif s["suggestion_type"] == "合并":
             # 写入 entity_merge_task，由人工在合并审核 Tab 中批准
             primary_id = s["entity_id"]
             secondary_id = s.get("target_entity_id")
@@ -655,17 +655,17 @@ def confirm_suggestion(suggestion_id: str) -> dict:
                         str(uuid.uuid4()),
                         primary_id, secondary_id,
                         s["confidence"], "来自实体关联分析建议",
-                        "merge", s["confidence"],
+                        "合并", s["confidence"],
                         s.get("llm_reason") or "AI分析建议合并",
-                        "entity_analyzer",
-                        "pending",
+                        "实体分析",
+                        "待处理",
                     ),
                 )
             op_result = {"action": "merge_task_created"}
 
         # 更新建议状态
         conn.execute(
-            "UPDATE entity_relation_suggestion SET status='confirmed', confirmed_at=datetime('now') WHERE id=?",
+            "UPDATE entity_relation_suggestion SET status='已确认', confirmed_at=datetime('now') WHERE id=?",
             (suggestion_id,),
         )
         conn.commit()
@@ -680,11 +680,11 @@ def confirm_suggestion(suggestion_id: str) -> dict:
 
 
 def reject_suggestion(suggestion_id: str) -> None:
-    """拒绝建议，标记 status='rejected'"""
+    """拒绝建议，标记 status='已拒绝'"""
     conn = get_connection()
     try:
         conn.execute(
-            "UPDATE entity_relation_suggestion SET status='rejected' WHERE id=?",
+            "UPDATE entity_relation_suggestion SET status='已拒绝' WHERE id=?",
             (suggestion_id,),
         )
         conn.commit()

@@ -54,16 +54,16 @@ function fetchTaskStatus() {
 
 // 状态显示映射
 const STATUS_MAP = {
-  'processing': { label: '处理中', icon: '⟳', cls: 'running' },
-  'cleaning': { label: '清洗中', icon: '⟳', cls: 'running' },
-  'extracting': { label: '抽取中', icon: '⟳', cls: 'running' },
-  'reviewing': { label: '审核中', icon: '⟳', cls: 'running' },
-  'linking': { label: '链接中', icon: '⟳', cls: 'running' },
-  'processed': { label: '已完成', icon: '✓', cls: 'done' },
-  'failed': { label: '失败', icon: '✗', cls: 'error' },
-  'empty': { label: '空内容', icon: '⊘', cls: 'empty' },
-  'empty_after_clean': { label: '空内容', icon: '⊘', cls: 'empty' },
-  'ACTIVE': { label: '待处理', icon: '○', cls: 'pending' },
+  '处理中': { label: '处理中', icon: '⟳', cls: '运行中' },
+  '清洗中': { label: '清洗中', icon: '⟳', cls: '运行中' },
+  '抽取中': { label: '抽取中', icon: '⟳', cls: '运行中' },
+  '审核中': { label: '审核中', icon: '⟳', cls: '运行中' },
+  '链接中': { label: '链接中', icon: '⟳', cls: '运行中' },
+  '已完成': { label: '已完成', icon: '✓', cls: 'done' },
+  '失败': { label: '失败', icon: '✗', cls: 'error' },
+  '内容为空': { label: '空内容', icon: '⊘', cls: '内容为空' },
+  '清洗后为空': { label: '空内容', icon: '⊘', cls: '内容为空' },
+  '待处理': { label: '待处理', icon: '○', cls: 'pending' },
 };
 
 function renderTaskStatus(data) {
@@ -90,7 +90,7 @@ function renderTaskStatus(data) {
     if (miniBadge) {
       miniBadge.textContent = summary.failed;
       miniBadge.style.display = 'inline';
-      miniBadge.classList.remove('success');
+      miniBadge.classList.remove('成功');
     }
     if (widgetBadge) {
       widgetBadge.textContent = summary.failed;
@@ -103,7 +103,7 @@ function renderTaskStatus(data) {
 
   // 清空已完成按钮（有待清空时显示）
   const clearBtn = document.getElementById('btn-clear-done');
-  const hasDone = tasks.some(t => t.status === 'processed' || t.status === 'failed' || t.status === 'empty' || t.status === 'empty_after_clean');
+  const hasDone = tasks.some(t => t.status === '已完成' || t.status === '失败' || t.status === '内容为空' || t.status === '清洗后为空');
   if (clearBtn) clearBtn.style.display = hasDone ? 'inline' : 'none';
 
   // 显示/隐藏小标签
@@ -134,13 +134,13 @@ function renderTaskStatus(data) {
     const timeAgo = getTimeAgo(task.updated_at);
 
     let meta = `<span class="task-status ${statusInfo.cls}">${statusInfo.label}</span>`;
-    if (task.status === 'processed') {
+    if (task.status === '已完成') {
       meta += `<span>提取 ${task.facts_count || 0} 条</span>`;
-    } else if (!['failed', 'empty', 'empty_after_clean'].includes(task.status)) {
+    } else if (!['失败', '内容为空', '清洗后为空'].includes(task.status)) {
       meta += `<span>${timeAgo}</span>`;
     }
 
-    const isRunning = ['processing', 'cleaning', 'extracting', 'reviewing', 'linking'].includes(task.status);
+    const isRunning = ['处理中', '清洗中', '抽取中', '审核中', '链接中'].includes(task.status);
     const iconHtml = isRunning ? `<span class="spin">${statusInfo.icon}</span>` : statusInfo.icon;
 
     html += `

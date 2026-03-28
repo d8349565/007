@@ -67,7 +67,7 @@ def cmd_process(args):
         conn = get_connection()
         try:
             rows = conn.execute(
-                "SELECT id FROM source_document WHERE status IS NULL OR status = 'imported'"
+                "SELECT id FROM source_document WHERE status IN ('待处理', 'imported', 'failed', 'extracting', 'too_short') OR status IS NULL"
             ).fetchall()
         finally:
             conn.close()

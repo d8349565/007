@@ -708,7 +708,7 @@ def get_candidate_relations_from_facts() -> list[dict]:
                FROM fact_atom f
                JOIN entity es ON f.subject_entity_id = es.id
                JOIN entity eo ON f.object_entity_id = eo.id
-               WHERE f.review_status IN ('AUTO_PASS', 'HUMAN_PASS')
+               WHERE f.review_status IN ('自动通过', '人工通过')
                  AND f.fact_type IN ('COOPERATION', 'INVESTMENT', 'EXPANSION')
                  AND f.subject_entity_id IS NOT NULL
                  AND f.object_entity_id IS NOT NULL
@@ -806,7 +806,7 @@ def ai_suggest_relations(hint: str = "") -> list[dict]:
 
     entity_lines = []
     for e in entities:
-        line = f"- [{e['id']}] {e['canonical_name']} [{e['entity_type'] or 'UNKNOWN'}]"
+        line = f"- [{e['id']}] {e['canonical_name']} [{e['entity_type'] or '未知'}]"
         if e["aliases"]:
             line += f"  别名: {e['aliases']}"
         entity_lines.append(line)

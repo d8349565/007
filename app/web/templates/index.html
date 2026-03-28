@@ -46,7 +46,7 @@
     </div>
     <div class="card metric-card metric-card-green">
       <div class="metric-icon" style="font-size:22px;margin-bottom:6px;">✅</div>
-      {% set auto_pass = stats.review_status_distribution | selectattr('review_status','eq','AUTO_PASS') | list %}
+      {% set auto_pass = stats.review_status_distribution | selectattr('review_status','eq','自动通过') | list %}
       <div class="metric-value">{{ auto_pass[0].cnt if auto_pass else 0 }}</div>
       <div class="metric-label">自动通过</div>
       <div class="metric-footer">
@@ -57,7 +57,7 @@
     </div>
     <div class="card metric-card metric-card-orange">
       <div class="metric-icon" style="font-size:22px;margin-bottom:6px;">⏳</div>
-      {% set human = stats.review_status_distribution | selectattr('review_status','eq','HUMAN_REVIEW_REQUIRED') | list %}
+      {% set human = stats.review_status_distribution | selectattr('review_status','eq','待人工审核') | list %}
       <div class="metric-value">{{ human[0].cnt if human else 0 }}</div>
       <div class="metric-label">待人工审核</div>
       <div class="metric-footer"><a href="/review" style="color:var(--color-warning);">前往审核 →</a></div>
@@ -123,11 +123,11 @@
             {% set pct = (row.cnt / total * 100)|int %}
             <tr>
               <td>
-                {% if row.review_status == 'AUTO_PASS' or row.review_status == 'HUMAN_PASS' %}
-                  <span class="badge badge-pass">{% if row.review_status == 'AUTO_PASS' %}自动通过{% else %}人工通过{% endif %}</span>
-                {% elif row.review_status in ('REJECTED', 'HUMAN_REJECTED') %}
-                  <span class="badge badge-reject">{% if row.review_status == 'REJECTED' %}已拒绝{% else %}人工拒绝{% endif %}</span>
-                {% elif row.review_status == 'HUMAN_REVIEW_REQUIRED' %}
+                {% if row.review_status == '自动通过' or row.review_status == '人工通过' %}
+                  <span class="badge badge-pass">{% if row.review_status == '自动通过' %}自动通过{% else %}人工通过{% endif %}</span>
+                {% elif row.review_status in ('已拒绝', '人工拒绝') %}
+                  <span class="badge badge-reject">{% if row.review_status == '已拒绝' %}已拒绝{% else %}人工拒绝{% endif %}</span>
+                {% elif row.review_status == '待人工审核' %}
                   <span class="badge badge-review">待人工审核</span>
                 {% else %}
                   <span class="badge badge-pending">待处理</span>
@@ -136,11 +136,11 @@
               <td>{{ row.cnt }}</td>
               <td>
                 <div class="bar-bg">
-                  {% if row.review_status in ('AUTO_PASS','HUMAN_PASS') %}
+                  {% if row.review_status in ('自动通过','人工通过') %}
                     <div class="bar-fill bar-fill-pass" style="width:{{ pct }}%"></div>
-                  {% elif row.review_status in ('REJECTED','HUMAN_REJECTED') %}
+                  {% elif row.review_status in ('已拒绝','人工拒绝') %}
                     <div class="bar-fill bar-fill-reject" style="width:{{ pct }}%"></div>
-                  {% elif row.review_status == 'HUMAN_REVIEW_REQUIRED' %}
+                  {% elif row.review_status == '待人工审核' %}
                     <div class="bar-fill bar-fill-review" style="width:{{ pct }}%"></div>
                   {% else %}
                     <div class="bar-fill bar-fill-pending" style="width:{{ pct }}%"></div>

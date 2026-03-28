@@ -280,7 +280,7 @@ def _get_entity_sample_facts(entity_id: str, conn, limit: int = 3) -> list[str]:
         """SELECT fact_type, predicate, object_text, value_num, value_text, unit, time_expr
            FROM fact_atom
            WHERE subject_entity_id = ?
-             AND review_status IN ('AUTO_PASS','HUMAN_PASS')
+             AND review_status IN ('自动通过','人工通过')
            LIMIT ?""",
         (entity_id, limit),
     ).fetchall()
@@ -303,7 +303,7 @@ def _call_llm_for_pair(entity_a: dict, entity_b: dict, conn) -> dict:
     """
     调用 LLM 判断两个实体是否应合并。
     返回 {verdict, confidence, primary_name, reason, model}
-    出错时返回 verdict='uncertain'。
+    出错时返回 verdict='不确定'。
     """
     from app.services.llm_client import LLMClient
 
@@ -333,7 +333,7 @@ def _call_llm_for_pair(entity_a: dict, entity_b: dict, conn) -> dict:
         )
         data = result["data"]
         return {
-            "verdict":      data.get("verdict", "uncertain"),
+            "verdict":      data.get("verdict", "不确定"),
             "confidence":   float(data.get("confidence", 0.5)),
             "primary_name": data.get("primary_name", ""),
             "reason":       data.get("reason", ""),
@@ -343,7 +343,7 @@ def _call_llm_for_pair(entity_a: dict, entity_b: dict, conn) -> dict:
         logger.warning("LLM 实体分析失败 (%s vs %s): %s",
                        entity_a["canonical_name"], entity_b["canonical_name"], e)
         return {
-            "verdict": "uncertain",
+            "verdict": "不确定",
             "confidence": 0.0,
             "primary_name": "",
             "reason": f"LLM调用失败: {str(e)[:60]}",
@@ -409,8 +409,8 @@ def generate_merge_tasks(max_llm_calls: int = 30) -> dict:
                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
                     (task_id, c["primary_id"], c["secondary_id"],
                      c["score"], c["reason"],
-                     "merge", 1.0, "名称归一化后完全相同", "rule-only",
-                     "pending"),
+                     "合并", 1.0, "名称归一化后完全相同", "rule-only",
+                     "待处理"),
                 )
                 new_tasks += 1
                 continue
@@ -426,7 +426,7 @@ def generate_merge_tasks(max_llm_calls: int = 30) -> dict:
             # 如果 LLM 推荐不同的主实体，交换顺序
             final_primary_id = c["primary_id"]
             final_secondary_id = c["secondary_id"]
-            if (llm_result["verdict"] == "merge"
+            if (llm_result["verdict"] == "合并"
                     and llm_result["primary_name"]
                     and llm_result["primary_name"] == secondary["canonical_name"]):
                 final_primary_id, final_secondary_id = c["secondary_id"], c["primary_id"]
@@ -443,7 +443,7 @@ def generate_merge_tasks(max_llm_calls: int = 30) -> dict:
                  llm_result["confidence"],
                  llm_result["reason"],
                  llm_result["model"],
-                 "pending"),
+                 "待处理"),
             )
             new_tasks += 1
 
@@ -464,7 +464,7 @@ def generate_merge_tasks(max_llm_calls: int = 30) -> dict:
 def get_pending_merge_tasks(status: str = "pending") -> list[dict]:
     """
     返回指定状态的合并任务列表，附带实体名称信息。
-    status: 'pending' | 'approved' | 'rejected' | 'executed' | 'all'
+    status: '待处理' | '已批准' | '已拒绝' | '已执行' | 'all'
     """
     conn = get_connection()
     try:
@@ -500,7 +500,7 @@ def get_merge_task_stats() -> dict:
         rows = conn.execute(
             "SELECT status, COUNT(*) AS cnt FROM entity_merge_task GROUP BY status"
         ).fetchall()
-        stats = {"pending": 0, "approved": 0, "rejected": 0, "executed": 0, "total": 0}
+        stats = {"待处理": 0, "已批准": 0, "已拒绝": 0, "已执行": 0, "total": 0}
         for r in rows:
             stats[r["status"]] = r["cnt"]
             stats["total"] += r["cnt"]
@@ -523,7 +523,7 @@ def approve_task(task_id: str) -> dict:
         ).fetchone()
         if not task:
             raise ValueError(f"任务不存在: {task_id}")
-        if task["status"] == "executed":
+        if task["status"] == "已执行":
             raise ValueError("任务已执行，不能重复操作")
     finally:
         conn.close()
@@ -535,7 +535,7 @@ def approve_task(task_id: str) -> dict:
     conn = get_connection()
     try:
         conn.execute(
-            "UPDATE entity_merge_task SET status='executed', reviewed_at=datetime('now') WHERE id=?",
+            "UPDATE entity_merge_task SET status='已执行', reviewed_at=datetime('now') WHERE id=?",
             (task_id,),
         )
         conn.commit()
@@ -550,7 +550,7 @@ def reject_task(task_id: str) -> None:
     conn = get_connection()
     try:
         conn.execute(
-            "UPDATE entity_merge_task SET status='rejected', reviewed_at=datetime('now') WHERE id=?",
+            "UPDATE entity_merge_task SET status='已拒绝', reviewed_at=datetime('now') WHERE id=?",
             (task_id,),
         )
         conn.commit()

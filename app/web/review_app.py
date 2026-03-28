@@ -2,6 +2,7 @@
 
 import json
 import os
+import concurrent.futures
 import threading
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
 
@@ -19,6 +20,40 @@ from app.services.query import (
 from app.web.api_tasks import api_tasks_bp
 
 logger = get_logger(__name__)
+
+# ── 后台处理线程池（LLM 调用为 I/O 密集，可安全并行；
+#    SQLite WAL 模式支持并发读写）──
+_max_workers = get_config().get("pipeline", {}).get("max_concurrent_docs", 4)
+_executor = concurrent.futures.ThreadPoolExecutor(max_workers=_max_workers, thread_name_prefix="doc-proc")
+
+# ── 暂停控制：Event set = 运行中，clear = 暂停 ──
+_pause_event = threading.Event()
+_pause_event.set()  # 默认运行
+
+
+def _process_one_doc(doc_id: str) -> None:
+    """处理单个文档，带超时保护。在线程池中执行。"""
+    from app.services.pipeline import process_document
+
+    # 如果已暂停，等待恢复（每 2 秒检查一次）
+    while not _pause_event.wait(timeout=2):
+        pass
+
+    try:
+        process_document(doc_id)
+    except Exception as e:
+        logger.error("后台处理文档失败 [%s]: %s", doc_id[:8], e, exc_info=True)
+        conn = get_connection()
+        try:
+            conn.execute(
+                "UPDATE source_document SET status='失败', error_message=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (str(e)[:500], doc_id),
+            )
+            conn.commit()
+        except Exception:
+            pass
+        finally:
+            conn.close()
 
 # 事实类型中文名映射
 FACT_TYPE_NAMES = {
@@ -207,21 +242,21 @@ def create_app() -> Flask:
         # 汇总统计
         summary = {
             "total": len(docs),
-            "processed": sum(1 for d in docs if d["status"] == "processed"),
-            "failed": sum(1 for d in docs if d["status"] == "failed"),
-            "processing": sum(1 for d in docs if d["status"] in ("processing", "cleaning", "extracting", "reviewing", "linking")),
-            "total_facts": sum(d["fact_count"] for d in docs),
-            "total_evidences": sum(d["evidence_count"] for d in docs),
-            "total_cost": sum(d["cost"] for d in docs),
-            "tasks_failed": sum(d["fail_tasks"] for d in docs),
+            "processed": sum(1 for d in docs if d["status"] == "已完成"),
+            "failed": sum(1 for d in docs if d["status"] == "失败"),
+            "processing": sum(1 for d in docs if d["status"] in ("处理中", "清洗中", "抽取中", "审核中", "链接中")),
+            "total_facts": sum(d.get("fact_count") or 0 for d in docs),
+            "total_evidences": sum(d.get("evidence_count") or 0 for d in docs),
+            "total_cost": sum(d.get("cost") or 0 for d in docs),
+            "tasks_failed": sum(d.get("fail_tasks") or 0 for d in docs),
         }
         # 按状态分组排序：failed 在前，processing 次之，processed 最后
-        status_order = {"failed": 0, "processing": 1, "cleaning": 1, "extracting": 1, "reviewing": 1, "linking": 1, "processed": 2, "empty": 3, "empty_after_clean": 3}
+        status_order = {"失败": 0, "处理中": 1, "清洗中": 1, "抽取中": 1, "审核中": 1, "链接中": 1, "已完成": 2, "内容为空": 3, "清洗后为空": 3}
         docs.sort(key=lambda d: (status_order.get(d["status"], 9), d.get("crawl_time") or ""), reverse=False)
         # failed 和 processing 排最前，processed 按时间倒序
-        failed_docs = [d for d in docs if d["status"] == "failed"]
-        processing_docs = [d for d in docs if d["status"] in ("processing", "cleaning", "extracting", "reviewing", "linking")]
-        ok_docs = [d for d in docs if d["status"] not in ("failed", "processing", "cleaning", "extracting", "reviewing", "linking")]
+        failed_docs = [d for d in docs if d["status"] == "失败"]
+        processing_docs = [d for d in docs if d["status"] in ("处理中", "清洗中", "抽取中", "审核中", "链接中")]
+        ok_docs = [d for d in docs if d["status"] not in ("失败", "处理中", "清洗中", "抽取中", "审核中", "链接中")]
         ok_docs.sort(key=lambda d: d.get("crawl_time") or "", reverse=True)
         sorted_docs = failed_docs + processing_docs + ok_docs
         return render_template("documents.html", documents=sorted_docs, summary=summary)
@@ -261,13 +296,13 @@ def create_app() -> Flask:
         """已通过结果展示页"""
         fact_type = request.args.get("fact_type", "")
         doc_id = request.args.get("doc_id", "")
-        pass_type = request.args.get("pass_type", "")  # '' | 'AUTO_PASS' | 'HUMAN_PASS'
+        pass_type = request.args.get("pass_type", "")  # '' | '自动通过' | '人工通过'
         subject_q = request.args.get("subject_q", "").strip()
         page = int(request.args.get("page", 1))
         per_page = 30
 
         # 查询状态范围
-        if pass_type in ("AUTO_PASS", "HUMAN_PASS"):
+        if pass_type in ("自动通过", "人工通过"):
             status_filter = pass_type
         else:
             status_filter = ""  # 由 query_facts 双状态处理
@@ -276,12 +311,12 @@ def create_app() -> Flask:
         if not pass_type:
             facts_auto = query_facts(
                 subject=subject_q,
-                fact_type=fact_type, review_status="AUTO_PASS",
+                fact_type=fact_type, review_status="自动通过",
                 document_id=doc_id, limit=per_page * 10,
             )
             facts_human = query_facts(
                 subject=subject_q,
-                fact_type=fact_type, review_status="HUMAN_PASS",
+                fact_type=fact_type, review_status="人工通过",
                 document_id=doc_id, limit=per_page * 10,
             )
             all_facts = facts_auto + facts_human
@@ -333,7 +368,7 @@ def create_app() -> Flask:
     def review_list():
         """审核列表页"""
         fact_type = request.args.get("fact_type", "")
-        status = request.args.get("status", "HUMAN_REVIEW_REQUIRED")
+        status = request.args.get("status", "待人工审核")
         page = int(request.args.get("page", 1))
         per_page = 20
 
@@ -360,8 +395,8 @@ def create_app() -> Flask:
 
         valid_types = cfg.get("fact_types", [])
         statuses = [
-            "HUMAN_REVIEW_REQUIRED", "AUTO_PASS", "PENDING",
-            "REJECTED", "HUMAN_PASS", "HUMAN_REJECTED", "UNCERTAIN",
+            "待人工审核", "自动通过", "待处理",
+            "已拒绝", "人工通过", "人工拒绝", "不确定",
         ]
 
         return render_template(
@@ -389,7 +424,7 @@ def create_app() -> Flask:
         action = request.form.get("action", "")
         note = request.form.get("note", "")
 
-        if action not in ("HUMAN_PASS", "HUMAN_REJECTED"):
+        if action not in ("人工通过", "人工拒绝"):
             return jsonify({"error": "invalid action"}), 400
 
         conn = get_connection()
@@ -414,7 +449,7 @@ def create_app() -> Flask:
                 """INSERT INTO review_log
                 (id, target_type, target_id, old_status, new_status,
                  reviewer, review_action, review_note)
-                VALUES (?, 'fact_atom', ?, ?, ?, 'human', ?, ?)""",
+                VALUES (?, 'fact_atom', ?, ?, ?, '人工', ?, ?)""",
                 (str(uuid.uuid4()), fact_id, old_status, action, action.lower(), note),
             )
             conn.commit()
@@ -445,11 +480,11 @@ def create_app() -> Flask:
                 update_vals[field] = val
 
         if action == "save_and_pass":
-            new_status = "HUMAN_PASS"
+            new_status = "人工通过"
         elif action == "save_and_reject":
-            new_status = "HUMAN_REJECTED"
+            new_status = "人工拒绝"
         else:
-            new_status = "HUMAN_REVIEW_REQUIRED"
+            new_status = "待人工审核"
 
         conn = get_connection()
         try:
@@ -473,7 +508,7 @@ def create_app() -> Flask:
                 """INSERT INTO review_log
                 (id, target_type, target_id, old_status, new_status,
                  reviewer, review_action, review_note)
-                VALUES (?, 'fact_atom', ?, ?, ?, 'human', 'human_edit', ?)""",
+                VALUES (?, 'fact_atom', ?, ?, ?, '人工', '人工编辑', ?)""",
                 (
                     str(uuid.uuid4()), fact_id, old_status, new_status,
                     update_vals.get("review_note") or "",
@@ -664,7 +699,7 @@ def create_app() -> Flask:
         clear_document_results(doc_id)
         conn = get_connection()
         try:
-            conn.execute("UPDATE source_document SET status='ACTIVE' WHERE id=?", (doc_id,))
+            conn.execute("UPDATE source_document SET status='待处理' WHERE id=?", (doc_id,))
             conn.commit()
         finally:
             conn.close()
@@ -716,7 +751,7 @@ def create_app() -> Flask:
                            COUNT(f.id) AS fact_count
                     FROM entity e
                     LEFT JOIN fact_atom f ON f.subject_entity_id = e.id
-                      AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                      AND f.review_status IN ('自动通过','人工通过')
                     WHERE e.id IN ({placeholders})
                     GROUP BY e.id""",
                 id_list,
@@ -731,7 +766,7 @@ def create_app() -> Flask:
     def api_merge_task_list():
         """返回合并任务列表，支持 ?status=pending|all|rejected|executed"""
         from app.services.entity_merger import get_pending_merge_tasks, get_merge_task_stats
-        status = request.args.get("status", "pending")
+        status = request.args.get("status", "待处理")
         tasks = get_pending_merge_tasks(status=status)
         stats = get_merge_task_stats()
         return jsonify({"tasks": tasks, "stats": stats})
@@ -861,7 +896,7 @@ def create_app() -> Flask:
                 """SELECT e.id
                    FROM entity e
                    LEFT JOIN fact_atom f ON f.subject_entity_id = e.id
-                     AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                     AND f.review_status IN ('自动通过','人工通过')
                    GROUP BY e.id
                    ORDER BY COUNT(f.id) DESC
                    LIMIT ?""",
@@ -886,7 +921,7 @@ def create_app() -> Flask:
         """查询实体关联建议列表"""
         from app.services.entity_analyzer import get_suggestions
         entity_id = request.args.get("entity_id", "") or None
-        status = request.args.get("status", "pending")
+        status = request.args.get("status", "待处理")
         limit = min(int(request.args.get("limit", 100)), 500)
         suggestions = get_suggestions(entity_id=entity_id, status=status, limit=limit)
         return jsonify({"suggestions": suggestions})
@@ -930,11 +965,11 @@ def create_app() -> Flask:
                    FROM entity e
                    LEFT JOIN fact_atom f_linked
                      ON f_linked.subject_entity_id = e.id
-                     AND f_linked.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                     AND f_linked.review_status IN ('自动通过','人工通过')
                    LEFT JOIN entity_alias ea ON ea.entity_id = e.id
                    LEFT JOIN fact_atom f_text
                      ON f_text.subject_entity_id IS NULL
-                     AND f_text.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                     AND f_text.review_status IN ('自动通过','人工通过')
                      AND (f_text.subject_text = e.canonical_name
                           OR f_text.subject_text = ea.alias_name)
                    GROUP BY e.id
@@ -1084,7 +1119,7 @@ def create_app() -> Flask:
                           COUNT(DISTINCT f.id) AS cnt
                    FROM entity e
                    LEFT JOIN fact_atom f ON f.subject_entity_id = e.id
-                     AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                     AND f.review_status IN ('自动通过','人工通过')
                    WHERE e.canonical_name LIKE ?
                    GROUP BY e.id ORDER BY cnt DESC LIMIT 20""",
                 (pattern,),
@@ -1097,7 +1132,7 @@ def create_app() -> Flask:
                    FROM entity_alias ea
                    JOIN entity e ON ea.entity_id = e.id
                    LEFT JOIN fact_atom f ON f.subject_entity_id = e.id
-                     AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                     AND f.review_status IN ('自动通过','人工通过')
                    WHERE ea.alias_name LIKE ?
                    GROUP BY ea.entity_id ORDER BY cnt DESC LIMIT 10""",
                 (pattern,),
@@ -1127,7 +1162,7 @@ def create_app() -> Flask:
             subj_rows = conn.execute(
                 """SELECT subject_text AS text_val, COUNT(*) AS cnt
                    FROM fact_atom
-                   WHERE review_status IN ('AUTO_PASS','HUMAN_PASS')
+                   WHERE review_status IN ('自动通过','人工通过')
                      AND subject_text LIKE ? AND subject_text IS NOT NULL
                      AND subject_entity_id IS NULL
                    GROUP BY subject_text ORDER BY cnt DESC LIMIT 50""",
@@ -1136,7 +1171,7 @@ def create_app() -> Flask:
             obj_rows = conn.execute(
                 """SELECT object_text AS text_val, COUNT(*) AS cnt
                    FROM fact_atom
-                   WHERE review_status IN ('AUTO_PASS','HUMAN_PASS')
+                   WHERE review_status IN ('自动通过','人工通过')
                      AND object_text LIKE ? AND object_text IS NOT NULL
                      AND object_entity_id IS NULL
                    GROUP BY object_text ORDER BY cnt DESC LIMIT 30""",
@@ -1211,7 +1246,7 @@ def create_app() -> Flask:
             subj_rows = conn.execute(
                 """SELECT subject_text AS text_val, COUNT(*) AS cnt
                    FROM fact_atom
-                   WHERE review_status IN ('AUTO_PASS','HUMAN_PASS')
+                   WHERE review_status IN ('自动通过','人工通过')
                      AND subject_text IS NOT NULL AND subject_text != ''
                    GROUP BY subject_text
                    HAVING cnt >= 1
@@ -1224,7 +1259,7 @@ def create_app() -> Flask:
                           COUNT(DISTINCT f.id) AS cnt
                    FROM entity e
                    LEFT JOIN fact_atom f ON f.subject_entity_id = e.id
-                     AND f.review_status IN ('AUTO_PASS','HUMAN_PASS')
+                     AND f.review_status IN ('自动通过','人工通过')
                    GROUP BY e.id"""
             ).fetchall()
         finally:
@@ -1407,8 +1442,8 @@ def create_app() -> Flask:
         valid_types = cfg.get("fact_types", [])
 
         REL_TYPE_ZH = {
-            "SUBSIDIARY": "子公司", "SHAREHOLDER": "股东", "JV": "合资",
-            "BRAND": "品牌归属", "PARTNER": "合作方", "INVESTS_IN": "投资/持有",
+            "子公司": "子公司", "股东": "股东", "合资": "合资",
+            "品牌": "品牌归属", "合作方": "合作方", "投资": "投资/持有",
         }
 
         return render_template(
@@ -1578,7 +1613,7 @@ def create_app() -> Flask:
                 """INSERT INTO review_log
                 (id, target_type, target_id, old_status, new_status,
                  reviewer, review_action, review_note)
-                VALUES (?, 'fact_atom', ?, 'DELETED', 'DELETED', 'human', 'delete', '')""",
+                VALUES (?, 'fact_atom', ?, 'DELETED', 'DELETED', '人工', 'delete', '')""",
                 (str(uuid.uuid4()), fact_id),
             )
             conn.commit()
@@ -1633,8 +1668,8 @@ def create_app() -> Flask:
         valid_types = cfg.get("fact_types", [])
 
         REL_TYPE_ZH = {
-            "SUBSIDIARY": "子公司", "SHAREHOLDER": "股东", "JV": "合资",
-            "BRAND": "品牌归属", "PARTNER": "合作方", "INVESTS_IN": "投资/持有",
+            "子公司": "子公司", "股东": "股东", "合资": "合资",
+            "品牌": "品牌归属", "合作方": "合作方", "投资": "投资/持有",
         }
 
         return render_template(
@@ -1652,64 +1687,26 @@ def create_app() -> Flask:
         )
 
     def _start_background_process(doc_ids: list[str]):
-        """在后台线程中处理文档（避免阻塞 HTTP 请求）"""
-        def _run():
-            import signal
-            from app.services.pipeline import process_document
-            from app.models.db import get_connection
+        """将文档提交到后台线程池并行处理。
 
-            # 单文档总超时时间（秒），防止 LLM 调用等场景无限挂起
-            DOC_TIMEOUT = 300  # 5 分钟
+        ThreadPoolExecutor(max_workers=N) 允许 N 篇文档并行处理，
+        每个文档独立提交，一个失败不影响后续文档。
+        """
+        def _on_done(future: concurrent.futures.Future, doc_id: str):
+            exc = future.exception()
+            if exc:
+                logger.error("文档处理异常 [%s]: %s", doc_id[:8], exc)
 
-            for doc_id in doc_ids:
-                try:
-                    # 为当前文档设置 alarm 超时（仅 Unix 有效，Windows 下忽略）
-                    def timeout_handler(signum, frame):
-                        raise TimeoutError(f"文档处理超时（>{DOC_TIMEOUT}s）")
-                    try:
-                        signal.signal(signal.SIGALRM, timeout_handler)
-                        signal.alarm(DOC_TIMEOUT)
-                    except (AttributeError, OSError):
-                        # Windows 不支持 SIGALRM，静默跳过
-                        pass
-
-                    process_document(doc_id)
-
-                    # 取消 alarm
-                    try:
-                        signal.alarm(0)
-                    except (AttributeError, OSError):
-                        pass
-
-                except TimeoutError as e:
-                    logger.error("后台处理文档超时 [%s]: %s", doc_id[:8], e)
-                    _mark_failed_status(doc_id)
-                except Exception as e:
-                    logger.error("后台处理文档失败 [%s]: %s", doc_id[:8], e)
-                    _mark_failed_status(doc_id)
-
-        def _mark_failed_status(doc_id):
-            """标记文档为失败状态"""
-            from app.models.db import get_connection
-            conn = get_connection()
-            try:
-                conn.execute(
-                    "UPDATE source_document SET status='failed', updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                    (doc_id,),
-                )
-                conn.commit()
-            finally:
-                conn.close()
-
-        t = threading.Thread(target=_run, daemon=True)
-        t.start()
+        for doc_id in doc_ids:
+            future = _executor.submit(_process_one_doc, doc_id)
+            future.add_done_callback(lambda f, did=doc_id: _on_done(f, did))
 
     # ─────────────── 批量重评估 API ───────────────
 
     @app.route("/api/review/re-evaluate", methods=["POST"])
     def api_review_re_evaluate():
-        """用当前 config 批量重评估 HUMAN_REVIEW_REQUIRED 事实，无需重新调用 LLM。
-        对 confidence_score >= 0.65 且符合新配置条件的事实晋升为 AUTO_PASS。
+        """用当前 config 批量重评估待人工审核 事实，无需重新调用 LLM。
+        对 confidence_score >= 0.65 且符合新配置条件的事实晋升为自动通过。
         """
         from app.services.reviewer import batch_re_evaluate_pending
         try:
@@ -1718,6 +1715,27 @@ def create_app() -> Flask:
         except Exception as e:
             logger.error("批量重评估失败: %s", e, exc_info=True)
             return jsonify({"error": str(e)}), 500
+
+    # ─────────────── 暂停/继续 API ───────────────
+
+    @app.route("/api/tasks/pause", methods=["POST"])
+    def api_pause_processing():
+        """暂停后台处理"""
+        _pause_event.clear()
+        logger.info("后台处理已暂停")
+        return jsonify({"ok": True, "paused": True})
+
+    @app.route("/api/tasks/resume", methods=["POST"])
+    def api_resume_processing():
+        """继续后台处理"""
+        _pause_event.set()
+        logger.info("后台处理已恢复")
+        return jsonify({"ok": True, "paused": False})
+
+    @app.route("/api/tasks/pause-status", methods=["GET"])
+    def api_pause_status():
+        """获取当前暂停状态"""
+        return jsonify({"paused": not _pause_event.is_set()})
 
     # 注册任务状态 API 蓝图
     app.register_blueprint(api_tasks_bp)

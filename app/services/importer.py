@@ -48,7 +48,7 @@ def import_file(
         title = path.stem
 
     return _upsert_document(
-        source_type="file",
+        source_type="文件",
         source_name=source or str(path.name),
         title=title,
         author=author,
@@ -95,7 +95,7 @@ def import_url(
         title = _extract_title(soup, raw_text, url)
 
     return _upsert_document(
-        source_type="url",
+        source_type="网址",
         source_name=source or url[:200],
         title=title,
         author=author,
@@ -117,7 +117,7 @@ def import_paste(
     返回: document_id
     """
     return _upsert_document(
-        source_type="paste",
+        source_type="粘贴",
         source_name=None,
         title=title,
         author=author,
@@ -307,7 +307,7 @@ def _upsert_document(
                     """UPDATE source_document SET
                         source_type=?, source_name=?, title=?, author=?,
                         url=?, publish_time=?, raw_text=?,
-                        crawl_time=CURRENT_TIMESTAMP, status='ACTIVE'
+                        crawl_time=CURRENT_TIMESTAMP, status='待处理'
                     WHERE id=?""",
                     (source_type, source_name, title, author,
                      url, publish_time, raw_text, doc_id),
@@ -328,7 +328,7 @@ def _upsert_document(
                 """UPDATE source_document SET
                     source_type=?, source_name=?, title=?, author=?,
                     url=?, publish_time=?, raw_text=?,
-                    crawl_time=CURRENT_TIMESTAMP, status='ACTIVE'
+                    crawl_time=CURRENT_TIMESTAMP, status='待处理'
                 WHERE id=?""",
                 (source_type, source_name, title, author,
                  url, publish_time, raw_text, doc_id),

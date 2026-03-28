@@ -263,16 +263,16 @@
             <td class="title-cell">
               <div class="title-text">{{ doc.title or '(无标题)' }}</div>
               <div class="source-text">
-                {% if doc.source_type == 'url' %}网址{% elif doc.source_type == 'file' %}文件{% elif doc.source_type == 'paste' %}粘贴{% else %}{{ doc.source_type }}{% endif %}
+                {% if doc.source_type == '网址' %}网址{% elif doc.source_type == '文件' %}文件{% elif doc.source_type == '粘贴' %}粘贴{% else %}{{ doc.source_type }}{% endif %}
                 · {{ doc.source_name or '—' }}
               </div>
             </td>
             <td class="text-sm text-muted">{{ doc.author or '—' }}</td>
             <td class="nowrap text-sm text-muted">{{ (doc.crawl_time or '')[:16] }}</td>
             <td>
-              {% if doc.status == 'processed' %}
+              {% if doc.status == '已完成' %}
               <span class="badge badge-processed">已处理</span>
-              {% elif doc.status == 'ACTIVE' %}
+              {% elif doc.status == '待处理' %}
               <span class="badge badge-active">待处理</span>
               {% else %}
               <span class="badge badge-pending">{{ doc.status or '—' }}</span>

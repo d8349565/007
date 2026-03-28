@@ -6,7 +6,7 @@
 3. 跨类型去重：无金额 INVESTMENT 与 EXPANSION 描述同一事件
 
 去重策略：保留 confidence 最高的一条作为正本（canonical），
-其余标记为 review_status='DUPLICATE'，review_note 记录正本 ID。
+其余标记为 review_status='重复'，review_note 记录正本 ID。
 evidence_span 关联保持不变，可追溯原文出处。
 """
 
@@ -140,7 +140,7 @@ def deduplicate_facts(document_id: str) -> dict:
     return stats
 
 
-_ACTIVE_FILTER = "review_status NOT IN ('REJECTED', 'DUPLICATE', 'HUMAN_REJECTED')"
+_ACTIVE_FILTER = "review_status NOT IN ('已拒绝', '重复', '人工拒绝')"
 
 _FACT_COLUMNS = """id, fact_type, subject_text, predicate, object_text,
     value_num, value_text, time_expr, location_text,
@@ -173,7 +173,7 @@ def _dedup_within_document(document_id: str) -> int:
         for dup_id, canonical_id in duplicates:
             conn.execute(
                 f"""UPDATE fact_atom
-                SET review_status='DUPLICATE', review_note=?
+                SET review_status='重复', review_note=?
                 WHERE id=? AND {_ACTIVE_FILTER}""",
                 (f"重复: 与 {canonical_id} 重复（同文档）", dup_id),
             )
@@ -232,7 +232,7 @@ def _dedup_cross_document(document_id: str) -> int:
                 # 新的分数不高于已有的，标记新的为 DUPLICATE
                 conn.execute(
                     f"""UPDATE fact_atom
-                    SET review_status='DUPLICATE', review_note=?
+                    SET review_status='重复', review_note=?
                     WHERE id=? AND {_ACTIVE_FILTER}""",
                     (f"重复: 与 {existing_id} 重复（跨文档）", nf["id"]),
                 )
@@ -241,7 +241,7 @@ def _dedup_cross_document(document_id: str) -> int:
                 # 新的分数更高，标记旧的为 DUPLICATE，新的成为正本
                 conn.execute(
                     f"""UPDATE fact_atom
-                    SET review_status='DUPLICATE', review_note=?
+                    SET review_status='重复', review_note=?
                     WHERE id=? AND {_ACTIVE_FILTER}""",
                     (f"重复: 与 {nf['id']} 重复（跨文档，分数更低）", existing_id),
                 )
@@ -309,7 +309,7 @@ def _dedup_cross_type(document_id: str) -> int:
                 exp_id = exp_id_map[k]
                 conn.execute(
                     f"""UPDATE fact_atom
-                    SET review_status='DUPLICATE', review_note=?
+                    SET review_status='重复', review_note=?
                     WHERE id=? AND {_ACTIVE_FILTER}""",
                     (f"重复: 无金额INVESTMENT，与EXPANSION {exp_id} 重叠", inv["id"]),
                 )
