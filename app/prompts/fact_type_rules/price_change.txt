@@ -1,4 +1,12 @@
 Additional rules for PRICE_CHANGE:
+
+## CRITICAL: value_num is REQUIRED
+- If the source text does NOT provide a specific price value, percentage change (涨幅/降幅), or numerical amount, do NOT extract this as a PRICE_CHANGE fact.
+- Qualitative descriptions like "实施涨价措施", "采取定价行动", "产品执行涨价" without specific percentages or amounts are NOT valid PRICE_CHANGE facts — SKIP them entirely.
+- VALID examples: "涂料价格上涨15%", "均价从50元/kg上调至58元/kg", "提价幅度约5%-10%"
+- INVALID examples: "将继续实施定价行动" (no number), "通过涨价缓解压力" (no number)
+
+## Field rules:
 - product_name goes into qualifiers.product_name if stated.
 - price_type goes into qualifiers: list_price, market_price, contract_price, average_price.
 - change_pct goes into qualifiers if a percentage change is stated.

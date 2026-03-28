@@ -1,5 +1,11 @@
 Additional rules for INVESTMENT:
 
+## CRITICAL: value_num is STRONGLY PREFERRED
+- If the source text does NOT provide a specific investment amount (value_num + currency), think carefully whether this record adds value beyond what an EXPANSION record would capture.
+- When the same event is already extractable as EXPANSION (project construction/建设/扩建), only extract as INVESTMENT if a **specific monetary amount** is stated. Do NOT create INVESTMENT records that merely restate the project event without adding financial data.
+- VALID INVESTMENT: "计划总投资6.5亿元建设X项目" → has amount, extract both INVESTMENT and EXPANSION
+- INVALID INVESTMENT: "投资建设X项目" (no amount) → extract only as EXPANSION, skip INVESTMENT
+
 ## Field mapping for investment/acquisition facts:
 - **subject**: The investing/acquiring entity (company or subsidiary doing the deal). MUST be a company/organization name.
 - **object**: The TARGET of the investment — the entity being acquired, the company invested in, or the project receiving investment. MUST be a company name, project name, or asset description. NEVER put the monetary amount here.

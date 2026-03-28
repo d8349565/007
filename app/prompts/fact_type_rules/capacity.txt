@@ -5,3 +5,4 @@ Additional rules for CAPACITY:
 - phase (e.g. 一期, 二期) goes into qualifiers.phase.
 - Do not confuse capacity (产能) with actual output (产量). Capacity is potential; output is realized.
 - If expansion involves capacity, it may be both EXPANSION and CAPACITY facts — extract each separately.
+- **time_expr is important for CAPACITY**: If the evidence itself has no explicit time, use the article's publish time year as time_expr. Capacity data without temporal context loses analytical value.

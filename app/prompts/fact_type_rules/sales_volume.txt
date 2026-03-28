@@ -1,4 +1,14 @@
 Additional rules for SALES_VOLUME:
+
+## CRITICAL: Industry scope restriction
+- Only extract SALES_VOLUME for the **coatings/paints/resin/pigment** industry and directly related chemical products.
+- Do NOT extract as SALES_VOLUME:
+  - Upstream industry data: 造船完工量, 造船订单量, 手持订单量, 港口加注量 → these provide context but are NOT coatings industry facts
+  - Trade show statistics: 展览面积, 参展单位数量, 参观人数 → these describe events, not product volume
+  - General economic indicators unrelated to coatings
+- If the subject is a shipbuilding/造船 metric or a port/港口 metric, do NOT extract it as SALES_VOLUME even if it has a numeric value with physical units.
+
+## Field rules:
 - metric_name (e.g. 总产量, 销量, 表观消费量, 出货量) must go into qualifiers.metric_name.
 - yoy and qoq percentages must go into qualifiers.yoy or qualifiers.qoq, NOT into value_num.
 - value_num should be the absolute volume number.
