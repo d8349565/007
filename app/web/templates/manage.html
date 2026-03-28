@@ -726,8 +726,16 @@ function executeDelete() {
   })
   .then(r => r.json())
   .then(data => {
-    if (data.success) { closeDelete(); location.reload(); }
-    else { alert('删除失败: ' + JSON.stringify(data)); }
+    if (data.success) {
+      const errors = (data.results || []).filter(r => r.error);
+      if (errors.length) {
+        alert('部分文档删除失败: ' + errors.map(e => e.doc_id.slice(0,8) + ': ' + e.error).join('\n'));
+      }
+      closeDelete();
+      location.reload();
+    } else {
+      alert('删除失败: ' + JSON.stringify(data));
+    }
   })
   .catch(err => alert('请求失败: ' + err))
   .finally(() => { btn.disabled = false; btn.textContent = '确认删除'; });
