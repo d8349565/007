@@ -1,32 +1,88 @@
 {% extends "_base.html" %}
 {% set active = 'documents' %}
-{% block title %}文档列表 — 资讯颗粒化{% endblock %}
+{% block title %}任务总览 — 资讯颗粒化{% endblock %}
 
 {% block content %}
   <div class="page-header">
-    <div class="page-title">文档列表</div>
+    <div class="page-title">任务总览</div>
     <div class="page-actions">
       <a class="btn btn-primary" href="/import">导入文章</a>
     </div>
   </div>
 
+  {# ── 汇总统计卡片 ── #}
+  <div class="grid grid-4" style="margin-bottom:20px;">
+    <div class="card metric-card">
+      <div class="metric-value">{{ summary.total }}</div>
+      <div class="metric-label">文档总数</div>
+    </div>
+    <div class="card metric-card">
+      <div class="metric-value text-success">{{ summary.processed }}</div>
+      <div class="metric-label">处理成功</div>
+    </div>
+    <div class="card metric-card">
+      <div class="metric-value" style="color:#ef4444;">{{ summary.failed }}</div>
+      <div class="metric-label">处理失败</div>
+    </div>
+    <div class="card metric-card">
+      <div class="metric-value">{{ summary.total_facts }}</div>
+      <div class="metric-label">事实总数 · ¥{{ '%.2f'|format(summary.total_cost) }}</div>
+    </div>
+  </div>
+
+  {# ── 筛选标签 ── #}
+  <div style="margin-bottom:16px;display:flex;gap:8px;">
+    <button class="btn btn-sm {% if not request.args.get('filter') %}btn-primary{% else %}btn-ghost{% endif %}" onclick="filterDocs('all')">
+      全部 ({{ summary.total }})
+    </button>
+    {% if summary.failed > 0 %}
+    <button class="btn btn-sm {% if request.args.get('filter')=='failed' %}btn-primary{% else %}btn-ghost{% endif %}" onclick="filterDocs('failed')" style="color:#ef4444;">
+      失败 ({{ summary.failed }})
+    </button>
+    {% endif %}
+    {% if summary.processing > 0 %}
+    <button class="btn btn-sm btn-ghost" onclick="filterDocs('processing')">
+      处理中 ({{ summary.processing }})
+    </button>
+    {% endif %}
+    <button class="btn btn-sm {% if request.args.get('filter')=='processed' %}btn-primary{% else %}btn-ghost{% endif %}" onclick="filterDocs('processed')">
+      已完成 ({{ summary.processed }})
+    </button>
+  </div>
+
   <div class="card">
     {% if documents %}
     <div class="card-flush">
-      <table class="data-table">
+      <table class="data-table" id="doc-table">
         <thead>
           <tr>
-            <th>#</th>
+            <th style="width:36px">#</th>
+            <th>状态</th>
             <th>标题 / 来源</th>
             <th>采集时间</th>
             <th style="text-align:center">流水线进度</th>
+            <th>任务</th>
+            <th>费用</th>
             <th>操作</th>
           </tr>
         </thead>
         <tbody>
           {% for doc in documents %}
-          <tr style="cursor:pointer;" onclick="location.href='/documents/{{ doc.id }}'">
+          <tr class="doc-row doc-status-{{ doc.status }}" style="cursor:pointer;" onclick="location.href='/documents/{{ doc.id }}'">
             <td class="cell-muted">{{ loop.index }}</td>
+            <td>
+              {% if doc.status == 'failed' %}
+                <span class="badge badge-reject" title="{{ doc.error_message or '未记录错误信息（历史数据）' }}">失败</span>
+              {% elif doc.status == 'processed' %}
+                <span class="badge badge-pass">完成</span>
+              {% elif doc.status in ('processing', 'cleaning', 'extracting', 'reviewing', 'linking') %}
+                <span class="badge badge-running">{{ doc.status }}</span>
+              {% elif doc.status in ('empty', 'empty_after_clean') %}
+                <span class="badge badge-pending">空内容</span>
+              {% else %}
+                <span class="badge badge-pending">{{ doc.status }}</span>
+              {% endif %}
+            </td>
             <td class="title-cell">
               <div class="title-text">
                 {% if doc.url %}
@@ -39,6 +95,30 @@
                 {% if doc.source_type == 'url' %}网址{% elif doc.source_type == 'file' %}文件{% elif doc.source_type == 'paste' %}粘贴{% else %}{{ doc.source_type }}{% endif %}
                 · {{ doc.source_name or '—' }}
               </div>
+              {# 失败原因展示 #}
+              {% if doc.status == 'failed' %}
+                {% if doc.error_message %}
+                <div class="error-hint" style="color:#ef4444;font-size:12px;margin-top:4px;line-height:1.4;">
+                  ⚠ {{ doc.error_message[:150] }}{% if doc.error_message|length > 150 %}...{% endif %}
+                </div>
+                {% elif doc.fail_tasks > 0 %}
+                  {% for err in doc.failed_task_errors %}
+                  <div class="error-hint" style="color:#ef4444;font-size:12px;margin-top:4px;line-height:1.4;">
+                    ⚠ [{{ err.task_type }}] {{ err.error[:120] }}{% if err.error|length > 120 %}...{% endif %}
+                  </div>
+                  {% endfor %}
+                {% else %}
+                <div class="error-hint" style="color:#f59e0b;font-size:12px;margin-top:4px;">
+                  ⚠ 异常中断（未记录错误，可重新处理）
+                </div>
+                {% endif %}
+              {% elif doc.fail_tasks > 0 %}
+                {% for err in doc.failed_task_errors %}
+                <div class="error-hint" style="color:#f59e0b;font-size:12px;margin-top:4px;line-height:1.4;">
+                  ⚠ [{{ err.task_type }}] {{ err.error[:100] }}{% if err.error|length > 100 %}...{% endif %}
+                </div>
+                {% endfor %}
+              {% endif %}
             </td>
             <td class="nowrap text-sm text-muted">{{ (doc.crawl_time or '')[:16] }}</td>
             <td>
@@ -58,6 +138,28 @@
                   <div class="label">事实</div>
                 </div>
               </div>
+              {# review 分布小标签 #}
+              {% if doc.review_dist %}
+              <div style="margin-top:4px;display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">
+                {% if doc.review_dist.get('AUTO_PASS') %}
+                <span style="font-size:10px;color:#22c55e;">✓{{ doc.review_dist['AUTO_PASS'] }}</span>
+                {% endif %}
+                {% if doc.review_dist.get('HUMAN_REVIEW_REQUIRED') %}
+                <span style="font-size:10px;color:#f59e0b;">⏳{{ doc.review_dist['HUMAN_REVIEW_REQUIRED'] }}</span>
+                {% endif %}
+                {% if doc.review_dist.get('REJECTED') %}
+                <span style="font-size:10px;color:#ef4444;">✗{{ doc.review_dist['REJECTED'] }}</span>
+                {% endif %}
+              </div>
+              {% endif %}
+            </td>
+            <td class="text-sm text-muted nowrap">
+              {% if doc.total_tasks > 0 %}
+              <span style="color:#22c55e;">{{ doc.ok_tasks }}</span>{% if doc.fail_tasks > 0 %}/<span style="color:#ef4444;">{{ doc.fail_tasks }}</span>{% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td class="text-sm text-muted nowrap">
+              {% if doc.cost > 0 %}¥{{ '%.3f'|format(doc.cost) }}{% else %}—{% endif %}
             </td>
             <td onclick="event.stopPropagation()">
               <a class="btn btn-sm btn-ghost" href="/documents/{{ doc.id }}">详情 →</a>
@@ -71,4 +173,31 @@
     <div class="empty-state">暂无文档。<a href="/import">去导入 →</a></div>
     {% endif %}
   </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterDocs(status) {
+  const rows = document.querySelectorAll('.doc-row');
+  rows.forEach(row => {
+    if (status === 'all') {
+      row.style.display = '';
+    } else if (status === 'failed') {
+      row.style.display = row.classList.contains('doc-status-failed') ? '' : 'none';
+    } else if (status === 'processing') {
+      const s = row.className;
+      row.style.display = (s.includes('processing') || s.includes('cleaning') || s.includes('extracting') || s.includes('reviewing') || s.includes('linking')) ? '' : 'none';
+    } else if (status === 'processed') {
+      row.style.display = row.classList.contains('doc-status-processed') ? '' : 'none';
+    }
+  });
+  // 更新按钮样式
+  document.querySelectorAll('.page-header ~ div .btn-sm').forEach(btn => {
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-ghost');
+  });
+  event.target.classList.remove('btn-ghost');
+  event.target.classList.add('btn-primary');
+}
+</script>
 {% endblock %}

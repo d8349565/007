@@ -127,13 +127,13 @@ def export_csv(facts: list[dict], filepath: str = "") -> str:
 # ──────────────────────────── 统计 ────────────────────────────
 
 def get_documents(limit: int = 200, offset: int = 0) -> list[dict]:
-    """获取文档列表，附带各流程阶段计数及费用"""
+    """获取文档列表，附带各流程阶段计数、任务成败统计及费用"""
     conn = get_connection()
     try:
         # 先查文档基础信息和计数
         rows = conn.execute(
             """SELECT sd.id, sd.title, sd.source_name, sd.source_type,
-                      sd.status, sd.crawl_time, sd.publish_time, sd.url,
+                      sd.status, sd.error_message, sd.crawl_time, sd.publish_time, sd.url,
                       COUNT(DISTINCT dc.id)  AS chunk_count,
                       COUNT(DISTINCT es.id)  AS evidence_count,
                       COUNT(DISTINCT f.id)   AS fact_count
@@ -147,7 +147,7 @@ def get_documents(limit: int = 200, offset: int = 0) -> list[dict]:
             (limit, offset),
         ).fetchall()
 
-        # 单独查每个文档的 token 费用（避免 JOIN 倍增）
+        # 单独查每个文档的 token 费用 + 任务统计（避免 JOIN 倍增）
         doc_ids = [r["id"] for r in rows]
         result = []
         for r in rows:
@@ -163,10 +163,51 @@ def get_documents(limit: int = 200, offset: int = 0) -> list[dict]:
                 d["total_input_tokens"] = toks["total_in"]
                 d["total_output_tokens"] = toks["total_out"]
                 d["cost"] = calculate_cost(toks["total_in"] or 0, toks["total_out"] or 0)
+                # 任务成败统计
+                task_stats = conn.execute(
+                    """SELECT
+                          COUNT(*) AS total_tasks,
+                          SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) AS ok_tasks,
+                          SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS fail_tasks,
+                          SUM(CASE WHEN status='running' THEN 1 ELSE 0 END) AS run_tasks
+                       FROM extraction_task WHERE document_id=?""",
+                    (d["id"],),
+                ).fetchone()
+                d["total_tasks"] = task_stats["total_tasks"]
+                d["ok_tasks"] = task_stats["ok_tasks"]
+                d["fail_tasks"] = task_stats["fail_tasks"]
+                d["run_tasks"] = task_stats["run_tasks"]
+                # 失败任务的错误信息
+                if task_stats["fail_tasks"]:
+                    fail_rows = conn.execute(
+                        """SELECT task_type, error_message FROM extraction_task
+                           WHERE document_id=? AND status='failed'""",
+                        (d["id"],),
+                    ).fetchall()
+                    d["failed_task_errors"] = [
+                        {"task_type": fr["task_type"], "error": fr["error_message"] or ""}
+                        for fr in fail_rows
+                    ]
+                else:
+                    d["failed_task_errors"] = []
+                # review_status 分布
+                review_dist = conn.execute(
+                    """SELECT review_status, COUNT(*) AS cnt
+                       FROM fact_atom WHERE document_id=?
+                       GROUP BY review_status""",
+                    (d["id"],),
+                ).fetchall()
+                d["review_dist"] = {row["review_status"]: row["cnt"] for row in review_dist}
             else:
                 d["total_input_tokens"] = 0
                 d["total_output_tokens"] = 0
                 d["cost"] = 0.0
+                d["total_tasks"] = 0
+                d["ok_tasks"] = 0
+                d["fail_tasks"] = 0
+                d["run_tasks"] = 0
+                d["failed_task_errors"] = []
+                d["review_dist"] = {}
             result.append(d)
         return result
     finally:

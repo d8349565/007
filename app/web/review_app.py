@@ -204,7 +204,27 @@ def create_app() -> Flask:
     @app.route("/documents")
     def documents_list():
         docs = get_documents(limit=200)
-        return render_template("documents.html", documents=docs)
+        # 汇总统计
+        summary = {
+            "total": len(docs),
+            "processed": sum(1 for d in docs if d["status"] == "processed"),
+            "failed": sum(1 for d in docs if d["status"] == "failed"),
+            "processing": sum(1 for d in docs if d["status"] in ("processing", "cleaning", "extracting", "reviewing", "linking")),
+            "total_facts": sum(d["fact_count"] for d in docs),
+            "total_evidences": sum(d["evidence_count"] for d in docs),
+            "total_cost": sum(d["cost"] for d in docs),
+            "tasks_failed": sum(d["fail_tasks"] for d in docs),
+        }
+        # 按状态分组排序：failed 在前，processing 次之，processed 最后
+        status_order = {"failed": 0, "processing": 1, "cleaning": 1, "extracting": 1, "reviewing": 1, "linking": 1, "processed": 2, "empty": 3, "empty_after_clean": 3}
+        docs.sort(key=lambda d: (status_order.get(d["status"], 9), d.get("crawl_time") or ""), reverse=False)
+        # failed 和 processing 排最前，processed 按时间倒序
+        failed_docs = [d for d in docs if d["status"] == "failed"]
+        processing_docs = [d for d in docs if d["status"] in ("processing", "cleaning", "extracting", "reviewing", "linking")]
+        ok_docs = [d for d in docs if d["status"] not in ("failed", "processing", "cleaning", "extracting", "reviewing", "linking")]
+        ok_docs.sort(key=lambda d: d.get("crawl_time") or "", reverse=True)
+        sorted_docs = failed_docs + processing_docs + ok_docs
+        return render_template("documents.html", documents=sorted_docs, summary=summary)
 
     @app.route("/documents/<doc_id>")
     def document_detail(doc_id):
