@@ -10,6 +10,7 @@ from app.services.cleaner import clean_text
 from app.services.full_extractor import extract_facts_full_text
 from app.services.reviewer import review_document_facts
 from app.services.entity_linker import batch_link_fact_atoms
+from app.services.deduplicator import deduplicate_facts
 from app.services.query import clear_document_results
 
 logger = get_logger(__name__)
@@ -36,6 +37,7 @@ def process_document(document_id: str) -> dict:
         "passed": 0,
         "rejected": 0,
         "uncertain": 0,
+        "duplicates": 0,
     }
 
     # 1. 获取文档信息
@@ -129,19 +131,41 @@ def process_document(document_id: str) -> dict:
                 stats["uncertain"] += 1
             all_fact_atom_ids.append(rr["fact_atom_id"])
 
-    # 6. 实体链接
+    # 6. 自动去重（同文档 + 跨文档 + 跨类型）
+    if fact_results:
+        _mark_document_status(document_id, "deduplicating")
+        dedup_stats = deduplicate_facts(document_id)
+        stats["duplicates"] = sum(dedup_stats.values())
+
+    # 7. 实体链接（排除已标记 DUPLICATE / REJECTED 的事实）
     if all_fact_atom_ids:
         _mark_document_status(document_id, "linking")
-        batch_link_fact_atoms(all_fact_atom_ids)
+        conn = get_connection()
+        try:
+            placeholders = ",".join("?" * len(all_fact_atom_ids))
+            active_ids = [
+                row["id"] for row in
+                conn.execute(
+                    f"""SELECT id FROM fact_atom
+                    WHERE id IN ({placeholders})
+                      AND review_status NOT IN ('DUPLICATE', 'REJECTED')""",
+                    all_fact_atom_ids,
+                ).fetchall()
+            ]
+        finally:
+            conn.close()
+        if active_ids:
+            batch_link_fact_atoms(active_ids)
 
-    # 7. 更新文档状态
+    # 8. 更新文档状态
     _mark_document_status(document_id, "processed")
 
     logger.info(
-        "文档处理完成: %s — evidences=%d, facts=%d, pass=%d, reject=%d, uncertain=%d",
+        "文档处理完成: %s — evidences=%d, facts=%d, pass=%d, reject=%d, uncertain=%d, dup=%d",
         document_id[:8],
         stats["evidences"], stats["facts"],
         stats["passed"], stats["rejected"], stats["uncertain"],
+        stats["duplicates"],
     )
 
     return stats
@@ -166,7 +190,7 @@ def process_batch(document_ids: list[str], show_progress: bool = True) -> list[d
             results.append(result)
         except Exception as e:
             logger.error("处理文档失败 [%s]: %s", doc_id[:8], e)
-            _mark_document_status(doc_id, "failed")
+            _mark_document_status(doc_id, "failed", error_message=str(e)[:500])
             results.append({
                 "document_id": doc_id,
                 "error": str(e),

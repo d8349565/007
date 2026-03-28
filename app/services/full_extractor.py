@@ -16,6 +16,7 @@ from app.logger import get_logger
 from app.models.db import get_connection
 from app.services.llm_client import get_llm_client
 from app.services.entity_linker import get_known_entities_context
+from app.services.deduplicator import _get_discriminator
 
 logger = get_logger(__name__)
 
@@ -359,15 +360,28 @@ def extract_facts_full_text(
 
     logger.info("[doc=%s] 两阶段抽取完成，共 %d 条有效记录", document_id[:8], len(parsed_records))
 
-    # 同文档内去重：以 (fact_type, subject, predicate, value_text, time_expr) 为 key
+    # 同文档内去重：以 (fact_type, subject, 类型判别维度, value_num, time_expr) 为 key
+    # 用 value_num + qualifier 判别维度代替 predicate + value_text，
+    # 避免两阶段抽取因措辞微调而漏去重
     before_dedup = len(parsed_records)
     seen: dict[str, dict] = {}
     for rec in parsed_records:
+        ft = (rec.get("fact_type") or "").strip()
+        qualifiers = rec.get("qualifiers", {})
+        if not isinstance(qualifiers, dict):
+            qualifiers = {}
+
+        q_disc = _get_discriminator(
+            ft, qualifiers,
+            predicate=rec.get("predicate", ""),
+            object_text=rec.get("object", ""),
+        )
+
         key = "|".join([
-            (rec.get("fact_type") or "").strip(),
+            ft,
             (rec.get("subject") or "").strip(),
-            (rec.get("predicate") or "").strip(),
-            (rec.get("value_text") or "").strip(),
+            q_disc,
+            str(rec.get("value_num") or ""),
             (rec.get("time_expr") or "").strip(),
         ]).lower()
         if key in seen:
