@@ -85,8 +85,15 @@ class LLMClient:
                 )
 
                 usage = response.usage
+                content = response.choices[0].message.content or ""
+
+                # 清除 thinking 标签（MiniMax 等模型会输出 <think>...</think>）
+                if "<think>" in content:
+                    import re
+                    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+
                 result = {
-                    "content": response.choices[0].message.content or "",
+                    "content": content,
                     "input_tokens": usage.prompt_tokens if usage else 0,
                     "output_tokens": usage.completion_tokens if usage else 0,
                     "model": response.model or self.model,
@@ -155,8 +162,8 @@ class LLMClient:
 
         text = text.strip()
 
-        # 先去除 <thinking>...</thinking> 标签（如 MiniMax thinking 模型）
-        text = re.sub(r"<thinking>.*?</thinking>", "", text, flags=re.DOTALL)
+        # 先去除 thinking 标签（<thinking> 或 <think>）
+        text = re.sub(r"<think(?:ing)?>.*?</think(?:ing)?>", "", text, flags=re.DOTALL)
 
         # 尝试直接解析（去除 thinking 后应该是干净的 JSON）
         try:

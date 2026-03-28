@@ -9,7 +9,7 @@ database:
 # --- LLM 提供商切换（修改此处即可切换模型）---
 # 可选值：deepseek / kimi / minimax
 llm:
-  provider: "kimi"
+  provider: "minimax"
 
   # --- DeepSeek 配置 ---
   deepseek:
