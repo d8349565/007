@@ -2,6 +2,7 @@
 
 import csv
 import io
+import json
 from datetime import datetime
 
 from app.logger import get_logger
@@ -394,8 +395,8 @@ def cascade_delete_document(document_id: str) -> dict:
     """
     级联删除文档及其所有关联数据。
     删除顺序（尊重外键）：
-      review_log → fact_atom → evidence_span → extraction_task
-      → document_sentence → document_chunk → source_document
+      review_log → entity_relation_suggestion → fact_atom → evidence_span
+      → extraction_task → document_sentence → document_chunk → source_document
     返回各表删除行数。
     """
     conn = get_connection()
@@ -425,32 +426,42 @@ def cascade_delete_document(document_id: str) -> dict:
                 ev_ids,
             ).rowcount
 
-        # 3. 删除 fact_atom（清除实体链接，entity 本身保留）
+        # 3. 删除 entity_relation_suggestion（引用 fact_atom，必须先删）
+        if fact_ids:
+            placeholders = ",".join(["?"] * len(fact_ids))
+            stats["entity_relation_suggestion"] = conn.execute(
+                f"DELETE FROM entity_relation_suggestion WHERE evidence_fact_id IN ({placeholders})",
+                fact_ids,
+            ).rowcount
+        else:
+            stats["entity_relation_suggestion"] = 0
+
+        # 4. 删除 fact_atom（清除实体链接，entity 本身保留）
         stats["fact_atom"] = conn.execute(
             "DELETE FROM fact_atom WHERE document_id=?", (document_id,)
         ).rowcount
 
-        # 4. 删除 evidence_span
+        # 5. 删除 evidence_span
         stats["evidence_span"] = conn.execute(
             "DELETE FROM evidence_span WHERE document_id=?", (document_id,)
         ).rowcount
 
-        # 5. 删除 extraction_task
+        # 6. 删除 extraction_task
         stats["extraction_task"] = conn.execute(
             "DELETE FROM extraction_task WHERE document_id=?", (document_id,)
         ).rowcount
 
-        # 6. 删除 document_sentence
+        # 7. 删除 document_sentence
         stats["document_sentence"] = conn.execute(
             "DELETE FROM document_sentence WHERE document_id=?", (document_id,)
         ).rowcount
 
-        # 7. 删除 document_chunk
+        # 8. 删除 document_chunk
         stats["document_chunk"] = conn.execute(
             "DELETE FROM document_chunk WHERE document_id=?", (document_id,)
         ).rowcount
 
-        # 8. 删除 source_document
+        # 9. 删除 source_document
         stats["source_document"] = conn.execute(
             "DELETE FROM source_document WHERE id=?", (document_id,)
         ).rowcount
@@ -1019,6 +1030,64 @@ def get_entity_timeline(
         ).fetchall()
 
         facts = [dict(r) for r in rows]
+
+        # 跨文档去重：同一实体的近似事实只保留 confidence 最高的
+        def _normalize_time(t):
+            """归一化时间表达式用于去重比较"""
+            if not t:
+                return ""
+            import re
+            t = t.replace("-至今", "至今").replace("年-", "年").replace("月-", "月")
+            # "2024年12月02日" → "2024年12月2日"
+            t = re.sub(r"(\d)0(\d日)", r"\1\2", t)
+            return t
+
+        def _dedup_key(f):
+            """生成去重键，对谓词同义词做归一化"""
+            ft = f["fact_type"]
+            subj = f["subject_text"] or ""
+            vt = f.get("value_text") or ""
+            te = _normalize_time(f.get("time_expr") or "")
+            obj = f.get("object_text") or ""
+            pred = f.get("predicate") or ""
+
+            # 解析 qualifiers
+            quals = {}
+            qj = f.get("qualifier_json")
+            if qj:
+                try:
+                    quals = json.loads(qj) if isinstance(qj, str) else qj
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            if ft in ("FINANCIAL_METRIC", "SALES_VOLUME"):
+                # 区分不同指标：用 metric_name 或 predicate
+                metric = quals.get("metric_name") or pred
+                return (ft, subj, metric, vt, te)
+            elif ft == "COMPETITIVE_RANKING":
+                # 归一化排名：用排名值 + 排名上下文
+                rank_val = vt or str(f.get("value_num") or "")
+                ctx = quals.get("ranking_name") or quals.get("segment") or ""
+                return (ft, subj, rank_val, ctx, te)
+            elif ft in ("INVESTMENT", "EXPANSION", "COOPERATION"):
+                # 用 object + value 区分
+                return (ft, subj, obj, vt, te)
+            else:
+                return (ft, subj, pred, vt, te)
+
+        seen = {}
+        deduped = []
+        for f in facts:
+            key = _dedup_key(f)
+            if key in seen:
+                existing = seen[key]
+                if (f.get("confidence_score") or 0) > (existing.get("confidence_score") or 0):
+                    deduped[deduped.index(existing)] = f
+                    seen[key] = f
+            else:
+                seen[key] = f
+                deduped.append(f)
+        facts = deduped
 
         # 可用的 fact_type 列表
         type_rows = conn.execute(
