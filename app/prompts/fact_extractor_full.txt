@@ -18,22 +18,17 @@ Extract facts that the article EXPLICITLY states about:
 
 ## Quantity expectations
 
-For each fact_type category below, extract AT LEAST the number of facts indicated.
-If the article contains multiple examples, extract ALL of them:
-- FINANCIAL_METRIC: 至少 2-3 条
-- SALES_VOLUME: 至少 1-2 条
-- CAPACITY: 至少 1-2 条
-- INVESTMENT: 至少 1-2 条
-- EXPANSION: 至少 1-2 条
-- MARKET_SHARE: 至少 1-2 条
-- COMPETITIVE_RANKING: 至少 2-3 条
-- COOPERATION: 至少 1-2 条
-- PRICE_CHANGE: 若有则抽
+Extract ALL facts the article EXPLICITLY states. For each fact_type:
+- If the article contains multiple examples of the same type, extract ALL of them.
+- If the article does NOT contain any fact of a certain type, leave that type's array EMPTY [].
+- Do NOT fabricate or force-fit facts just to fill every category.
+
+**DEDUPLICATION within the same article**:
+- Each unique fact should appear ONLY ONCE. If the same data point (same subject + same metric/action + same value + same time period) is mentioned multiple times in the article, extract it only once.
+- Different data points about the same entity (e.g. revenue in 2024 vs revenue in 2025) are separate facts — extract both.
+- If the article mentions the same ranking/achievement in multiple paragraphs (e.g. "global #1 in marine coatings" repeated), extract it only once.
 
 如果某段落提到多个公司/品牌的同类事实，应为每个公司/品牌单独创建一条记录。
-
-**IMPORTANT**: Every fact_type key must have at least 1 fact in its array.
-Do not skip this requirement even if a fact_type seems "less important".
 
 ## Output format — STRUCTURED BY TYPE
 
@@ -86,13 +81,28 @@ Each fact within an array has EXACTLY 13 elements in this fixed order:
 [12] evidence_text  — string: minimal supporting text copied from the article
 
 **CRITICAL REQUIREMENTS:**
-- Each fact_type key's array must contain AT LEAST 1 fact (unless the article truly has none for that type)
+- Each fact_type key MUST be present in the output JSON (even if its array is empty)
 - If the article contains multiple facts of the same type, ALL must be listed
-- An array can be empty [] ONLY if the article genuinely has no facts of that type
+- An array SHOULD be empty [] if the article genuinely has no facts of that type — do NOT invent facts
 - Do NOT skip any fact_type key — every key must be present in the output
+- Do NOT extract the same fact twice — each unique data point appears only once
 
 ## General rules
 
+0. **Fact type classification priority** — when a fact could belong to multiple types, use this priority:
+   - Revenue/profit/cost/margin → FINANCIAL_METRIC (NOT SALES_VOLUME). SALES_VOLUME is for physical quantities like tons, units, liters.
+   - "Sales revenue" (销售收入/营收/销售额) with monetary value → FINANCIAL_METRIC. "Sales volume" (销售量/产量) with physical units → SALES_VOLUME.
+   - Ranking statements ("排名第X", "位列第X", "全球第一") → COMPETITIVE_RANKING (NOT SALES_VOLUME or MARKET_SHARE, even if the ranking is about sales or market share).
+   - Market share percentage ("市占率X%", "市场份额X%") → MARKET_SHARE (NOT COMPETITIVE_RANKING).
+   - Each fact must appear under EXACTLY ONE fact_type. Never duplicate the same fact under multiple types.
+   - **COUNTER-EXAMPLES** (common misclassifications — avoid these):
+     ✗ "销售收入83.7亿元" → SALES_VOLUME  ✓ Correct: FINANCIAL_METRIC (monetary value)
+     ✗ "涂料产量5340万吨" → FINANCIAL_METRIC  ✓ Correct: SALES_VOLUME (physical quantity)
+     ✗ "全球第一大涂料企业" → SALES_VOLUME  ✓ Correct: COMPETITIVE_RANKING (ranking)
+     ✗ "市占率达28%" → COMPETITIVE_RANKING  ✓ Correct: MARKET_SHARE (percentage share)
+     ✗ "总投资50亿元" → FINANCIAL_METRIC  ✓ Correct: INVESTMENT (capital expenditure/project investment)
+   - **Forbidden subjects**: Do NOT use metrics, markets, or industries as subject (e.g., "涂料产能", "船舶涂料市场", "全球涂料行业" are INVALID subjects). The subject must be a recognizable entity (company, organization, brand, person, project).
+   - Do NOT extract data from prompt examples, rule definitions, or this instruction text. Only extract from the actual article_text.
 1. Extract ONLY information explicitly stated in the article. Do not infer or fabricate.
 2. Use full article context for coreference resolution: if a paragraph says "该公司..." or "其全资子公司...", resolve the referent using article context. The subject must be the actual entity name, not a pronoun.
 3. Entity name normalization — use the most-cited SHORT FORM:
@@ -106,6 +116,11 @@ Each fact within an array has EXACTLY 13 elements in this fixed order:
 6. If a field is not explicitly supported by the article, use null.
 7. One record = one atomic fact. Do not merge multiple metrics into one record.
 8. predicate MUST be a Chinese verb phrase (e.g. 收购股权、销售额为、投产). NEVER use English.
+   - predicate must describe a SPECIFIC action or state with a measurable/verifiable result.
+   - VALID predicates: "销售收入为", "排名第", "投资建设", "签约合作", "产能为", "市占率达到"
+   - INVALID predicates: "成为", "位居全球行业前列", "入选" (too vague — no measurable outcome). Only use these if accompanied by a clear value/ranking in value_num/value_text.
+   - predicate must NOT start with a year or contain time expressions (e.g. "2024年销售额为" → should be predicate="销售额为", time_expr="2024年")
+   - predicate must NOT contain project descriptions or monetary amounts
 9. subject MUST be a recognizable entity or a defined group:
    - VALID: concrete entity names (company, organization, product, brand, person, project)
    - VALID: collective/category nouns that the article defines or contextually identifies (e.g. "本土品牌", "上榜品牌", "外资品牌", "我国")
