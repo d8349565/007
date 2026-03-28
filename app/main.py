@@ -83,6 +83,19 @@ def cmd_process(args):
         print("❌ 请指定 --document-id 或 --all")
 
 
+def cmd_relink(args):
+    """重新执行实体链接（补全空 entity_id）"""
+    init_db()
+    from app.services.entity_linker import batch_link_fact_atoms
+    print("[relink] 开始重新执行实体链接...")
+    stats = batch_link_fact_atoms()
+    print(
+        f"[relink] 实体链接完成: 处理 {stats['processed']} 条, "
+        f"匹配 {stats['matched']} 条, 未匹配 {stats['unmatched']} 条, "
+        f"新建实体 {stats['created']} 个"
+    )
+
+
 def cmd_stats(args):
     """查看统计"""
     init_db()
@@ -158,6 +171,10 @@ def main():
     sub_proc.add_argument("--document-id", help="文档 ID")
     sub_proc.add_argument("--all", action="store_true", help="处理所有待处理文档")
     sub_proc.set_defaults(func=cmd_process)
+
+    # relink
+    sub_relink = subparsers.add_parser("relink", help="重新执行实体链接（补全空 entity_id）")
+    sub_relink.set_defaults(func=cmd_relink)
 
     # stats
     sub_stats = subparsers.add_parser("stats", help="查看统计")
