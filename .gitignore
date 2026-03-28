@@ -66,6 +66,9 @@ htmlcov/
 
 # Temp files
 *.temp
+_q*.py
+_diag*.py
+_check_*.py
 
 # Cache
 .cache/
