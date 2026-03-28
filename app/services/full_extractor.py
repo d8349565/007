@@ -359,6 +359,30 @@ def extract_facts_full_text(
 
     logger.info("[doc=%s] 两阶段抽取完成，共 %d 条有效记录", document_id[:8], len(parsed_records))
 
+    # 同文档内去重：以 (fact_type, subject, predicate, value_text, time_expr) 为 key
+    before_dedup = len(parsed_records)
+    seen: dict[str, dict] = {}
+    for rec in parsed_records:
+        key = "|".join([
+            (rec.get("fact_type") or "").strip(),
+            (rec.get("subject") or "").strip(),
+            (rec.get("predicate") or "").strip(),
+            (rec.get("value_text") or "").strip(),
+            (rec.get("time_expr") or "").strip(),
+        ]).lower()
+        if key in seen:
+            if rec.get("confidence", 0) > seen[key].get("confidence", 0):
+                seen[key] = rec
+        else:
+            seen[key] = rec
+    parsed_records = list(seen.values())
+    if before_dedup > len(parsed_records):
+        logger.info(
+            "[doc=%s] 去重: %d → %d (-%.0f%%)",
+            document_id[:8], before_dedup, len(parsed_records),
+            (1 - len(parsed_records) / before_dedup) * 100,
+        )
+
     # 写入数据库：evidence_span + fact_atom
     fact_results = []
     evidence_cache = {}  # (fact_type, evidence_text) → evidence_id
