@@ -7,8 +7,8 @@ Do NOT judge content accuracy or factual correctness. Focus solely on format, fi
 
 1. **Required fields**: fact_type, subject, predicate must be non-null and non-empty.
 2. **Field types**:
-   - value_num: number or null (REJECT if it is a string)
-   - qualifiers: JSON object {} (REJECT if array or string)
+   - value_num: number or null (拒绝 if it is a string)
+   - qualifiers: JSON object {} (拒绝 if array or string)
    - confidence: number between 0 and 1
 3. **Subject validity**:
    - VALID: entity names (company, organization, brand, person, product, project)
@@ -17,23 +17,30 @@ Do NOT judge content accuracy or factual correctness. Focus solely on format, fi
 4. **Predicate validity**: Must be a Chinese verb phrase describing an action or state.
    - VALID: "[metric]为" constructs like "营业收入为", "净利润为", "销售额为", "销售量为", "市场份额为", "产能为" — the "为" (is/equals) makes these valid state-describing predicates for FINANCIAL_METRIC / SALES_VOLUME / CAPACITY / MARKET_SHARE facts.
    - VALID: action verbs like "收购", "投产", "签约", "计划总投资", "实现销售额为", "实现净利润"
-   - REJECT if predicate contains: a full sentence, a time expression (e.g. "2025年底建成"), a project description (e.g. "年产4.1万吨项目"), or a monetary amount.
+   - 拒绝 if predicate contains:
+     (a) a full sentence
+     (b) a **year or time prefix** (e.g. "2024年销售额为", "2023年营业收入为") — year MUST go to time_expr, predicate should be just "销售额为" or "营业收入为"
+     (c) a **project phase/stage prefix** (e.g. "一期建成后产能增加至", "二期投产后产能为") — phase MUST go to qualifiers.phase, predicate should be just "产能为"
+     (d) a **scope/range prefix** (e.g. "全厂产能为", "全球销售额为") — scope MUST go to qualifiers, predicate should be just "产能为" or "销售额为"
+     (e) a project description (e.g. "年产4.1万吨项目")
+     (f) a monetary amount
+   - Quick regex test for (b): if predicate matches `/^\d{4}年/` → 拒绝, score ≤ 0.55
 5. **Object field**: Should be a target entity or null.
-   - REJECT if object contains predicates, time expressions, or action descriptions.
+   - 拒绝 if object contains predicates, time expressions, or action descriptions.
 6. **Internal consistency**:
    - value_num present → value_text should exist and match
    - currency present → monetary value_num should exist
    - unit should be consistent with value_text
    - value_text should faithfully represent the original number expression (e.g. "5000万元" not "5000万吨")
 7. **Atom reconstructability**: Read "[subject] [predicate] [object] [value_text+unit]" — does it form a coherent, meaningful statement?
-   - PASS: "东方雨虹 收购股权 世界五金 约1.64亿港元" → coherent ✓
-   - REJECT: "浙江钰烯 年产4.1万吨项目 将于2025年底建成" → predicate contains project description, object contains time ✗
+   - 通过: "东方雨虹 收购股权 世界五金 约1.64亿港元" → coherent ✓
+   - 拒绝: "浙江钰烯 年产4.1万吨项目 将于2025年底建成" → predicate contains project description, object contains time ✗
 
 8. **Qualifier completeness** (by fact_type — check that context-defining qualifiers are present when evidence implies them):
-   - COMPETITIVE_RANKING: qualifiers SHOULD include at least one of ranking_name, ranking_scope, or segment. If all three are absent/null yet the evidence clearly describes a specific ranking context (mentions a leaderboard, geographic scope, or product segment), verdict = UNCERTAIN with issue field="qualifiers", issue="COMPETITIVE_RANKING 缺少上下文限定词（榜单/范围/赛道），无法确定该排名的成立条件".
-   - FINANCIAL_METRIC: if predicate is generic (e.g. "指标为", "财务数据为") AND qualifiers.metric_name is absent/null → verdict = UNCERTAIN, issue="FINANCIAL_METRIC 谓词未体现指标名，且 qualifiers.metric_name 缺失".
-   - CAPACITY: if evidence explicitly mentions a product type or project phase but qualifiers.product_type and qualifiers.phase are both null → flag as UNCERTAIN with issue="evidence 中有产品线/阶段信息但 qualifiers 未捕获".
-   - General rule: score should be reduced by 0.10~0.15 when qualifiers is empty {} but evidence contains clear scope/context markers (e.g. geographic qualifier, product segment, report caliber). Do NOT reject solely for missing qualifiers; prefer UNCERTAIN.
+   - COMPETITIVE_RANKING: qualifiers SHOULD include at least one of ranking_name, ranking_scope, or segment. If all three are absent/null yet the evidence clearly describes a specific ranking context (mentions a leaderboard, geographic scope, or product segment), verdict = 不确定 with issue field="qualifiers", issue="COMPETITIVE_RANKING 缺少上下文限定词（榜单/范围/赛道），无法确定该排名的成立条件".
+   - FINANCIAL_METRIC: if predicate is generic (e.g. "指标为", "财务数据为") AND qualifiers.metric_name is absent/null → verdict = 不确定, issue="FINANCIAL_METRIC 谓词未体现指标名，且 qualifiers.metric_name 缺失".
+   - CAPACITY: if evidence explicitly mentions a product type or project phase but qualifiers.product_type and qualifiers.phase are both null → flag as 不确定 with issue="evidence 中有产品线/阶段信息但 qualifiers 未捕获".
+   - General rule: score should be reduced by 0.10~0.15 when qualifiers is empty {} but evidence contains clear scope/context markers (e.g. geographic qualifier, product segment, report caliber). Do NOT reject solely for missing qualifiers; prefer 不确定.
 
 ## What NOT to check
 
@@ -43,16 +50,16 @@ Do NOT judge content accuracy or factual correctness. Focus solely on format, fi
 
 ## Verdict rules
 
-- PASS: valid structure, fields correctly placed, atom reconstructable
-- REJECT: critical structural problem — field misplacement, invalid subject, type errors, value_text mismatch
-- UNCERTAIN: minor issues that need human judgment
+- 通过: valid structure, fields correctly placed, atom reconstructable
+- 拒绝: critical structural problem — field misplacement, invalid subject, type errors, value_text mismatch
+- 不确定: minor issues that need human judgment
 
 ## Output
 
 You receive an array of fact records. Return a JSON array, one result per fact:
 
 [
-  {"fact_id": "...", "verdict": "PASS|REJECT|UNCERTAIN", "score": 0.0-1.0, "issues": [{"field": "...", "issue": "..."}], "review_note": "简短说明"},
+  {"fact_id": "...", "verdict": "通过|拒绝|不确定", "score": 0.0-1.0, "issues": [{"field": "...", "issue": "..."}], "review_note": "简短说明"},
   ...
 ]
 

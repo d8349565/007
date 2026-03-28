@@ -20,3 +20,15 @@ Evidence: "完成与香港万昌五金建材有限公司、康宝香港有限公
   "qualifiers": {"cooperation_type": "equity_cooperation", "scope": "强化港澳及大湾区渠道网络"}
 }
 ```
+
+## Predicate 完整性约束
+- predicate must be a COMPLETE action phrase, NEVER just "与" or "和".
+  ✅ "共同投资设立" / "合作使用" / "代理销售" / "完成股权合作"
+  ❌ "与" / "和" / "合作" (too vague)
+- If the evidence says "A与B合作成立C", predicate should be "合作成立", NOT "与".
+- cooperation_type in qualifiers must EXACTLY match the cooperation nature described in the evidence:
+  - "合作使用和应用" → "technology_cooperation", NOT "supply_agreement"
+  - "共同投资设立" → "equity_cooperation"
+  - "代理销售/授权销售" → "distribution_agreement"
+  - "供应涂料/提供产品" → "supply_agreement"
+  - Do NOT use "supply_agreement" when the evidence describes collaborative usage rather than supply.

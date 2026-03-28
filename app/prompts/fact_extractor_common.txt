@@ -28,7 +28,7 @@ You must follow these rules:
        - "上半年" → "YYYY年01月-YYYY年06月"; "下半年" → "YYYY年07月-YYYY年12月"
        - "一季度" → "YYYY年01月-YYYY年03月" (similarly for Q2/Q3/Q4)
     d. For future/projected time, infer a date and add {"is_forecast": true} to qualifiers.
-16. currency: For monetary values, always specify the currency code. Infer from context: "亿元" / "万元" / "元" → CNY; "亿日元" → JPY; "亿美元" → USD; "亿港元" → HKD. Only leave null if the value is non-monetary.
+16. currency: For monetary values, always specify the currency code. Infer from context: "亿元"/"万元"/"元" → CNY; "亿日元" → JPY; "亿美元" → USD; "亿港元" → HKD; "亿欧元"/"欧元" → EUR; "亿挪威克朗"/"挪威克朗" → NOK; "亿韩元" → KRW; "亿英镑" → GBP; "亿卢布" → RUB; "亿瑞士法郎" → CHF. Only leave null if the value is non-monetary. If the unit string contains a currency name (e.g. unit="亿挪威克朗"), currency MUST be set correspondingly (NOK).
 17. location FORMAT RULES:
     a. If the evidence mentions a geographic scope (全国、中国、全球、华东、某省市 etc.), extract it as location. Do NOT leave location null when a geographic reference exists in the evidence.
     b. Use hierarchical format: "国家/省/市/区" — include only known levels.
@@ -43,6 +43,35 @@ You must follow these rules:
     - "5亿元" → value_num = 5, unit = "亿元", currency = CNY. NOT value_num = 500000000
     - "3000万吨" → value_num = 3000, unit = "万吨". NOT value_num = 30000000
     - value_text must match the original expression including scale word (e.g. value_text = "5亿元")
+21. predicate MUST be a PURE verb phrase (动词/动词短语). Do NOT embed ANY non-verb information inside predicate — those belong in dedicated fields:
+    a. Time/year → time_expr field:
+       - ✅ predicate="销售额为", time_expr="2024年"
+       - ❌ predicate="2024年销售额为"（年份应在 time_expr）
+       - ✅ predicate="营业收入为", time_expr="2023年"
+       - ❌ predicate="2023年营业收入为"
+    b. Object/entity name → object field:
+       - ✅ predicate="通过验收", object="船舶涂料改造项目（一期）"
+       - ❌ predicate="船舶涂料改造项目（一期）通过验收", object=null
+       - ✅ predicate="签约落地", object="高性能涂料新工厂项目"
+       - ❌ predicate="签约落地高性能涂料新工厂及液体涂料研发中心项目"
+    c. Project phase/stage → qualifiers.phase:
+       - ✅ predicate="产能为", qualifiers={"phase": "一期"}
+       - ❌ predicate="一期建成后产能增加至"
+       - ✅ predicate="产能为", qualifiers={"phase": "一期建成后"}
+       - ❌ predicate="一期建成后全厂船舶涂料产能增加至"
+    d. Scope/range → qualifiers (e.g. is_factory_wide, scope):
+       - ✅ predicate="产能为", qualifiers={"scope": "全厂"}
+       - ❌ predicate="全厂产能为"
+    Rule of thumb: predicate 只保留「动作/状态」核心，所有限定修饰（时间、阶段、范围、对象名称）必须拆入对应字段。
+22. predicate MUST preserve the EXACT tense/intent from the evidence:
+    - "计划投资" vs "已投资" vs "签约投资" are DIFFERENT — use the one matching the evidence
+    - "合作使用" ≠ "合作供应" — do not rephrase the action
+    - NEVER use predicate="与" or "和" alone — always include the full action verb (e.g. "共同投资设立", "合作成立")
+    - Do NOT exaggerate: if a company is a supplier, use "供应涂料" not "参与建设"
+23. subject precision rules:
+    a. When a sentence mentions both a principal and an agent/dealer performing an action (e.g. "A的代理商B成功中标"), the subject MUST be the entity performing the action (B), NOT the upstream principal (A).
+    b. Do NOT replace a specific entity name with a broader/generalized name. "佐敦张家港生产基地" must NOT be replaced with "佐敦中国" unless the evidence text itself uses the broader name.
+    c. When in doubt, use the EXACT entity name as it appears in the evidence text.
 
 Use this fixed schema for each record:
 {

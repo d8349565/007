@@ -6,3 +6,5 @@ Additional rules for COMPETITIVE_RANKING:
 - **Range ranking**: If the evidence gives a range like "第4-10位" or "前5-10名", use predicate "排名在范围内" and put the range in qualifiers.position_range (e.g. "4-10"). Do NOT use "位居第" or "排名第" when only a range is given instead of a specific rank.
 - Do not confuse "入选" (listed/included) with "排名第一" (ranked #1).
 - If multiple companies are listed in the same ranking text, each company is a separate record.
+- value_text MUST contain the original ranking expression from the evidence (e.g. "第9位", "第一名", "全球第1", "前十强"). Do NOT leave value_text=null when value_num has a ranking number.
+- ranking_scope in qualifiers MUST be Chinese text ("全球"/"中国"/"亚洲"/"欧洲"). NEVER use English values ("global"/"china"/"asia").
