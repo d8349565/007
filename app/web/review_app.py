@@ -90,7 +90,10 @@ QUALIFIER_VALUE_ZH = {
 
 
 def _build_fact_summary(fact: dict) -> str:
-    """为事实生成一行式摘要文本，包含关键限定信息。"""
+    """为事实生成摘要文本，同时在 fact 上设置 context_tag 字段。
+    - summary: 主谓宾+数值，不含限定词括号
+    - context_tag: 最关键的一个限定词（≤12字），用于在模板中单独渲染为标签
+    """
     # 解析 qualifiers
     quals = {}
     qj = fact.get("qualifier_json")
@@ -103,11 +106,9 @@ def _build_fact_summary(fact: dict) -> str:
         quals = qj
 
     parts = []
-
-    # 主谓宾
+    ft = fact.get("fact_type") or ""
     pred = fact.get("predicate") or ""
     obj = fact.get("object_text") or ""
-    ft = fact.get("fact_type") or ""
 
     if pred:
         parts.append(pred)
@@ -130,63 +131,41 @@ def _build_fact_summary(fact: dict) -> str:
             val_str += f"({fact['currency']})"
         parts.append(val_str)
 
-    # 按事实类型附加关键限定词
-    ctx_parts = []
+    # 提取 context_tag（不超过 12 个字）并设置到 fact 上
+    _MAX = 12
+    ctx = ""
     if ft == "COMPETITIVE_RANKING":
         rn = quals.get("ranking_name") or ""
         seg = quals.get("segment") or ""
-        if rn:
-            ctx_parts.append(rn)
-        elif seg:
-            ctx_parts.append(seg)
+        raw = rn or seg
+        ctx = raw[:_MAX] + ("…" if len(raw) > _MAX else "")
     elif ft == "CAPACITY":
-        pt = quals.get("product_type") or ""
-        ph = quals.get("phase") or ""
-        if pt:
-            ctx_parts.append(pt)
-        if ph:
-            ctx_parts.append(QUALIFIER_VALUE_ZH.get(ph, ph))
+        raw = quals.get("product_type") or ""
+        ctx = raw[:_MAX]
     elif ft == "COOPERATION":
         ct = quals.get("cooperation_type") or ""
-        scope = quals.get("scope") or ""
-        if ct:
-            ctx_parts.append(QUALIFIER_VALUE_ZH.get(ct, ct))
-        if scope and len(scope) <= 20:
-            ctx_parts.append(scope)
+        ctx = QUALIFIER_VALUE_ZH.get(ct, ct)[:_MAX]
     elif ft == "EXPANSION":
-        scope = quals.get("scope") or quals.get("purpose") or ""
-        pn = quals.get("project_name") or ""
-        if pn:
-            ctx_parts.append(pn)
-        elif scope and len(scope) <= 20:
-            ctx_parts.append(scope)
+        raw = quals.get("project_name") or quals.get("scope") or ""
+        ctx = raw[:_MAX] + ("…" if len(raw) > _MAX else "")
     elif ft == "FINANCIAL_METRIC":
-        mn = quals.get("metric_name") or ""
-        if mn:
-            ctx_parts.append(mn)
+        raw = quals.get("metric_name") or quals.get("segment") or ""
+        ctx = raw[:_MAX]
     elif ft == "SALES_VOLUME":
-        pt = quals.get("product_type") or quals.get("product_name") or ""
-        if pt:
-            ctx_parts.append(pt)
+        raw = quals.get("product_type") or quals.get("product_name") or ""
+        ctx = raw[:_MAX]
     elif ft == "INVESTMENT":
-        pn = quals.get("project_name") or quals.get("purpose") or ""
-        if pn and len(pn) <= 20:
-            ctx_parts.append(pn)
+        raw = quals.get("project_name") or quals.get("purpose") or ""
+        ctx = raw[:_MAX] + ("…" if len(raw) > _MAX else "")
     elif ft == "MARKET_SHARE":
-        ms = quals.get("market_scope") or quals.get("segment") or ""
-        if ms:
-            ctx_parts.append(ms)
+        raw = quals.get("market_scope") or quals.get("segment") or ""
+        ctx = raw[:_MAX]
     elif ft == "PRICE_CHANGE":
-        pn = quals.get("product_name") or quals.get("product_type") or ""
-        prt = quals.get("price_type") or ""
-        if pn:
-            ctx_parts.append(pn)
-        if prt:
-            ctx_parts.append(QUALIFIER_VALUE_ZH.get(prt, prt))
+        pt = quals.get("product_name") or quals.get("product_type") or ""
+        prt = QUALIFIER_VALUE_ZH.get(quals.get("price_type") or "", "")
+        ctx = (pt + ("·" + prt if prt else ""))[:_MAX]
 
-    if ctx_parts:
-        parts.append("（" + "·".join(ctx_parts) + "）")
-
+    fact["context_tag"] = ctx
     return " ".join(parts) if parts else "—"
 
 
