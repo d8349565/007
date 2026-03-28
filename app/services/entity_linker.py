@@ -89,7 +89,41 @@ def link_entity(raw_text: str, entity_type: str = "") -> dict:
                 logger.info("括号规范化匹配: '%s' → '%s'", text, row["canonical_name"])
                 return {"entity_id": row["id"], "canonical_name": row["canonical_name"], "matched": True}
 
-        # 4. 未命中 → 保留原文
+        # 4. 包含匹配回退：text 是某 entity 名称的子串，或反之
+        search_texts = [text]
+        if normalized and normalized not in search_texts:
+            search_texts.append(normalized)
+
+        for st in search_texts:
+            if len(st) < 2:
+                continue
+            safe = st.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+            rows = conn.execute(
+                """SELECT id, canonical_name FROM entity
+                   WHERE canonical_name LIKE ? ESCAPE '!'
+                     AND canonical_name != ?""",
+                (f"%{safe}%", st),
+            ).fetchall()
+            if rows:
+                best = min(rows, key=lambda r: len(r["canonical_name"]))
+                logger.info("包含匹配: '%s' → '%s'", st, best["canonical_name"])
+                return {"entity_id": best["id"], "canonical_name": best["canonical_name"], "matched": True}
+
+        # 反向包含：某 entity 的 canonical_name 是 text 的子串
+        if len(text) >= 2:
+            rows = conn.execute(
+                """SELECT id, canonical_name FROM entity
+                   WHERE ? LIKE '%' || canonical_name || '%'
+                     AND canonical_name != ?
+                     AND LENGTH(canonical_name) >= 2""",
+                (text, text),
+            ).fetchall()
+            if rows:
+                best = max(rows, key=lambda r: len(r["canonical_name"]))
+                logger.info("反向包含匹配: '%s' → '%s'", text, best["canonical_name"])
+                return {"entity_id": best["id"], "canonical_name": best["canonical_name"], "matched": True}
+
+        # 5. 未命中 → 保留原文
         return {"entity_id": None, "canonical_name": text, "matched": False}
 
     finally:
@@ -328,6 +362,28 @@ def _auto_discover_entities(rows: list, conn) -> int:
         ).fetchone()
         if alias_match:
             continue
+
+        # 跳过通用名称（不应作为独立实体）
+        if text in eu.SKIP_NAMES:
+            continue
+
+        # 包含匹配：避免创建与已有实体名称高度重叠的新实体
+        if len(text) >= 2:
+            safe = text.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+            contains_row = conn.execute(
+                """SELECT id, canonical_name FROM entity
+                   WHERE canonical_name LIKE ? ESCAPE '!'
+                     AND canonical_name != ?
+                   ORDER BY LENGTH(canonical_name) LIMIT 1""",
+                (f"%{safe}%", text),
+            ).fetchone()
+            if contains_row:
+                conn.execute(
+                    "INSERT OR IGNORE INTO entity_alias (id, entity_id, alias_name) VALUES (?, ?, ?)",
+                    (str(uuid.uuid4()), contains_row["id"], text),
+                )
+                logger.debug("自动别名: '%s' → '%s'", text, contains_row["canonical_name"])
+                continue
 
         entity_type = eu.infer_entity_type(text, fact_type)[0]
         eid = str(uuid.uuid4())
