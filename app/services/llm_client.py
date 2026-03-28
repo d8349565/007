@@ -47,6 +47,7 @@ class LLMClient:
         self.client = OpenAI(
             api_key=provider_cfg.get("api_key", cfg.get("api_key", "")),
             base_url=provider_cfg.get("base_url", cfg.get("base_url", "https://api.deepseek.com")),
+            timeout=self.timeout,
         )
 
     def chat(
@@ -181,6 +182,13 @@ class LLMClient:
 
         # 尝试找到第一个 { 或 [，匹配到最后一个 } 或 ]
         # 对于嵌套结构如 [[...]]，需要正确配对括号
+        partial_match = None  # 保存内部匹配结果（如 [] 在 {} 内部匹配到的）
+        first_json_char = None
+        for ch in text:
+            if ch in ('{', '['):
+                first_json_char = ch
+                break
+
         for start_char, end_char in [("{", "}"), ("[", "]")]:
             start = text.find(start_char)
             if start == -1:
@@ -194,9 +202,85 @@ class LLMClient:
                     depth -= 1
                     if depth == 0:
                         try:
-                            return json.loads(text[start : i + 1])
+                            parsed = json.loads(text[start : i + 1])
+                            # 如果外层是 { 但这里匹配的是 []，先存起来尝试修复
+                            if first_json_char == '{' and start_char == '[':
+                                partial_match = parsed
+                                break
+                            return parsed
                         except json.JSONDecodeError:
                             break
+
+        # 尝试修复截断的 JSON（LLM 输出被 max_tokens 截断）
+        repaired = LLMClient._repair_truncated_json(text)
+        if repaired is not None:
+            return repaired
+
+        # 修复失败，退而使用内部匹配结果
+        if partial_match is not None:
+            return partial_match
+
+        return None
+
+    @staticmethod
+    def _repair_truncated_json(text: str) -> dict | list | None:
+        """尝试修复被截断的 JSON：去掉最后一个不完整的值，补齐括号。"""
+        # 找到 JSON 起始位置
+        start = -1
+        for i, ch in enumerate(text):
+            if ch in ('{', '['):
+                start = i
+                break
+        if start == -1:
+            return None
+
+        fragment = text[start:]
+
+        # 扫描找最后一个完整逗号位置和未关闭括号
+        in_string = False
+        escape = False
+        last_comma = -1
+        stack = []
+        for i, ch in enumerate(fragment):
+            if escape:
+                escape = False
+                continue
+            if ch == '\\':
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+            if in_string:
+                if i > 0 and ch == ',' :
+                    pass  # 字符串内的逗号不算
+                continue
+            if ch == ',':
+                last_comma = i
+            if ch in ('{', '['):
+                stack.append('}' if ch == '{' else ']')
+            elif ch in ('}', ']'):
+                if stack and stack[-1] == ch:
+                    stack.pop()
+
+        if not stack:
+            return None  # 括号已平衡但仍解析失败，无法修复
+
+        closing = ''.join(reversed(stack))
+
+        # 策略1：截断到最后一个逗号 + 补齐括号
+        # 策略2：直接补齐括号
+        candidates = []
+        if last_comma > 0:
+            candidates.append(fragment[:last_comma] + closing)
+        candidates.append(fragment + closing)
+
+        for candidate in candidates:
+            try:
+                parsed = json.loads(candidate)
+                logger.warning("已修复截断的 JSON（补齐 %d 个括号）", len(stack))
+                return parsed
+            except json.JSONDecodeError:
+                continue
 
         return None
 

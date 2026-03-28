@@ -124,7 +124,13 @@ def _validate_record(rec: dict, cfg: dict) -> dict | None:
         # 如果是 dict 或其他类型，提取其中的数值（如果有）
         if isinstance(confidence, dict):
             logger.warning("confidence 是 dict，尝试提取其中的值")
-            confidence = 0.0
+            # 尝试从 dict 中提取数值（LLM 有时返回 {"score": 0.9, ...}）
+            for k in ("score", "value", "confidence"):
+                if k in confidence and isinstance(confidence[k], (int, float)):
+                    confidence = float(confidence[k])
+                    break
+            else:
+                confidence = 0.0
         else:
             confidence = 0.0
     rec["confidence"] = float(confidence)
@@ -157,8 +163,22 @@ def _complement_facts_by_type(
     cfg: dict,
 ) -> dict[str, list[dict]]:
     """
-    阶段 2：对每个 fact_type 的抽取结果进行上下文补全审查。
+    阶段 2：对所有 fact_type 的抽取结果进行一次性上下文补全审查。
+
+    改为单次 LLM 调用处理所有类型，避免每种类型单独调用导致
+    token 消耗倍增（N 种类型 = N 次重复发送全文）。
     """
+    # 过滤掉空类型
+    non_empty = {ft: facts for ft, facts in facts_by_type.items() if facts}
+    if not non_empty:
+        return facts_by_type
+
+    # 配置检查：是否启用上下文补全
+    complement_cfg = cfg.get("pipeline", {})
+    if not complement_cfg.get("enable_complementation", True):
+        logger.info("[doc=%s] 上下文补全已禁用，跳过阶段2", document_id[:8])
+        return facts_by_type
+
     comp_prompt_path = _PROMPT_DIR / "context_complementation.txt"
     comp_prompt = comp_prompt_path.read_text(encoding="utf-8")
 
@@ -171,53 +191,90 @@ def _complement_facts_by_type(
         comp_prompt += "\n\n".join(rules_parts)
 
     client = get_llm_client()
+
+    # 单次调用：把所有类型打包发送
+    user_input = json.dumps(
+        {
+            "article_text": cleaned_text,
+            "all_extracted_facts_by_type": non_empty,
+        },
+        ensure_ascii=False,
+    )
+
+    task_id = str(uuid.uuid4())
+    _record_task_start(task_id, document_id, "上下文补全")
+
+    try:
+        result = client.chat_json(comp_prompt, user_input)
+        raw_data = result["data"]
+        _record_task_end(
+            task_id, "成功",
+            result["input_tokens"], result["output_tokens"],
+            result["model"],
+        )
+    except Exception as e:
+        _record_task_end(task_id, "失败", error=str(e))
+        logger.error("阶段2补全调用失败 [doc=%s]: %s", document_id[:8], e)
+        return facts_by_type
+
+    # 解析返回结果：按 fact_type 分组
     result_by_type = {}
 
-    for fact_type, facts in facts_by_type.items():
-        if not facts:
+    # 防护：如果 LLM 返回 list 而非 dict，尝试转换
+    if isinstance(raw_data, list):
+        logger.warning("[doc=%s] 补全 LLM 返回了 list 而非 dict，尝试转换", document_id[:8])
+        converted = {}
+        for item in raw_data:
+            if isinstance(item, dict):
+                ft = item.get("fact_type", "")
+                if ft:
+                    converted.setdefault(ft, []).append(item)
+        raw_data = converted if converted else {}
+
+    if not isinstance(raw_data, dict):
+        logger.error("[doc=%s] 补全返回数据格式异常: %s，跳过补全", document_id[:8], type(raw_data).__name__)
+        return facts_by_type
+
+    for fact_type in facts_by_type:
+        if not facts_by_type[fact_type]:
             result_by_type[fact_type] = []
             continue
 
-        user_input = json.dumps(
-            {
-                "article_text": cleaned_text,
-                "fact_type": fact_type,
-                "already_extracted_facts": facts,
-            },
-            ensure_ascii=False,
-        )
-
-        task_id = str(uuid.uuid4())
-        _record_task_start(task_id, document_id, "complementation")
-
-        try:
-            result = client.chat_json(comp_prompt, user_input)
-            raw_data = result["data"]
-            _record_task_end(
-                task_id, "success",
-                result["input_tokens"], result["output_tokens"],
-                result["model"],
-            )
-        except Exception as e:
-            _record_task_end(task_id, "failed", error=str(e))
-            logger.error("阶段2补全调用失败 [doc=%s, type=%s]: %s", document_id[:8], fact_type, e)
-            result_by_type[fact_type] = facts
+        # 从返回结果中获取该类型的数据
+        type_data = raw_data.get(fact_type, {})
+        if not isinstance(type_data, dict):
+            # 兼容：如果 LLM 直接返回列表
+            if isinstance(type_data, list):
+                for f in type_data:
+                    if isinstance(f, dict):
+                        f.setdefault("fact_type", fact_type)
+                result_by_type[fact_type] = [f for f in type_data if isinstance(f, dict)]
+            else:
+                result_by_type[fact_type] = facts_by_type[fact_type]
             continue
 
-        supplemented = raw_data.get("supplemented_facts", [])
-        unchanged = raw_data.get("unchanged_facts", [])
+        supplemented = type_data.get("supplemented_facts", [])
+        unchanged = type_data.get("unchanged_facts", [])
 
-        # 合并去重
-        all_facts = list(unchanged)
+        # 合并去重，确保每条 fact 都携带 fact_type
+        all_facts = []
+        for f in unchanged:
+            if isinstance(f, dict):
+                f.setdefault("fact_type", fact_type)
+                all_facts.append(f)
         existing_evidence = {f.get("evidence_text", "") for f in all_facts}
         for new_fact in supplemented:
+            if not isinstance(new_fact, dict):
+                continue
+            new_fact.setdefault("fact_type", fact_type)
             if new_fact.get("evidence_text", "") not in existing_evidence:
                 all_facts.append(new_fact)
 
         result_by_type[fact_type] = all_facts
         logger.info(
             "[doc=%s] 阶段2 %s: 原=%d, 补=%d, 终=%d",
-            document_id[:8], fact_type, len(facts), len(supplemented), len(all_facts),
+            document_id[:8], fact_type,
+            len(facts_by_type[fact_type]), len(supplemented), len(all_facts),
         )
 
     return result_by_type
@@ -294,18 +351,18 @@ def extract_facts_full_text(
 
     client = get_llm_client()
     task_id = str(uuid.uuid4())
-    _record_task_start(task_id, document_id, "full_extractor")
+    _record_task_start(task_id, document_id, "全文抽取")
 
     try:
         result = client.chat_json(system_prompt, user_input)
         raw_data = result["data"]
         _record_task_end(
-            task_id, "success",
+            task_id, "成功",
             result["input_tokens"], result["output_tokens"],
             result["model"],
         )
     except Exception as e:
-        _record_task_end(task_id, "failed", error=str(e))
+        _record_task_end(task_id, "失败", error=str(e))
         logger.error("全文抽取调用失败 [doc=%s]: %s", document_id[:8], e)
         # 记录错误到文档
         conn = get_connection()
@@ -338,6 +395,13 @@ def extract_facts_full_text(
                 validated = _validate_record(rec, cfg)
                 if validated:
                     parsed_records_stage1.append(validated)
+
+    if not parsed_records_stage1:
+        logger.warning(
+            "[doc=%s] 阶段1解析后 0 条有效记录 (raw_data 类型=%s, 长度=%s)",
+            document_id[:8], type(raw_data).__name__,
+            len(raw_data) if isinstance(raw_data, (list, dict)) else "N/A",
+        )
 
     # 将阶段1结果按类型分组
     facts_by_type = {}
@@ -451,7 +515,7 @@ def extract_facts_full_text(
                  time_expr, location_text, qualifier_json,
                  confidence_score, extraction_model, extraction_version,
                  review_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')""",
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '待处理')""",
                 (
                     fact_atom_id,
                     document_id,
@@ -497,7 +561,7 @@ def _record_task_start(task_id: str, document_id: str, task_type: str) -> None:
         conn.execute(
             """INSERT INTO extraction_task
             (id, document_id, task_type, status, started_at)
-            VALUES (?, ?, ?, 'running', CURRENT_TIMESTAMP)""",
+            VALUES (?, ?, ?, '运行中', CURRENT_TIMESTAMP)""",
             (task_id, document_id, task_type),
         )
         conn.commit()

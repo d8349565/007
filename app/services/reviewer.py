@@ -44,27 +44,27 @@ def review_fact(
 
     client = get_llm_client()
     task_id = str(uuid.uuid4())
-    _record_task_start(task_id, document_id, "reviewer")
+    _record_task_start(task_id, document_id, "审核")
 
     try:
         result = client.chat_json(system_prompt, user_input)
         data = result["data"]
         _record_task_end(
-            task_id, "success",
+            task_id, "成功",
             result["input_tokens"], result["output_tokens"],
             result["model"],
         )
     except Exception as e:
-        _record_task_end(task_id, "failed", error=str(e))
+        _record_task_end(task_id, "失败", error=str(e))
         logger.error("Reviewer 调用失败 [fact=%s]: %s", fact_atom_id[:8], e)
         return {
-            "verdict": "UNCERTAIN",
+            "verdict": "不确定",
             "score": 0.0,
             "issues": [{"field": "system", "issue": f"审核调用失败: {e}"}],
             "review_note": "审核调用异常，进入人工审核池",
         }
 
-    verdict = data.get("verdict", "UNCERTAIN").upper()
+    verdict = data.get("verdict", "不确定").upper()
     score = data.get("score", 0.0)
     issues = data.get("issues", [])
     review_note = data.get("review_note", "")
@@ -88,9 +88,9 @@ def review_fact(
             """INSERT INTO review_log
             (id, target_type, target_id, old_status, new_status,
              reviewer, review_action, review_note)
-            VALUES (?, 'fact_atom', ?, 'PENDING', ?, 'system_reviewer', ?, ?)""",
+            VALUES (?, 'fact_atom', ?, '待处理', ?, '系统审核', ?, ?)""",
             (str(uuid.uuid4()), fact_atom_id, review_status,
-             verdict.lower(), review_note),
+             verdict, review_note),
         )
 
         conn.commit()
@@ -124,21 +124,21 @@ def _map_verdict_to_status(
     qualifiers = fact_record.get("qualifiers", {})
 
     # REJECT → 直接 REJECTED
-    if verdict == "REJECT":
-        return "REJECTED"
+    if verdict == "拒绝":
+        return "已拒绝"
 
     # UNCERTAIN → 进入人工审核池
-    if verdict == "UNCERTAIN":
-        return "HUMAN_REVIEW_REQUIRED"
+    if verdict == "不确定":
+        return "待人工审核"
 
     # PASS 但需要强制人工审核
     if fact_type in force_human_types:
-        return "HUMAN_REVIEW_REQUIRED"
+        return "待人工审核"
 
     # 检查是否包含需要强制审核的 qualifier key（如 is_forecast、yoy/qoq）
     for qual_key in force_human_preds:
         if qual_key in qualifiers:
-            return "HUMAN_REVIEW_REQUIRED"
+            return "待人工审核"
 
     # predicate 白名单模糊校验：不匹配仅记录日志，不阻断 AUTO_PASS
     # (白名单作为"期望词表"辅助监控，不作为硬性门禁)
@@ -161,7 +161,7 @@ def _map_verdict_to_status(
             "fact_type=%s qualifiers 缺少上下文限定词 (需要其中之一: %s)，强制人工审核",
             fact_type, required_any,
         )
-        return "HUMAN_REVIEW_REQUIRED"
+        return "待人工审核"
 
     # MARKET_SHARE 定性守门：无量化数值时禁止 AUTO_PASS（保留人工确认）
     if fact_type == "MARKET_SHARE":
@@ -170,14 +170,14 @@ def _map_verdict_to_status(
                 "MARKET_SHARE 无量化数值 (predicate='%s')，保留人工审核",
                 fact_record.get("predicate", ""),
             )
-            return "HUMAN_REVIEW_REQUIRED"
+            return "待人工审核"
 
     # PASS 且分数足够高
-    if verdict == "PASS" and score >= auto_pass_threshold:
-        return "AUTO_PASS"
+    if verdict == "通过" and score >= auto_pass_threshold:
+        return "自动通过"
 
     # PASS 但分数不够高
-    return "HUMAN_REVIEW_REQUIRED"
+    return "待人工审核"
 
 
 def _record_task_start(task_id: str, document_id: str, task_type: str) -> None:
@@ -186,7 +186,7 @@ def _record_task_start(task_id: str, document_id: str, task_type: str) -> None:
         conn.execute(
             """INSERT INTO extraction_task
             (id, document_id, task_type, status, started_at)
-            VALUES (?, ?, ?, 'running', CURRENT_TIMESTAMP)""",
+            VALUES (?, ?, ?, '运行中', CURRENT_TIMESTAMP)""",
             (task_id, document_id, task_type),
         )
         conn.commit()
@@ -262,31 +262,31 @@ def review_facts_batch(
 
     client = get_llm_client()
     task_id = str(uuid.uuid4())
-    _record_task_start(task_id, document_id, "reviewer")
+    _record_task_start(task_id, document_id, "审核")
 
     try:
         result = client.chat_json(system_prompt, user_input)
         raw_data = result["data"]
         _record_task_end(
-            task_id, "success",
+            task_id, "成功",
             result["input_tokens"], result["output_tokens"],
             result["model"],
         )
     except Exception as e:
-        _record_task_end(task_id, "failed", error=str(e))
+        _record_task_end(task_id, "失败", error=str(e))
         logger.error("Reviewer 批量调用失败: %s", e)
         # 全部标记 UNCERTAIN
         results = []
         for fid, frec in facts_with_ids:
             fallback = {
                 "fact_atom_id": fid,
-                "verdict": "UNCERTAIN",
+                "verdict": "不确定",
                 "score": 0.0,
                 "issues": [{"field": "system", "issue": f"批量审核调用失败: {e}"}],
                 "review_note": "审核调用异常，进入人工审核池",
-                "review_status": "HUMAN_REVIEW_REQUIRED",
+                "review_status": "待人工审核",
             }
-            _persist_review(fid, "UNCERTAIN", 0.0, "HUMAN_REVIEW_REQUIRED", fallback["review_note"])
+            _persist_review(fid, "不确定", 0.0, "待人工审核", fallback["review_note"])
             results.append(fallback)
         return results
 
@@ -305,7 +305,7 @@ def review_facts_batch(
     for fid, frec in facts_with_ids:
         item = review_map.get(fid, {})
 
-        verdict = item.get("verdict", "UNCERTAIN").upper()
+        verdict = item.get("verdict", "不确定").upper()
         score = item.get("score", 0.0)
         issues = item.get("issues", [])
         review_note = item.get("review_note", "")
@@ -348,9 +348,9 @@ def _persist_review(
             """INSERT INTO review_log
             (id, target_type, target_id, old_status, new_status,
              reviewer, review_action, review_note)
-            VALUES (?, 'fact_atom', ?, 'PENDING', ?, 'system_reviewer', ?, ?)""",
+            VALUES (?, 'fact_atom', ?, '待处理', ?, '系统审核', ?, ?)""",
             (str(uuid.uuid4()), fact_atom_id, review_status,
-             verdict.lower(), review_note),
+             verdict, review_note),
         )
         conn.commit()
     finally:
@@ -374,7 +374,7 @@ def batch_re_evaluate_pending() -> dict:
         rows = conn.execute(
             """SELECT id, fact_type, predicate, object_text, value_num, value_text,
                       qualifier_json, confidence_score
-               FROM fact_atom WHERE review_status = 'HUMAN_REVIEW_REQUIRED'"""
+               FROM fact_atom WHERE review_status = '待人工审核'"""
         ).fetchall()
 
         promoted = 0
@@ -401,10 +401,10 @@ def batch_re_evaluate_pending() -> dict:
 
             # 用新 config 重新评估（推断当时 verdict=PASS，只是被旧规则拦截）
             new_status = _map_verdict_to_status("PASS", score, fact_record, cfg)
-            if new_status == "AUTO_PASS":
+            if new_status == "自动通过":
                 conn.execute(
                     """UPDATE fact_atom
-                       SET review_status='AUTO_PASS',
+                       SET review_status='自动通过',
                            review_note='[批量重评估] 符合当前自动通过标准',
                            updated_at=CURRENT_TIMESTAMP
                        WHERE id=?""",
@@ -414,8 +414,8 @@ def batch_re_evaluate_pending() -> dict:
                     """INSERT INTO review_log
                        (id, target_type, target_id, old_status, new_status,
                         reviewer, review_action, review_note)
-                       VALUES (?, 'fact_atom', ?, 'HUMAN_REVIEW_REQUIRED', 'AUTO_PASS',
-                               'batch_re_evaluate', 'pass', '批量重评估晋升')""",
+                       VALUES (?, 'fact_atom', ?, '待人工审核', '自动通过',
+                               '批量重评估', '通过', '批量重评估晋升')""",
                     (str(uuid.uuid4()), row["id"]),
                 )
                 promoted += 1
@@ -456,7 +456,7 @@ def review_document_facts(
     system_prompt = _load_prompt()
 
     # 分批处理，每批最多 20 条，避免单次请求过大导致超时
-    BATCH_SIZE = 20
+    BATCH_SIZE = 10
     all_results = []
 
     for i in range(0, len(facts_with_ids), BATCH_SIZE):
@@ -494,33 +494,33 @@ def _review_batch(
 
     client = get_llm_client()
     task_id = str(uuid.uuid4())
-    _record_task_start(task_id, document_id, "reviewer")
+    _record_task_start(task_id, document_id, "审核")
 
     try:
         result = client.chat_json(system_prompt, user_input)
         raw_data = result["data"]
         _record_task_end(
-            task_id, "success",
+            task_id, "成功",
             result["input_tokens"], result["output_tokens"],
             result["model"],
         )
     except Exception as e:
-        _record_task_end(task_id, "failed", error=str(e))
+        _record_task_end(task_id, "失败", error=str(e))
         logger.error("Reviewer 批次调用失败 [%s]: %s", document_id[:8], e)
         results = []
         for fid, frec in facts_with_ids:
             _persist_review(
-                fid, "UNCERTAIN", 0.0,
-                "HUMAN_REVIEW_REQUIRED",
+                fid, "不确定", 0.0,
+                "待人工审核",
                 f"审核调用异常: {e}，进入人工审核池",
             )
             results.append({
                 "fact_atom_id": fid,
-                "verdict": "UNCERTAIN",
+                "verdict": "不确定",
                 "score": 0.0,
                 "issues": [],
                 "review_note": f"审核调用异常: {e}",
-                "review_status": "HUMAN_REVIEW_REQUIRED",
+                "review_status": "待人工审核",
             })
         return results
 
@@ -528,8 +528,22 @@ def _review_batch(
     if isinstance(raw_data, dict):
         raw_data = [raw_data]
 
+    # 防护：展平嵌套 list，确保每个 item 是 dict
+    flat_data = []
+    if isinstance(raw_data, list):
+        for item in raw_data:
+            if isinstance(item, dict):
+                flat_data.append(item)
+            elif isinstance(item, list):
+                # 嵌套 list，展平
+                for sub in item:
+                    if isinstance(sub, dict):
+                        flat_data.append(sub)
+    else:
+        logger.warning("Reviewer 返回非预期类型: %s", type(raw_data).__name__)
+
     review_map = {}
-    for item in raw_data:
+    for item in flat_data:
         fid = item.get("fact_id", "") or item.get("id", "")
         if fid:
             review_map[fid] = item
@@ -538,7 +552,7 @@ def _review_batch(
     for fid, frec in facts_with_ids:
         item = review_map.get(fid, {})
 
-        verdict = item.get("verdict", "UNCERTAIN").upper()
+        verdict = item.get("verdict", "不确定").upper()
         score = item.get("score", 0.0)
         issues = item.get("issues", [])
         review_note = item.get("review_note", "")
