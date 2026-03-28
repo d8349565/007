@@ -8,9 +8,9 @@
   {# 文档头部 #}
   <div class="card" style="margin-bottom:20px;">
     <div class="card-body">
-      <div style="font-size:18px;font-weight:700;color:#ffffff;margin-bottom:8px;">{{ doc.title or '(无标题)' }}</div>
-      <div style="font-size:12px;color:#94a3b8;display:flex;flex-wrap:wrap;gap:16px;">
-        <span>📂 {% if doc.source_type == 'url' %}网址{% elif doc.source_type == 'file' %}文件{% elif doc.source_type == 'paste' %}粘贴{% else %}{{ doc.source_type }}{% endif %} · {{ doc.source_name or '—' }}</span>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px;">{{ doc.title or '(无标题)' }}</div>
+      <div style="font-size:12px;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:16px;">
+        <span>📂 {% if doc.source_type == '网址' %}网址{% elif doc.source_type == '文件' %}文件{% elif doc.source_type == '粘贴' %}粘贴{% else %}{{ doc.source_type }}{% endif %} · {{ doc.source_name or '—' }}</span>
         {% if doc.url %}<span>🔗 <a href="{{ doc.url }}" target="_blank">{{ doc.url[:80] }}{% if doc.url|length > 80 %}...{% endif %}</a></span>{% endif %}
         <span>🕒 {{ (doc.crawl_time or '')[:16] }}</span>
         {% if doc.publish_time %}<span>📰 {{ doc.publish_time[:10] }}</span>{% endif %}
@@ -37,7 +37,7 @@
       <div class="metric-label">Token 消耗</div>
     </div>
     <div class="card metric-card">
-      {% set auto_pass_cnt = stats.review_distribution | selectattr('review_status','eq','AUTO_PASS') | list %}
+      {% set auto_pass_cnt = stats.review_distribution | selectattr('review_status','eq','自动通过') | list %}
       <div class="metric-value text-success">{{ auto_pass_cnt[0].cnt if auto_pass_cnt else 0 }}</div>
       <div class="metric-label">自动通过</div>
     </div>
@@ -102,8 +102,16 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>#</th><th>类型</th><th>主体</th><th>谓词</th>
-            <th>客体 / 数值</th><th>时间</th><th>置信</th><th>状态</th><th>操作</th>
+            <th style="width:32px;">#</th>
+            <th style="min-width:80px;">类型</th>
+            <th style="min-width:100px;">主体</th>
+            <th style="min-width:140px;">谓词 / 客体</th>
+            <th style="min-width:100px;">数值</th>
+            <th style="min-width:90px;">时间 / 地点</th>
+            <th style="min-width:180px;">证据</th>
+            <th style="width:42px;" title="置信度分值">信</th>
+            <th style="width:70px;">状态</th>
+            <th style="width:92px;">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -111,28 +119,135 @@
           <tr>
             <td class="cell-muted text-xs">{{ loop.index }}</td>
             <td><span class="badge badge-{{ f.fact_type }}">{{ FACT_TYPE_NAMES.get(f.fact_type, f.fact_type) }}</span></td>
-            <td>{{ f.subject_text or '—' }}</td>
-            <td class="text-muted">{{ f.predicate or '—' }}</td>
             <td>
-              {% if f.value_text %}{{ f.value_text }}{% elif f.value_num is not none %}{{ f.value_num }}{% else %}{{ f.object_text or '—' }}{% endif %}
-              {% if f.unit %}<span class="text-muted text-xs"> {{ f.unit }}</span>{% endif %}
+              {% if f.subject_entity_id %}
+              <a href="/entity/{{ f.subject_entity_id }}" class="truncate-inner font-bold" style="color:var(--accent-primary);text-decoration:none;"
+                {% if f.subject_text and f.subject_text|length > 18 %}data-tip="{{ f.subject_text|e }}"{% endif %}>
+                {{ f.subject_text or '—' }}
+              </a>
+              {% elif f.subject_text %}
+              <a href="/entity/search?subject={{ f.subject_text|urlencode }}" class="truncate-inner font-bold" style="color:var(--accent-primary);text-decoration:none;"
+                {% if f.subject_text|length > 18 %}data-tip="{{ f.subject_text|e }}"{% endif %}>
+                {{ f.subject_text }}
+              </a>
+              {% else %}
+              <span class="truncate-inner font-bold">—</span>
+              {% endif %}
             </td>
-            <td class="text-sm text-muted nowrap">{{ f.time_expr or '—' }}</td>
-            <td class="text-sm">{{ '%.2f'|format(f.confidence_score) if f.confidence_score else '—' }}</td>
             <td>
-              {% if f.review_status in ('AUTO_PASS','HUMAN_PASS') %}
-                <span class="badge badge-pass">{% if f.review_status == 'AUTO_PASS' %}自动通过{% else %}人工通过{% endif %}</span>
-              {% elif f.review_status in ('REJECTED','HUMAN_REJECTED') %}
-                <span class="badge badge-reject">{% if f.review_status == 'REJECTED' %}已拒绝{% else %}人工拒绝{% endif %}</span>
-              {% elif f.review_status == 'HUMAN_REVIEW_REQUIRED' %}
+              <div class="cell-stack">
+                <span class="truncate-inner text-sm"
+                  {% if f.predicate and f.predicate|length > 16 %}data-tip="{{ f.predicate|e }}"{% endif %}>
+                  {{ f.predicate or '—' }}
+                </span>
+                {% if f.object_text %}
+                <span class="truncate-inner text-xs text-muted"
+                  {% if f.object_text|length > 16 %}data-tip="{{ f.object_text|e }}"{% endif %}>
+                  → {{ f.object_text }}
+                </span>
+                {% endif %}
+                {# 限定词辅助行：按 fact_type 类型化渲染 #}
+                {% set q = f.qualifiers_display %}
+                {% if f.fact_type == 'COMPETITIVE_RANKING' and (q.get('ranking_name') or q.get('ranking_scope') or q.get('segment')) %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  {% if q.get('ranking_name') %}<span class="qualifier-inline" title="榜单">{{ q['ranking_name'][:14] }}</span>{% endif %}
+                  {% if q.get('ranking_scope') %}<span class="qualifier-inline" title="范围">{{ q['ranking_scope'][:10] }}</span>{% endif %}
+                  {% if q.get('segment') %}<span class="qualifier-inline qualifier-segment" title="赛道">{{ q['segment'][:10] }}</span>{% endif %}
+                </div>
+                {% elif f.fact_type == 'FINANCIAL_METRIC' %}
+                {% set show_metric = q.get('metric_name') and q['metric_name'] not in (f.predicate or '') %}
+                {% set show_scope = q.get('report_scope') %}
+                {% if show_metric or show_scope %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  {% if show_metric %}<span class="qualifier-inline qualifier-metric" title="指标名">{{ q['metric_name'][:14] }}</span>{% endif %}
+                  {% if show_scope %}<span class="qualifier-inline" title="口径">{{ QUALIFIER_VALUE_ZH.get(q['report_scope'], q['report_scope'])[:12] }}</span>{% endif %}
+                </div>
+                {% endif %}
+                {% elif f.fact_type == 'CAPACITY' and (q.get('product_type') or q.get('phase')) %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  {% if q.get('product_type') %}<span class="qualifier-inline" title="产品类型">{{ q['product_type'][:12] }}</span>{% endif %}
+                  {% if q.get('phase') %}<span class="qualifier-inline qualifier-phase" title="阶段">{{ QUALIFIER_VALUE_ZH.get(q['phase'], q['phase'])[:10] }}</span>{% endif %}
+                </div>
+                {% elif f.fact_type == 'COOPERATION' and q.get('cooperation_type') %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  <span class="qualifier-inline qualifier-phase" title="合作类型">{{ QUALIFIER_VALUE_ZH.get(q['cooperation_type'], q['cooperation_type'])[:14] }}</span>
+                </div>
+                {% elif f.fact_type in ['MARKET_SHARE', 'SALES_VOLUME'] and q.get('segment') %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  <span class="qualifier-inline qualifier-segment" title="细分赛道">{{ q['segment'][:12] }}</span>
+                </div>
+                {% elif f.fact_type == 'EXPANSION' and q.get('phase') %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  <span class="qualifier-inline qualifier-phase" title="阶段">{{ QUALIFIER_VALUE_ZH.get(q['phase'], q['phase'])[:10] }}</span>
+                </div>
+                {% elif f.fact_type == 'INVESTMENT' and (q.get('project_name') or q.get('purpose')) %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  {% if q.get('project_name') %}<span class="qualifier-inline" title="项目">{{ q['project_name'][:14] }}</span>{% endif %}
+                  {% if q.get('purpose') %}<span class="qualifier-inline" title="用途">{{ q['purpose'][:12] }}</span>{% endif %}
+                </div>
+                {% elif f.fact_type == 'MARKET_SHARE' and q.get('market_scope') %}
+                <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">
+                  <span class="qualifier-inline" title="市场范围">{{ q['market_scope'][:14] }}</span>
+                </div>
+                {% endif %}
+              </div>
+            </td>
+            <td style="white-space:nowrap;">
+              {% if f.value_num is not none and f.value_num != '' %}
+                <span class="font-bold">{{ f.value_num }}</span>
+                {% if f.unit %}<span class="text-xs text-muted"> {{ f.unit }}</span>{% endif %}
+                {% if f.currency %}<span class="text-xs text-muted"> {{ f.currency }}</span>{% endif %}
+              {% elif f.value_text %}
+                <span class="font-bold"
+                  {% if f.value_text|length > 14 %}data-tip="{{ f.value_text|e }}"{% endif %}>
+                  {{ f.value_text[:14] }}{% if f.value_text|length > 14 %}…{% endif %}
+                </span>
+                {% if f.unit %}<span class="text-xs text-muted"> {{ f.unit }}</span>{% endif %}
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              <div class="cell-stack" style="max-width:100px;">
+                {% if f.time_expr %}
+                <span class="text-xs nowrap">⏱ {{ f.time_expr }}</span>
+                {% endif %}
+                {% if f.location_text %}
+                <span class="truncate-inner text-xs text-muted"
+                  {% if f.location_text|length > 12 %}data-tip="{{ f.location_text|e }}"{% endif %}>
+                  📍 {{ f.location_text }}
+                </span>
+                {% endif %}
+                {% if not f.time_expr and not f.location_text %}<span class="text-muted">—</span>{% endif %}
+              </div>
+            </td>
+            <td>
+              {% if f.evidence_text %}
+              <span class="truncate-inner text-xs text-muted"
+                {% if f.evidence_text|length > 40 %}data-tip="{{ f.evidence_text|e }}"{% endif %}>
+                {{ f.evidence_text[:40] }}{% if f.evidence_text|length > 40 %}…{% endif %}
+              </span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td style="text-align:center;">
+              {% if f.confidence_score %}
+              <span class="text-xs {% if f.confidence_score >= 0.8 %}text-success{% elif f.confidence_score >= 0.5 %}text-warning{% else %}text-danger{% endif %}">
+                {{ '%.2f'|format(f.confidence_score) }}
+              </span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              {% if f.review_status in ('自动通过','人工通过') %}
+                <span class="badge badge-pass">{% if f.review_status == '自动通过' %}自动通过{% else %}人工通过{% endif %}</span>
+              {% elif f.review_status in ('已拒绝','人工拒绝') %}
+                <span class="badge badge-reject">{% if f.review_status == '已拒绝' %}已拒绝{% else %}人工拒绝{% endif %}</span>
+              {% elif f.review_status == '待人工审核' %}
                 <span class="badge badge-review">待人工审核</span>
               {% else %}
                 <span class="badge badge-pending">待处理</span>
               {% endif %}
             </td>
             <td>
-              {% if f.review_status == 'HUMAN_REVIEW_REQUIRED' %}
-              <div class="actions">
+              {% if f.review_status == '待人工审核' %}
+              <div class="actions" style="display:flex;gap:4px;">
                 <form method="post" action="/review/{{ f.id }}/action">
                   <input type="hidden" name="action" value="HUMAN_PASS">
                   <button type="submit" class="btn-action-pass" title="通过">✓</button>
@@ -145,16 +260,6 @@
               {% endif %}
             </td>
           </tr>
-          {% if f.qualifiers_display %}
-          <tr style="background:#2a2a2a;">
-            <td colspan="2"></td>
-            <td colspan="7" style="padding-top:2px;padding-bottom:6px;">
-              {% for k, v in f.qualifiers_display.items() %}
-              <span class="qualifier-pill">{{ k }}: {{ v }}</span>
-              {% endfor %}
-            </td>
-          </tr>
-          {% endif %}
           {% endfor %}
         </tbody>
       </table>
@@ -174,8 +279,8 @@
           <tr>
             <td><code>{{ t.task_type }}</code></td>
             <td>
-              {% if t.status == 'success' %}<span class="badge badge-pass">成功</span>
-              {% elif t.status == 'failed' %}<span class="badge badge-reject">失败</span>
+              {% if t.status == '成功' %}<span class="badge badge-pass">成功</span>
+              {% elif t.status == '失败' %}<span class="badge badge-reject">失败</span>
               {% else %}<span class="badge badge-running">运行中</span>{% endif %}
             </td>
             <td>{{ '{:,}'.format(t.input_tokens or 0) }}</td>

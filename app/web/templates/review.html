@@ -25,16 +25,7 @@
       <select name="status" onchange="this.form.submit()">
         <option value="">全部</option>
         {% for s in statuses %}
-        <option value="{{ s }}" {% if s == current_status %}selected{% endif %}>
-          {% if s == 'HUMAN_REVIEW_REQUIRED' %}待人工审核
-          {% elif s == 'AUTO_PASS' %}自动通过
-          {% elif s == 'HUMAN_PASS' %}人工通过
-          {% elif s == 'REJECTED' %}已拒绝
-          {% elif s == 'HUMAN_REJECTED' %}人工拒绝
-          {% elif s == 'PENDING' %}待处理
-          {% elif s == 'UNCERTAIN' %}不确定
-          {% else %}{{ s }}{% endif %}
-        </option>
+        <option value="{{ s }}" {% if s == current_status %}selected{% endif %}>{{ s }}</option>
         {% endfor %}
       </select>
     </form>
@@ -145,15 +136,20 @@
             </td>
             <td style="white-space:nowrap;">
               {% if f.value_num is not none and f.value_num != '' %}
-                <span class="font-bold" style="color:#ffffff;">{{ f.value_num }}</span>
-                {% if f.unit %}<span class="text-xs text-muted"> {{ f.unit }}</span>{% endif %}
-                {% if f.currency %}<span class="text-xs text-muted"> {{ f.currency }}</span>{% endif %}
+                <div class="value-cell">
+                  <span class="value-num">{{ f.value_num }}</span>
+                  {% if f.unit or f.currency %}
+                  <span class="value-meta">{{ f.unit or '' }}{% if f.unit and f.currency %} · {% endif %}{{ f.currency or '' }}</span>
+                  {% endif %}
+                </div>
               {% elif f.value_text %}
-                <span class="font-bold"
-                  {% if f.value_text|length > 14 %}data-tip="{{ f.value_text|e }}"{% endif %}>
-                  {{ f.value_text[:14] }}{% if f.value_text|length > 14 %}…{% endif %}
-                </span>
-                {% if f.unit %}<span class="text-xs text-muted"> {{ f.unit }}</span>{% endif %}
+                <div class="value-cell">
+                  <span class="value-num"
+                    {% if f.value_text|length > 14 %}data-tip="{{ f.value_text|e }}"{% endif %}>
+                    {{ f.value_text[:14] }}{% if f.value_text|length > 14 %}…{% endif %}
+                  </span>
+                  {% if f.unit %}<span class="value-meta">{{ f.unit }}</span>{% endif %}
+                </div>
               {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
             <td>
@@ -186,13 +182,13 @@
               {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
             <td>
-              {% if f.review_status == 'HUMAN_REVIEW_REQUIRED' %}
+              {% if f.review_status == '待人工审核' %}
               <span class="badge badge-review">待审</span>
-              {% elif f.review_status == 'AUTO_PASS' %}
+              {% elif f.review_status == '自动通过' %}
               <span class="badge badge-pass">自动✓</span>
-              {% elif f.review_status == 'HUMAN_PASS' %}
+              {% elif f.review_status == '人工通过' %}
               <span class="badge badge-pass">人工✓</span>
-              {% elif f.review_status == 'REJECTED' or f.review_status == 'HUMAN_REJECTED' %}
+              {% elif f.review_status == '已拒绝' or f.review_status == '人工拒绝' %}
               <span class="badge badge-reject">已拒</span>
               {% else %}
               <span class="badge badge-pending">{{ f.review_status[:6] }}</span>

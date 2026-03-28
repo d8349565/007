@@ -143,11 +143,11 @@
       <span class="fd-type-badge" style="background:{{ FT_COLORS.get(fact.fact_type, '#3b82f6') }};">
         {{ FACT_TYPE_NAMES.get(fact.fact_type, fact.fact_type) }}
       </span>
-      {% if fact.review_status == 'AUTO_PASS' %}
+      {% if fact.review_status == '自动通过' %}
       <span class="fd-review-badge pass">✓ 自动通过</span>
-      {% elif fact.review_status == 'HUMAN_PASS' %}
+      {% elif fact.review_status == '人工通过' %}
       <span class="fd-review-badge human">✓ 人工通过</span>
-      {% elif fact.review_status == 'PENDING' %}
+      {% elif fact.review_status == '待处理' %}
       <span class="fd-review-badge pending">待审核</span>
       {% else %}
       <span class="fd-review-badge" style="background:#f1f5f9;color:#64748b;">{{ fact.review_status or '未知' }}</span>
