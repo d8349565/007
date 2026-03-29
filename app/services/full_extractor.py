@@ -8,6 +8,7 @@ LLM 输出采用 list-of-lists 格式以减少 token 消耗：
 """
 
 import json
+import re
 import uuid
 from pathlib import Path
 
@@ -156,6 +157,80 @@ def _validate_record(rec: dict, cfg: dict) -> dict | None:
     return rec
 
 
+# --- 年份/地域/产品前缀的正则 ---
+_RE_YEAR_PREFIX = re.compile(r"^(\d{4}年(?:\d{1,2}月)?)")
+_RE_SCOPE_PREFIX = re.compile(r"^(全球|全国|中国|国内|中国市场)")
+_RE_MISSING_VERB = re.compile(r"^(.+(?:产能|收入|销售额|营收|利润|产值|市场规模|市场份额|募集资金净额|营业收入))$")
+
+
+def _normalize_record(rec: dict) -> dict:
+    """
+    自动修正常见字段错位问题（在验证后、写入 DB 前执行）：
+    1. predicate 含年份前缀 → 剥离到 time_expr
+    2. predicate 含地域前缀 → 剥离到 location 或 qualifiers
+    3. predicate 缺少动词尾 → 补 "为"
+    4. predicate 含产品名+产能 → 拆到 qualifiers.product_type
+    """
+    predicate = rec.get("predicate", "")
+    changed = False
+
+    # 1. 剥离年份前缀：如 "2024年销售额为" → "销售额为"，年份填到 time_expr
+    m = _RE_YEAR_PREFIX.match(predicate)
+    if m:
+        year_part = m.group(1)
+        new_pred = predicate[len(year_part):]
+        if new_pred:  # 确保剥离后还有内容
+            if not rec.get("time_expr"):
+                rec["time_expr"] = year_part
+            predicate = new_pred
+            changed = True
+
+    # 2. 剥离地域前缀：如 "全球销售额为" → "销售额为"，地域填到 location
+    m = _RE_SCOPE_PREFIX.match(predicate)
+    if m:
+        scope_part = m.group(1)
+        new_pred = predicate[len(scope_part):]
+        if new_pred:
+            if not rec.get("location"):
+                scope_map = {"全国": "中国", "国内": "中国", "中国市场": "中国"}
+                rec["location"] = scope_map.get(scope_part, scope_part)
+            predicate = new_pred
+            changed = True
+
+    # 3. predicate 缺少动词结尾 → 补 "为"
+    # 如 "油性工业涂料产能" → "油性工业涂料产能为"
+    # 如 "IPO计划募集资金净额" → "IPO计划募集资金净额为"
+    if _RE_MISSING_VERB.match(predicate) and not predicate.endswith("为"):
+        predicate = predicate + "为"
+        changed = True
+
+    # 4. predicate 含 "[产品名]产能为" → 把产品名拆到 qualifiers.product_type
+    # 如 "油性工业涂料产能为" → "产能为"  qualifiers.product_type="油性工业涂料"
+    # 如 "高性能涂料项目产能为" → "产能为"  qualifiers.product_type="高性能涂料"
+    if predicate.endswith("产能为") and len(predicate) > len("产能为"):
+        product_part = predicate[:-len("产能为")]
+        # 去掉可能的"项目"后缀
+        product_part = re.sub(r"项目$", "", product_part).strip()
+        if product_part:
+            qualifiers = rec.get("qualifiers", {})
+            if not isinstance(qualifiers, dict):
+                qualifiers = {}
+            if not qualifiers.get("product_type"):
+                qualifiers["product_type"] = product_part
+                rec["qualifiers"] = qualifiers
+            predicate = "产能为"
+            changed = True
+
+    if changed:
+        logger.debug(
+            "predicate 自动修正: '%s' → '%s'",
+            rec.get("predicate", ""), predicate,
+        )
+        rec["predicate"] = predicate
+
+    return rec
+
+
 def _complement_facts_by_type(
     facts_by_type: dict[str, list[dict]],
     cleaned_text: str,
@@ -256,25 +331,25 @@ def _complement_facts_by_type(
         supplemented = type_data.get("supplemented_facts", [])
         unchanged = type_data.get("unchanged_facts", [])
 
-        # 合并去重，确保每条 fact 都携带 fact_type
-        all_facts = []
-        for f in unchanged:
-            if isinstance(f, dict):
-                f.setdefault("fact_type", fact_type)
-                all_facts.append(f)
+        # 保底策略：始终以阶段1原始事实为基础，仅追加补全的新事实
+        # 防止 LLM 遗漏 unchanged_facts 导致原始事实丢失
+        all_facts = list(facts_by_type[fact_type])  # 保留所有原始事实
         existing_evidence = {f.get("evidence_text", "") for f in all_facts}
+        added = 0
         for new_fact in supplemented:
             if not isinstance(new_fact, dict):
                 continue
             new_fact.setdefault("fact_type", fact_type)
             if new_fact.get("evidence_text", "") not in existing_evidence:
                 all_facts.append(new_fact)
+                existing_evidence.add(new_fact.get("evidence_text", ""))
+                added += 1
 
         result_by_type[fact_type] = all_facts
         logger.info(
             "[doc=%s] 阶段2 %s: 原=%d, 补=%d, 终=%d",
             document_id[:8], fact_type,
-            len(facts_by_type[fact_type]), len(supplemented), len(all_facts),
+            len(facts_by_type[fact_type]), added, len(all_facts),
         )
 
     return result_by_type
@@ -305,7 +380,8 @@ def _parse_structured_output(raw_data: dict, cfg: dict) -> list[dict]:
 
             validated = _validate_record(rec, cfg)
             if validated is not None:
-                parsed_records.append(validated)
+                normalized = _normalize_record(validated)
+                parsed_records.append(normalized)
 
     return parsed_records
 
@@ -394,13 +470,21 @@ def extract_facts_full_text(
             if rec:
                 validated = _validate_record(rec, cfg)
                 if validated:
-                    parsed_records_stage1.append(validated)
+                    normalized = _normalize_record(validated)
+                    parsed_records_stage1.append(normalized)
 
     if not parsed_records_stage1:
         logger.warning(
             "[doc=%s] 阶段1解析后 0 条有效记录 (raw_data 类型=%s, 长度=%s)",
             document_id[:8], type(raw_data).__name__,
             len(raw_data) if isinstance(raw_data, (list, dict)) else "N/A",
+        )
+        # 更新任务状态为"解析失败"，记录 LLM 返回了数据但解析为空
+        _record_task_end(
+            task_id, "解析失败",
+            result["input_tokens"], result["output_tokens"],
+            result["model"],
+            error=f"LLM 返回 {type(raw_data).__name__}(长度={len(raw_data) if isinstance(raw_data, (list, dict)) else 'N/A'})，解析后 0 条有效记录",
         )
 
     # 将阶段1结果按类型分组
