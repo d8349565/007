@@ -236,3 +236,21 @@ CREATE TABLE IF NOT EXISTS entity_search_cache (
 
 CREATE INDEX IF NOT EXISTS idx_entity_search_cache_entity
     ON entity_search_cache(entity_name);
+
+-- 实体档案表（从现有数据聚合 + LLM/Web 丰富的结构化 Profile）
+CREATE TABLE IF NOT EXISTS entity_profile (
+    id               TEXT PRIMARY KEY,
+    entity_id        TEXT NOT NULL UNIQUE REFERENCES entity(id),
+    aliases_json     TEXT NOT NULL DEFAULT '[]',      -- 别名列表 JSON
+    relations_json   TEXT NOT NULL DEFAULT '[]',      -- 关系列表 JSON（子公司/股东/合资等）
+    benchmarks_json  TEXT NOT NULL DEFAULT '[]',      -- 关键指标 JSON（历史财务/产能数据）
+    competitors_json TEXT NOT NULL DEFAULT '[]',      -- 竞争对手 JSON
+    summary_text     TEXT NOT NULL DEFAULT '',        -- 实体简介
+    profile_source   TEXT NOT NULL DEFAULT '聚合',    -- '聚合' | '聚合+搜索' | '聚合+LLM'
+    fact_count       INTEGER NOT NULL DEFAULT 0,      -- 聚合时的事实数快照
+    last_built_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    last_enriched_at TEXT                             -- Web/LLM 丰富时间
+);
+
+CREATE INDEX IF NOT EXISTS idx_entity_profile_entity
+    ON entity_profile(entity_id);
