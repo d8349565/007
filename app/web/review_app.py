@@ -1054,6 +1054,53 @@ def create_app() -> Flask:
         candidates = get_candidate_relations_from_facts()
         return jsonify({"candidates": candidates})
 
+    @app.route("/api/entity/profile")
+    def api_entity_profile():
+        """获取实体档案"""
+        from app.services.entity_profiler import get_entity_profile
+        entity_id = request.args.get("entity_id", "").strip()
+        if not entity_id:
+            return jsonify({"error": "缺少 entity_id"}), 400
+        profile = get_entity_profile(entity_id)
+        if not profile:
+            return jsonify({"error": "实体不存在"}), 404
+        return jsonify({"profile": profile})
+
+    @app.route("/api/entity/profile/build", methods=["POST"])
+    def api_entity_profile_build():
+        """构建或重建实体档案（纯聚合，无 LLM）"""
+        from app.services.entity_profiler import build_entity_profile
+        data = request.get_json(silent=True) or {}
+        entity_id = data.get("entity_id", "").strip()
+        if not entity_id:
+            return jsonify({"error": "缺少 entity_id"}), 400
+        profile = build_entity_profile(entity_id)
+        if not profile:
+            return jsonify({"error": "实体不存在或构建失败"}), 404
+        return jsonify({"success": True, "profile": profile})
+
+    @app.route("/api/entity/profile/enrich", methods=["POST"])
+    def api_entity_profile_enrich():
+        """Web 搜索 + LLM 丰富实体档案"""
+        from app.services.entity_profiler import enrich_entity_profile
+        data = request.get_json(silent=True) or {}
+        entity_id = data.get("entity_id", "").strip()
+        if not entity_id:
+            return jsonify({"error": "缺少 entity_id"}), 400
+        result = enrich_entity_profile(entity_id)
+        if not result:
+            return jsonify({"error": "实体不存在或丰富失败"}), 404
+        return jsonify({"success": True, "result": result})
+
+    @app.route("/api/entity/profile/build-all", methods=["POST"])
+    def api_entity_profile_build_all():
+        """批量构建所有实体档案"""
+        from app.services.entity_profiler import build_all_profiles
+        data = request.get_json(silent=True) or {}
+        min_facts = int(data.get("min_facts", 1))
+        stats = build_all_profiles(min_facts=min_facts)
+        return jsonify({"success": True, "stats": stats})
+
     @app.route("/api/entity/ai-suggest-relations", methods=["POST"])
     def api_ai_suggest_relations():
         """调用 AI 分析所有实体，给出关系建议"""
