@@ -56,6 +56,9 @@ def setup_logging() -> logging.Logger:
 
 
 def get_logger(name: str = "fact_extract") -> logging.Logger:
-    """获取子 logger"""
+    """获取子 logger（挂在 fact_extract 命名空间下，确保日志写入文件）"""
     setup_logging()
-    return logging.getLogger(name)
+    if name == "fact_extract":
+        return logging.getLogger("fact_extract")
+    # 将模块名映射到 fact_extract 的子 logger，确保日志传播到文件 handler
+    return logging.getLogger(f"fact_extract.{name}")
