@@ -7,247 +7,415 @@
 {% block head %}
 <style>
 
-/* ===== Entity Detail Page ===== */
+/* ===== Entity Detail Page — Redesigned ===== */
 
-/* Header */
+/* ---------- Header ---------- */
 .ed-header {
-  background: #ffffff; border-radius: 10px; padding: 20px 24px;
-  margin-bottom: 0; border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+  padding: 20px 28px 18px;
+  margin: -20px -20px 0 -20px;
 }
-.ed-header-top {
-  display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap;
+.ed-breadcrumb {
+  font-size: 12px; color: var(--text-muted, #94a3b8); margin-bottom: 16px;
 }
-.ed-back { font-size: 13px; color: #3b82f6; text-decoration: none; white-space: nowrap; padding-top: 6px; }
-.ed-back:hover { text-decoration: underline; }
-.ed-name-block { flex: 1; min-width: 200px; }
+.ed-breadcrumb a {
+  color: var(--accent-primary, #2563eb); text-decoration: none;
+}
+.ed-breadcrumb a:hover { text-decoration: underline; }
+.ed-breadcrumb .ed-bc-sep { margin: 0 6px; color: var(--text-muted, #94a3b8); }
+
+.ed-header-main {
+  display: flex; align-items: flex-start; gap: 20px;
+}
+.ed-avatar {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--accent-primary, #2563eb); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: 700; flex-shrink: 0;
+  letter-spacing: -0.5px;
+}
+.ed-name-block { flex: 1; min-width: 0; }
+.ed-name-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
 .ed-name {
-  font-size: 26px; font-weight: 800; color: #0f172a; line-height: 1.2;
-  word-break: break-all;
-}
-.ed-name-sub {
-  margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 24px; font-weight: 800; color: var(--text-primary, #0f172a);
+  line-height: 1.3; word-break: break-all;
 }
 .ed-type-badge {
-  display: inline-block; padding: 3px 10px; border-radius: 12px;
-  font-size: 12px; font-weight: 600; background: rgba(109,40,217,0.08); color: #5b21b6;
-  cursor: default;
+  display: inline-block; padding: 3px 12px; border-radius: 20px;
+  font-size: 12px; font-weight: 600;
+  background: rgba(37, 99, 235, 0.1); color: var(--accent-primary, #2563eb);
 }
-.ed-aliases {
-  font-size: 12px; color: #6b7280; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+.ed-meta-line {
+  margin-top: 6px; font-size: 12px; color: var(--text-muted, #94a3b8);
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
 }
+.ed-meta-line span { white-space: nowrap; }
+
+.ed-alias-section { margin-top: 10px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .ed-alias-tag {
-  background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px;
-  padding: 1px 8px; font-size: 11px; color: #475569; display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #fff; border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: 20px; padding: 3px 10px; font-size: 12px; color: var(--text-secondary, #334155);
 }
 .ed-alias-del {
-  cursor: pointer; color: #ef4444; font-size: 13px; line-height: 1;
-  background: none; border: none; padding: 0; margin-left: 2px;
+  cursor: pointer; color: var(--text-muted, #94a3b8); font-size: 14px; line-height: 1;
+  background: none; border: none; padding: 0; margin-left: 1px;
 }
-.ed-alias-del:hover { color: #fca5a5; }
-.ed-header-right {
-  display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0;
+.ed-alias-del:hover { color: var(--color-danger, #dc2626); }
+.ed-alias-add-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 1px dashed var(--border-default, #cbd5e1);
+  border-radius: 20px; padding: 3px 10px; font-size: 12px;
+  color: var(--accent-primary, #2563eb); cursor: pointer;
 }
-.ed-stat-row { display: flex; gap: 20px; }
-.ed-stat { text-align: right; }
-.ed-stat-val { font-size: 20px; font-weight: 700; color: #0f172a; line-height: 1; }
-.ed-stat-lbl { font-size: 11px; color: #6b7280; margin-top: 2px; }
-.ed-edit-btn {
-  padding: 6px 14px; background: rgba(59,130,246,0.12); color: #60a5fa;
-  border: 1px solid rgba(59,130,246,0.3); border-radius: 6px; font-size: 12px;
-  cursor: pointer; white-space: nowrap;
+.ed-alias-add-btn:hover { border-color: var(--accent-primary, #2563eb); }
+.ed-alias-input-wrap {
+  display: none; align-items: center; gap: 6px;
 }
-.ed-edit-btn:hover { background: rgba(59,130,246,0.2); }
+.ed-alias-input-wrap.open { display: inline-flex; }
+.ed-alias-input-wrap input {
+  padding: 4px 10px; border: 1px solid var(--border-default, #cbd5e1);
+  border-radius: 6px; font-size: 12px; width: 140px; color: var(--text-primary, #0f172a);
+  background: #fff;
+}
+.ed-alias-input-wrap input:focus { outline: none; border-color: var(--accent-primary, #2563eb); }
+.ed-alias-input-wrap button {
+  padding: 4px 10px; background: var(--accent-primary, #2563eb); color: #fff;
+  border: none; border-radius: 6px; font-size: 12px; cursor: pointer;
+}
+
+.ed-header-actions {
+  display: flex; gap: 10px; flex-shrink: 0; align-items: flex-start; padding-top: 4px;
+}
+.ed-btn-outline {
+  padding: 8px 16px; background: #fff;
+  border: 1px solid var(--border-default, #cbd5e1); border-radius: var(--radius-md, 8px);
+  font-size: 13px; font-weight: 500; color: var(--text-secondary, #334155);
+  cursor: pointer; white-space: nowrap; text-decoration: none;
+}
+.ed-btn-outline:hover { background: #f8fafc; border-color: var(--accent-primary, #2563eb); color: var(--accent-primary, #2563eb); }
+.ed-btn-primary {
+  padding: 8px 16px; background: var(--accent-primary, #2563eb); color: #fff;
+  border: none; border-radius: var(--radius-md, 8px);
+  font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
+}
+.ed-btn-primary:hover { background: var(--accent-primary-hover, #1d4ed8); color: #fff; }
 
 /* Edit panel (inline) */
 .ed-edit-panel {
-  display: none; margin-top: 14px; padding: 16px;
-  background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;
+  display: none; margin-top: 16px; padding: 16px 20px;
+  background: #fff; border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-subtle, #e2e8f0);
 }
 .ed-edit-panel.open { display: block; }
-.ed-edit-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 12px; }
-.ed-edit-row:last-child { margin-bottom: 0; }
+.ed-edit-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 .ed-edit-field { display: flex; flex-direction: column; gap: 4px; min-width: 200px; }
-.ed-edit-field label { font-size: 11px; color: #6b7280; font-weight: 500; }
+.ed-edit-field label { font-size: 11px; color: var(--text-muted, #94a3b8); font-weight: 500; }
 .ed-edit-field input, .ed-edit-field select {
-  padding: 7px 10px; background: #ffffff; border: 1px solid #cbd5e1;
-  border-radius: 6px; color: #0f172a; font-size: 13px;
+  padding: 7px 10px; background: #fff; border: 1px solid var(--border-default, #cbd5e1);
+  border-radius: 6px; color: var(--text-primary, #0f172a); font-size: 13px;
 }
 .ed-edit-field input:focus, .ed-edit-field select:focus {
-  outline: none; border-color: #3b82f6;
+  outline: none; border-color: var(--accent-primary, #2563eb);
 }
 .ed-save-btn {
-  padding: 7px 18px; background: #3b82f6; color: #fff;
+  padding: 7px 18px; background: var(--accent-primary, #2563eb); color: #fff;
   border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
-.ed-save-btn:hover { background: #2563eb; }
+.ed-save-btn:hover { background: var(--accent-primary-hover, #1d4ed8); }
 .ed-cancel-btn {
-  padding: 7px 14px; background: transparent; color: #64748b;
-  border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; cursor: pointer;
+  padding: 7px 14px; background: transparent; color: var(--text-muted, #94a3b8);
+  border: 1px solid var(--border-subtle, #e2e8f0); border-radius: 6px; font-size: 13px; cursor: pointer;
 }
-.ed-cancel-btn:hover { color: #374151; }
 
-/* Alias add inline */
-.ed-alias-add { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
-.ed-alias-add input {
-  padding: 5px 10px; background: #ffffff; border: 1px solid #cbd5e1;
-  border-radius: 6px; color: #0f172a; font-size: 12px; width: 180px;
-}
-.ed-alias-add input:focus { outline: none; border-color: #3b82f6; }
-.ed-alias-add button {
-  padding: 5px 12px; background: rgba(59,130,246,0.12); color: #60a5fa;
-  border: 1px solid rgba(59,130,246,0.3); border-radius: 6px; font-size: 12px; cursor: pointer;
-}
-.ed-alias-add button:hover { background: rgba(59,130,246,0.2); }
-
-/* Tabs */
+/* ---------- Tabs ---------- */
 .ed-tabs {
-  display: flex; gap: 0; border-bottom: 2px solid #e2e8f0;
-  margin-top: 20px; margin-bottom: 20px;
+  display: flex; gap: 6px; justify-content: center;
+  padding: 16px 0 0; margin-bottom: 24px;
 }
 .ed-tab {
-  padding: 10px 20px; font-size: 14px; font-weight: 500; color: #6b7280;
-  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
-  white-space: nowrap; transition: color 0.15s, border-color 0.15s;
+  padding: 8px 20px; font-size: 14px; font-weight: 500;
+  color: var(--text-secondary, #334155); cursor: pointer;
+  border-radius: 20px; transition: all 0.15s; white-space: nowrap;
+  user-select: none;
 }
-.ed-tab:hover { color: #374151; }
-.ed-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; font-weight: 600; }
+.ed-tab:hover { background: #f1f5f9; }
+.ed-tab.active {
+  background: var(--accent-primary, #2563eb); color: #fff; font-weight: 600;
+}
+.ed-tab-icon { margin-right: 4px; }
 .ed-tab-panel { display: none; }
 .ed-tab-panel.active { display: block; }
 
-/* Overview tab */
-.ed-overview-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px; margin-bottom: 24px;
+/* ---------- Overview Tab ---------- */
+.ov-two-col {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+  align-items: start;
 }
-.ed-metric-card {
-  background: #ffffff; border-radius: 8px; padding: 16px;
-  border: 1px solid #e2e8f0; text-align: center;
-}
-.ed-metric-val { font-size: 28px; font-weight: 800; color: #0f172a; line-height: 1; }
-.ed-metric-lbl { font-size: 12px; color: #6b7280; margin-top: 6px; }
 
-.ed-section-title {
-  font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase;
-  letter-spacing: 0.06em; margin-bottom: 12px; margin-top: 24px;
+.ov-card {
+  background: var(--bg-card, #fff); border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.06));
 }
-.ed-section-title:first-child { margin-top: 0; }
+.ov-card + .ov-card { margin-top: 16px; }
+.ov-card-accent {
+  border-left: 3px solid var(--accent-primary, #2563eb);
+}
+.ov-card-header {
+  padding: 14px 18px; font-size: 14px; font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.ov-card-body { padding: 16px 18px; }
+
+/* Key-value pairs */
+.ov-kv-row {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 7px 0; border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+}
+.ov-kv-row:last-child { border-bottom: none; }
+.ov-kv-icon { flex-shrink: 0; width: 18px; text-align: center; }
+.ov-kv-label { color: var(--text-muted, #94a3b8); width: 100px; flex-shrink: 0; }
+.ov-kv-val { color: var(--text-primary, #0f172a); font-weight: 500; flex: 1; }
 
 /* Fact type distribution */
-.ed-ft-dist { display: flex; flex-direction: column; gap: 8px; }
-.ed-ft-row { display: flex; align-items: center; gap: 10px; }
-.ed-ft-label { width: 130px; font-size: 12px; color: #64748b; text-align: right; flex-shrink: 0; }
-.ed-ft-bar-wrap { flex: 1; background: #f1f5f9; border-radius: 3px; height: 8px; overflow: hidden; }
-.ed-ft-bar { height: 100%; border-radius: 3px; transition: width 0.3s; }
-.ed-ft-cnt { width: 36px; font-size: 12px; color: #94a3b8; text-align: right; flex-shrink: 0; }
+.ov-ft-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.ov-ft-label { width: 100px; font-size: 12px; color: var(--text-muted, #94a3b8); text-align: right; flex-shrink: 0; }
+.ov-ft-bar-wrap { flex: 1; background: #f1f5f9; border-radius: 3px; height: 8px; overflow: hidden; }
+.ov-ft-bar { height: 100%; border-radius: 3px; transition: width 0.3s; }
+.ov-ft-cnt { width: 36px; font-size: 12px; color: var(--text-muted, #94a3b8); text-align: right; flex-shrink: 0; }
 
-/* Alias section */
-.ed-alias-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+/* Stats grid */
+.ov-stats-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+}
+.ov-stat-item {
+  text-align: center; padding: 14px 10px;
+  background: #f8fafc; border-radius: var(--radius-md, 8px);
+}
+.ov-stat-val { font-size: 24px; font-weight: 800; color: var(--text-primary, #0f172a); line-height: 1; }
+.ov-stat-lbl { font-size: 11px; color: var(--text-muted, #94a3b8); margin-top: 4px; }
 
-/* Relations tab */
-.rel-group { margin-bottom: 24px; }
-.rel-group-title {
-  font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 10px;
-  display: flex; align-items: center; gap: 8px;
+/* ---------- Relations Tab ---------- */
+.rel-toolbar {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
 }
-.rel-group-badge {
-  font-size: 11px; padding: 1px 8px; border-radius: 8px;
-  background: rgba(139,92,246,0.12); color: #a78bfa; font-weight: 500;
+.rel-search {
+  padding: 7px 12px 7px 32px;
+  border: 1px solid var(--border-default, #cbd5e1);
+  border-radius: var(--radius-md, 8px); font-size: 13px; width: 240px;
+  color: var(--text-primary, #0f172a); background: var(--bg-card, #fff);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.656a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: 10px center;
 }
-.rel-items { display: flex; flex-direction: column; gap: 6px; }
-.rel-item {
-  display: flex; align-items: center; gap: 10px;
-  background: #f8fafc; border-radius: 6px; padding: 10px 14px;
-  border: 1px solid #e2e8f0;
+.rel-search:focus { outline: none; border-color: var(--accent-primary, #2563eb); }
+.rel-type-filters { display: flex; gap: 4px; }
+.rel-type-btn {
+  padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 500;
+  cursor: pointer; border: 1px solid var(--border-subtle, #e2e8f0);
+  background: var(--bg-card, #fff); color: var(--text-secondary, #334155);
+  user-select: none;
 }
-.rel-arrow { font-size: 11px; color: #6b7280; flex-shrink: 0; }
-.rel-entity-link {
-  font-size: 14px; font-weight: 600; color: #60a5fa; text-decoration: none; flex: 1;
-}
-.rel-entity-link:hover { text-decoration: underline; color: #93c5fd; }
-.rel-entity-type {
-  font-size: 11px; padding: 1px 8px; border-radius: 8px;
-  background: rgba(59,130,246,0.1); color: #93c5fd; flex-shrink: 0;
-}
-.rel-empty { color: #94a3b8; font-size: 13px; text-align: center; padding: 32px; }
-
-/* Timeline: type chips filter bar */
-.tl-type-bar {
-  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;
-  align-items: center;
-}
-.tl-type-chip {
-  padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 500;
-  cursor: pointer; border: 1px solid #e2e8f0; background: #ffffff; color: #475569;
-  transition: all 0.15s; white-space: nowrap; user-select: none;
-}
-.tl-type-chip:hover { border-color: #cbd5e1; background: #f8fafc; }
-.tl-type-chip.active { color: #fff; border-color: transparent; }
-
-/* Category grid */
-.tl-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px; align-items: start;
-}
-.tl-column {
-  background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0;
-  overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-}
-.tl-col-header {
-  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-  border-bottom: 2px solid var(--col-color, #3b82f6);
-  background: #f8fafc; position: sticky; top: 0; z-index: 1;
-}
-.tl-col-dot {
-  width: 9px; height: 9px; border-radius: 50%;
-  background: var(--col-color, #3b82f6); flex-shrink: 0;
-}
-.tl-col-title { font-size: 13px; font-weight: 700; color: #0f172a; flex: 1; }
-.tl-col-count {
-  font-size: 11px; color: #64748b; background: #f1f5f9;
-  padding: 1px 7px; border-radius: 10px;
+.rel-type-btn:hover { background: #f1f5f9; }
+.rel-type-btn.active {
+  background: var(--accent-primary, #2563eb); color: #fff;
+  border-color: var(--accent-primary, #2563eb);
 }
 
-/* Fact row — two-line card style */
-.tl-fact-row {
-  display: flex; align-items: flex-start; gap: 8px;
-  padding: 9px 14px; border-bottom: 1px solid #f1f5f9;
-  text-decoration: none; color: inherit; cursor: pointer;
-  transition: background 0.1s;
-}
-.tl-fact-row:hover { background: #f8fafc; }
-.tl-fact-row:last-child { border-bottom: none; }
-
-.tl-fact-content { flex: 1; min-width: 0; }
-.tl-fact-main {
-  font-size: 13px; color: #1e293b; line-height: 1.5;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+.rel-table {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  background: var(--bg-card, #fff); border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-subtle, #e2e8f0);
   overflow: hidden;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.06));
 }
-.tl-fact-meta {
-  display: flex; align-items: center; gap: 6px; margin-top: 3px;
+.rel-table th {
+  padding: 10px 14px; font-size: 12px; font-weight: 600;
+  color: var(--text-muted, #94a3b8); text-align: left;
+  background: #f8fafc; border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+  white-space: nowrap;
+}
+.rel-table td {
+  padding: 10px 14px; font-size: 13px; color: var(--text-primary, #0f172a);
+  border-bottom: 1px solid #f1f5f9;
+}
+.rel-table tr:last-child td { border-bottom: none; }
+.rel-table tbody tr:hover td { background: #fafbfc; }
+.rel-table .rel-entity-link {
+  color: var(--accent-primary, #2563eb); text-decoration: none; font-weight: 600;
+}
+.rel-table .rel-entity-link:hover { text-decoration: underline; }
+.rel-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 500; white-space: nowrap;
+}
+.rel-badge-type {
+  background: rgba(37, 99, 235, 0.08); color: var(--accent-primary, #2563eb);
+}
+.rel-badge-rel {
+  background: rgba(139, 92, 246, 0.08); color: #8b5cf6;
+}
+.rel-dir { font-size: 12px; color: var(--text-muted, #94a3b8); white-space: nowrap; }
+.rel-empty { color: var(--text-muted, #94a3b8); font-size: 13px; text-align: center; padding: 48px; }
+
+/* ---------- Timeline Tab ---------- */
+.tl-filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 24px;
   flex-wrap: wrap;
 }
-.tl-ctx-tag {
-  font-size: 11px; padding: 1px 6px; border-radius: 4px;
-  background: color-mix(in srgb, var(--col-color, #3b82f6) 10%, transparent);
-  color: color-mix(in srgb, var(--col-color, #3b82f6) 80%, #1e293b 20%);
-  border: 1px solid color-mix(in srgb, var(--col-color, #3b82f6) 20%, transparent);
-  white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
-  line-height: 1.6;
+.tl-filter-label {
+  font-size: 13px; color: var(--text-secondary, #334155); font-weight: 500;
+  flex-shrink: 0;
 }
-.tl-fact-time {
-  font-size: 11px; color: #94a3b8; white-space: nowrap;
+.tl-filter-chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+.tl-type-chip {
+  padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 500;
+  cursor: pointer; border: 1px solid var(--border-subtle, #e2e8f0);
+  background: var(--bg-card, #fff); color: var(--text-secondary, #334155);
+  transition: all 0.15s; white-space: nowrap; user-select: none;
 }
-.tl-fact-arrow {
-  font-size: 13px; color: #cbd5e1; flex-shrink: 0; align-self: center;
-  margin-left: 2px;
+.tl-type-chip:hover { border-color: var(--border-default, #cbd5e1); background: #f8fafc; }
+.tl-type-chip.active { color: #fff; border-color: transparent; }
+.tl-count-badge {
+  font-size: 13px; color: var(--text-muted, #94a3b8); flex-shrink: 0;
+  white-space: nowrap;
 }
+
+/* Vertical timeline */
+.vtl-container { position: relative; padding-left: 4px; padding-bottom: 32px; }
+
+.vtl-item {
+  display: flex; gap: 0; position: relative; min-height: 70px;
+}
+
+/* Date column */
+.vtl-date {
+  width: 80px; flex-shrink: 0; text-align: right;
+  padding-right: 20px; padding-top: 12px;
+}
+.vtl-date-year { font-size: 18px; font-weight: 800; color: var(--text-primary, #0f172a); line-height: 1; }
+.vtl-date-month { font-size: 12px; color: var(--text-muted, #94a3b8); margin-top: 2px; }
+.vtl-date-day { font-size: 11px; color: var(--text-muted, #94a3b8); }
+
+/* Center line + dot */
+.vtl-line-col {
+  width: 32px; flex-shrink: 0; display: flex; flex-direction: column;
+  align-items: center; position: relative;
+}
+.vtl-line {
+  position: absolute; top: 0; bottom: 0; left: 50%;
+  width: 2px; background: var(--border-subtle, #e2e8f0);
+  transform: translateX(-50%);
+}
+.vtl-dot {
+  position: relative; z-index: 2;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--accent-primary, #2563eb);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px var(--accent-primary, #2563eb);
+  margin-top: 18px; flex-shrink: 0;
+}
+.vtl-dot-sm {
+  width: 8px; height: 8px;
+  background: var(--border-default, #cbd5e1);
+  box-shadow: 0 0 0 2px var(--border-default, #cbd5e1);
+}
+/* First item hides line above dot */
+.vtl-item:first-child .vtl-line { top: 18px; }
+/* Last item hides line below dot */
+.vtl-item:last-child .vtl-line { bottom: calc(100% - 24px); }
+
+/* Event card */
+.vtl-card-col { flex: 1; padding: 6px 0 6px 16px; min-width: 0; }
+.vtl-card {
+  background: var(--bg-card, #fff); border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.06));
+  overflow: hidden; cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+.vtl-card:hover { box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.08)); }
+.vtl-card-main {
+  padding: 12px 16px; display: flex; align-items: flex-start; gap: 10px;
+}
+.vtl-card-body { flex: 1; min-width: 0; }
+.vtl-card-tags { display: flex; gap: 5px; margin-bottom: 6px; flex-wrap: wrap; }
+.vtl-fact-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 500; white-space: nowrap;
+}
+.vtl-card-title {
+  font-size: 14px; font-weight: 600; color: var(--text-primary, #0f172a);
+  line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden;
+}
+.vtl-card-chevron {
+  flex-shrink: 0; font-size: 12px; color: var(--text-muted, #94a3b8);
+  transition: transform 0.2s; margin-top: 4px; user-select: none;
+}
+.vtl-card.expanded .vtl-card-chevron { transform: rotate(180deg); }
+.vtl-card.expanded .vtl-card-title {
+  -webkit-line-clamp: unset; overflow: visible;
+}
+
+/* Expanded details */
+.vtl-card-detail {
+  display: none; padding: 0 16px 12px;
+  border-top: 1px solid #f1f5f9;
+}
+.vtl-card.expanded .vtl-card-detail { display: block; }
+.vtl-detail-row {
+  display: flex; align-items: center; gap: 12px; padding-top: 10px;
+  font-size: 12px; color: var(--text-muted, #94a3b8);
+  flex-wrap: wrap;
+}
+.vtl-detail-row a {
+  color: var(--accent-primary, #2563eb); text-decoration: none;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+.vtl-detail-row a:hover { text-decoration: underline; }
+.vtl-detail-desc {
+  font-size: 13px; color: var(--text-secondary, #334155);
+  line-height: 1.6; margin-top: 8px;
+}
+.vtl-detail-tags {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;
+}
+.vtl-detail-kv {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--text-secondary, #334155);
+  background: #f8fafc; padding: 3px 8px; border-radius: 4px;
+  border: 1px solid #f1f5f9;
+}
+.vtl-detail-kv strong { font-weight: 600; color: var(--text-primary, #0f172a); }
 
 /* Empty state */
 .tl-empty {
-  text-align: center; padding: 48px; color: #94a3b8;
+  text-align: center; padding: 64px 20px; color: var(--text-muted, #94a3b8);
 }
+.tl-empty-icon { font-size: 48px; opacity: 0.2; margin-bottom: 16px; }
 
+/* ---------- Responsive ---------- */
+@media (max-width: 1100px) {
+  .ov-two-col { grid-template-columns: 1fr; }
+}
+@media (max-width: 1024px) {
+  .ed-header-main { flex-wrap: wrap; }
+  .ed-header-actions { width: 100%; justify-content: flex-start; padding-top: 12px; }
+  .vtl-date { width: 60px; }
+  .vtl-date-year { font-size: 15px; }
+  .ov-stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .rel-table { font-size: 12px; }
+  .rel-table th, .rel-table td { padding: 8px 10px; }
+}
 </style>
 {% endblock %}
 
@@ -260,49 +428,53 @@
 
 <!-- ===== Header ===== -->
 <div class="ed-header">
-  <div class="ed-header-top">
-    <a class="ed-back" href="/graph">← 返回图谱</a>
+  <div class="ed-breadcrumb">
+    <a href="/graph">知识图谱</a><span class="ed-bc-sep">›</span>
+    <a href="/graph">实体库</a><span class="ed-bc-sep">›</span>
+    {{ detail.canonical_name or entity.name }}
+  </div>
+
+  <div class="ed-header-main">
+    <div class="ed-avatar">{{ (detail.canonical_name or entity.name)[0] }}</div>
+
     <div class="ed-name-block">
-      <div class="ed-name">{{ detail.canonical_name or entity.name }}</div>
-      <div class="ed-name-sub">
+      <div class="ed-name-row">
+        <span class="ed-name">{{ detail.canonical_name or entity.name }}</span>
         {% if detail.entity_type %}
         <span class="ed-type-badge">{{ ENTITY_TYPE_ZH.get(detail.entity_type, detail.entity_type) }}</span>
         {% endif %}
+      </div>
+      <div class="ed-meta-line">
+        {% if detail.time_latest %}<span>最后更新: {{ detail.time_latest }}</span>{% endif %}
+        <span>事实总数: {{ detail.total_fact_count }}</span>
+        {% if detail.aliases %}<span>别名数量: {{ detail.aliases | length }}</span>{% endif %}
+      </div>
+
+      <!-- Aliases -->
+      <div class="ed-alias-section">
         {% if detail.aliases %}
-        <div class="ed-aliases">
-          <span style="color:#4b5563;">别名:</span>
-          {% for alias in detail.aliases %}
-          <span class="ed-alias-tag" id="alias-{{ alias.id }}">
-            {{ alias.alias_name }}
-            {% if detail.id %}<button class="ed-alias-del" onclick="deleteAlias('{{ alias.id }}')" title="删除">×</button>{% endif %}
-          </span>
-          {% endfor %}
-        </div>
+        {% for alias in detail.aliases %}
+        <span class="ed-alias-tag" id="alias-{{ alias.id }}">
+          {{ alias.alias_name }}
+          {% if detail.id %}<button class="ed-alias-del" onclick="deleteAlias('{{ alias.id }}')" title="删除别名">×</button>{% endif %}
+        </span>
+        {% endfor %}
         {% endif %}
         {% if detail.id %}
-        <div class="ed-alias-add">
-          <input type="text" id="alias-input" placeholder="添加别名…" maxlength="100"
+        <button class="ed-alias-add-btn" onclick="toggleAliasInput()">+ 添加别名</button>
+        <span class="ed-alias-input-wrap" id="alias-input-wrap">
+          <input type="text" id="alias-input" placeholder="输入别名…" maxlength="100"
                  onkeydown="if(event.key==='Enter') addAlias()">
-          <button onclick="addAlias()">+ 别名</button>
-        </div>
+          <button onclick="addAlias()">添加</button>
+        </span>
         {% endif %}
       </div>
     </div>
-    <div class="ed-header-right">
-      <div class="ed-stat-row">
-        <div class="ed-stat">
-          <div class="ed-stat-val">{{ detail.total_fact_count }}</div>
-          <div class="ed-stat-lbl">事实总数</div>
-        </div>
-        {% if detail.source_doc_count %}
-        <div class="ed-stat">
-          <div class="ed-stat-val">{{ detail.source_doc_count }}</div>
-          <div class="ed-stat-lbl">来源文档</div>
-        </div>
-        {% endif %}
-      </div>
+
+    <div class="ed-header-actions">
       {% if detail.id %}
-      <button class="ed-edit-btn" onclick="toggleEditPanel()">✏ 编辑信息</button>
+      <button class="ed-btn-outline" onclick="toggleEditPanel()">✏ 编辑实体</button>
+      <a class="ed-btn-primary" href="/entity/{{ detail.id }}?tab=relations">🔗 关联分析</a>
       {% endif %}
     </div>
   </div>
@@ -334,112 +506,130 @@
 
 <!-- ===== Tabs ===== -->
 <div class="ed-tabs">
-  <div class="ed-tab {% if current_tab == 'overview' %}active{% endif %}" onclick="switchTab('overview')">概要</div>
-  <div class="ed-tab {% if current_tab == 'timeline' %}active{% endif %}" onclick="switchTab('timeline')">时间轴 <span style="font-size:11px;color:#6b7280;">({{ total_count }})</span></div>
-  <div class="ed-tab {% if current_tab == 'relations' %}active{% endif %}" onclick="switchTab('relations')">关联关系 <span style="font-size:11px;color:#6b7280;">({{ (detail.relations_from | length) + (detail.relations_to | length) }})</span></div>
+  <div class="ed-tab {% if current_tab == 'overview' %}active{% endif %}" onclick="switchTab('overview')">
+    <span class="ed-tab-icon">📊</span>概览
+  </div>
+  <div class="ed-tab {% if current_tab == 'relations' %}active{% endif %}" onclick="switchTab('relations')">
+    <span class="ed-tab-icon">🔗</span>关系
+    <span style="font-size:11px;opacity:0.7;margin-left:2px;">({{ (detail.relations_from | length) + (detail.relations_to | length) }})</span>
+  </div>
+  <div class="ed-tab {% if current_tab == 'timeline' %}active{% endif %}" onclick="switchTab('timeline')">
+    <span class="ed-tab-icon">⏱</span>时间轴
+    <span style="font-size:11px;opacity:0.7;margin-left:2px;">({{ total_count }})</span>
+  </div>
 </div>
 
-<!-- ======= TAB: 概要 ======= -->
+<!-- ======= TAB: 概览 ======= -->
 <div class="ed-tab-panel {% if current_tab == 'overview' %}active{% endif %}" id="tab-overview">
-  <div class="ed-overview-grid">
-    <div class="ed-metric-card">
-      <div class="ed-metric-val">{{ detail.total_fact_count }}</div>
-      <div class="ed-metric-lbl">事实总数</div>
-    </div>
-    <div class="ed-metric-card">
-      <div class="ed-metric-val">{{ detail.source_doc_count or 0 }}</div>
-      <div class="ed-metric-lbl">来源文档</div>
-    </div>
-    <div class="ed-metric-card">
-      <div class="ed-metric-val" style="font-size:16px;">{{ detail.time_earliest or '—' }}</div>
-      <div class="ed-metric-lbl">最早记录</div>
-    </div>
-    <div class="ed-metric-card">
-      <div class="ed-metric-val" style="font-size:16px;">{{ detail.time_latest or '—' }}</div>
-      <div class="ed-metric-lbl">最新记录</div>
-    </div>
-    <div class="ed-metric-card">
-      <div class="ed-metric-val">{{ detail.aliases | length }}</div>
-      <div class="ed-metric-lbl">别名数量</div>
-    </div>
-    <div class="ed-metric-card">
-      <div class="ed-metric-val">{{ (detail.relations_from | length) + (detail.relations_to | length) }}</div>
-      <div class="ed-metric-lbl">关联关系</div>
-    </div>
-  </div>
-
-  {% if detail.fact_type_stats %}
-  <div class="ed-section-title">事实类型分布</div>
-  {% set max_cnt = detail.fact_type_stats[0].cnt %}
-  <div class="ed-ft-dist">
-    {% for stat in detail.fact_type_stats %}
-    <div class="ed-ft-row">
-      <span class="ed-ft-label">{{ FACT_TYPE_NAMES.get(stat.fact_type, stat.fact_type) }}</span>
-      <div class="ed-ft-bar-wrap">
-        <div class="ed-ft-bar" style="width:{{ [stat.cnt * 100 // max_cnt, 100] | min }}%;background:{{ FT_COLORS.get(stat.fact_type, '#3b82f6') }};"></div>
+  <div class="ov-two-col">
+    <!-- Left column -->
+    <div>
+      <!-- 基本信息 -->
+      <div class="ov-card ov-card-accent">
+        <div class="ov-card-header">基本信息</div>
+        <div class="ov-card-body">
+          <div class="ov-kv-row">
+            <span class="ov-kv-icon">📋</span>
+            <span class="ov-kv-label">实体名称</span>
+            <span class="ov-kv-val">{{ detail.canonical_name or entity.name }}</span>
+          </div>
+          {% if detail.entity_type %}
+          <div class="ov-kv-row">
+            <span class="ov-kv-icon">🏷</span>
+            <span class="ov-kv-label">实体类型</span>
+            <span class="ov-kv-val">{{ ENTITY_TYPE_ZH.get(detail.entity_type, detail.entity_type) }}</span>
+          </div>
+          {% endif %}
+          {% if detail.normalized_name and detail.normalized_name != detail.canonical_name %}
+          <div class="ov-kv-row">
+            <span class="ov-kv-icon">🔤</span>
+            <span class="ov-kv-label">标准名称</span>
+            <span class="ov-kv-val">{{ detail.normalized_name }}</span>
+          </div>
+          {% endif %}
+          {% if detail.time_earliest %}
+          <div class="ov-kv-row">
+            <span class="ov-kv-icon">📅</span>
+            <span class="ov-kv-label">最早记录</span>
+            <span class="ov-kv-val">{{ detail.time_earliest }}</span>
+          </div>
+          {% endif %}
+          {% if detail.time_latest %}
+          <div class="ov-kv-row">
+            <span class="ov-kv-icon">📅</span>
+            <span class="ov-kv-label">最新记录</span>
+            <span class="ov-kv-val">{{ detail.time_latest }}</span>
+          </div>
+          {% endif %}
+          {% if detail.aliases %}
+          <div class="ov-kv-row">
+            <span class="ov-kv-icon">🔗</span>
+            <span class="ov-kv-label">别名</span>
+            <span class="ov-kv-val">{{ detail.aliases | map(attribute='alias_name') | join('、') }}</span>
+          </div>
+          {% endif %}
+        </div>
       </div>
-      <span class="ed-ft-cnt">{{ stat.cnt }}</span>
-    </div>
-    {% endfor %}
-  </div>
-  {% endif %}
-</div>
 
-<!-- ======= TAB: 时间轴 ======= -->
-<div class="ed-tab-panel {% if current_tab == 'timeline' %}active{% endif %}" id="tab-timeline">
-
-  {# ── 类型筛选芯片（支持多选） ── #}
-  <div class="tl-type-bar">
-    <span class="tl-type-chip {% if not active_types %}active{% endif %}"
-          style="{% if not active_types %}background:#3b82f6;{% endif %}"
-          onclick="toggleTypeFilter('')">全部 <span style="font-size:11px;opacity:0.8;">({{ total_count }})</span></span>
-    {% for ft in available_types %}
-    {% set ft_color = FT_COLORS.get(ft, '#3b82f6') %}
-    <span class="tl-type-chip {% if ft in active_types %}active{% endif %}"
-          data-type="{{ ft }}"
-          style="{% if ft in active_types %}background:{{ ft_color }};{% endif %}--chip-color:{{ ft_color }};"
-          onclick="toggleTypeFilter('{{ ft }}')">{{ FACT_TYPE_NAMES.get(ft, ft) }} <span style="font-size:11px;opacity:0.8;">({{ type_counts.get(ft, 0) }})</span></span>
-    {% endfor %}
-  </div>
-
-  {% if facts %}
-  {# ── 按类型分列的卡片网格 ── #}
-  <div class="tl-grid" id="tl-grid">
-    {% for ft in available_types %}
-    {% set ft_facts = [] %}
-    {% for f in facts if f.fact_type == ft %}{% if ft_facts.append(f) %}{% endif %}{% endfor %}
-    {% if ft_facts %}
-    <div class="tl-column" data-type="{{ ft }}" {% if active_types and ft not in active_types %}style="display:none;"{% endif %}>
-      <div class="tl-col-header" style="--col-color: {{ FT_COLORS.get(ft, '#3b82f6') }};">
-        <span class="tl-col-dot"></span>
-        <span class="tl-col-title">{{ FACT_TYPE_NAMES.get(ft, ft) }}</span>
-        <span class="tl-col-count">{{ ft_facts | length }}</span>
+      <!-- 事实类型分布 -->
+      {% if detail.fact_type_stats %}
+      <div class="ov-card ov-card-accent" style="margin-top:16px;">
+        <div class="ov-card-header">事实类型分布</div>
+        <div class="ov-card-body">
+          {% set max_cnt = detail.fact_type_stats[0].cnt %}
+          {% for stat in detail.fact_type_stats %}
+          <div class="ov-ft-row">
+            <span class="ov-ft-label">{{ FACT_TYPE_NAMES.get(stat.fact_type, stat.fact_type) }}</span>
+            <div class="ov-ft-bar-wrap">
+              <div class="ov-ft-bar" style="width:{{ [stat.cnt * 100 // max_cnt, 100] | min }}%;background:{{ FT_COLORS.get(stat.fact_type, '#3b82f6') }};"></div>
+            </div>
+            <span class="ov-ft-cnt">{{ stat.cnt }}</span>
+          </div>
+          {% endfor %}
+        </div>
       </div>
-      <div class="tl-col-body">
-        {% for fact in ft_facts %}
-        <a class="tl-fact-row" href="/fact/{{ fact.id }}" style="--col-color:{{ FT_COLORS.get(ft, '#3b82f6') }};">
-          <div class="tl-fact-content">
-            <div class="tl-fact-main">{{ fact.summary }}</div>
-            <div class="tl-fact-meta">
-              {% if fact.context_tag %}<span class="tl-ctx-tag">{{ fact.context_tag }}</span>{% endif %}
-              {% if fact.time_expr %}<span class="tl-fact-time">{{ fact.time_expr }}</span>{% endif %}
+      {% endif %}
+    </div>
+
+    <!-- Right column -->
+    <div>
+      <!-- 统计概览 -->
+      <div class="ov-card">
+        <div class="ov-card-header">数据概览</div>
+        <div class="ov-card-body">
+          <div class="ov-stats-grid">
+            <div class="ov-stat-item">
+              <div class="ov-stat-val">{{ detail.total_fact_count }}</div>
+              <div class="ov-stat-lbl">事实总数</div>
+            </div>
+            <div class="ov-stat-item">
+              <div class="ov-stat-val">{{ detail.source_doc_count or 0 }}</div>
+              <div class="ov-stat-lbl">来源文档</div>
+            </div>
+            <div class="ov-stat-item">
+              <div class="ov-stat-val">{{ (detail.relations_from | length) + (detail.relations_to | length) }}</div>
+              <div class="ov-stat-lbl">关联关系</div>
             </div>
           </div>
-          <span class="tl-fact-arrow">›</span>
-        </a>
-        {% endfor %}
+        </div>
+      </div>
+
+      <!-- 相关文档 -->
+      <div class="ov-card" style="margin-top:16px;">
+        <div class="ov-card-header">
+          <span>相关文档</span>
+          <span style="font-size:12px;color:var(--text-muted,#94a3b8);font-weight:400;">共 {{ detail.source_doc_count or 0 }} 篇</span>
+        </div>
+        <div class="ov-card-body" style="{% if not detail.source_doc_count %}padding:32px;text-align:center;color:var(--text-muted,#94a3b8);font-size:13px;{% endif %}">
+          {% if detail.source_doc_count %}
+          <p style="font-size:13px;color:var(--text-muted,#94a3b8);margin:0;">来源文档信息可在各事实详情中查看</p>
+          {% else %}
+          暂无关联文档
+          {% endif %}
+        </div>
       </div>
     </div>
-    {% endif %}
-    {% endfor %}
   </div>
-  {% else %}
-  <div class="tl-empty">
-    <div style="font-size:48px;opacity:0.2;margin-bottom:16px;">📅</div>
-    <p>暂无相关事实数据</p>
-    <p style="font-size:12px;margin-top:4px;">需要已通过审核的事实来展示时间轴</p>
-  </div>
-  {% endif %}
 </div>
 
 <!-- ======= TAB: 关联关系 ======= -->
@@ -449,50 +639,187 @@
   <div class="rel-empty">暂无已记录的关联关系</div>
   {% else %}
 
-  {% if detail.relations_from %}
-  {% set seen_from = [] %}
-  {% for rel in detail.relations_from %}{% if rel.relation_type not in seen_from %}{% if seen_from.append(rel.relation_type) %}{% endif %}{% endif %}{% endfor %}
-  {% for rtype in seen_from %}
-  <div class="rel-group">
-    <div class="rel-group-title">
-      {{ detail.canonical_name or entity.name }} 的
-      <span class="rel-group-badge">{{ REL_TYPE_ZH.get(rtype, rtype) }}</span>
-    </div>
-    <div class="rel-items">
-      {% for rel in detail.relations_from if rel.relation_type == rtype %}
-      <div class="rel-item">
-        <span class="rel-arrow">→</span>
-        <a class="rel-entity-link" href="/entity/{{ rel.target_id }}">{{ rel.target_name }}</a>
-        <span class="rel-entity-type">{{ ENTITY_TYPE_ZH.get(rel.target_type, rel.target_type or '') }}</span>
-      </div>
+  <div class="rel-toolbar">
+    <input type="text" class="rel-search" placeholder="搜索关联实体…" id="rel-search-input" oninput="filterRelations()">
+    <div class="rel-type-filters">
+      <span class="rel-type-btn active" data-filter="all" onclick="filterRelType(this, 'all')">全部</span>
+      {% set seen_entity_types = [] %}
+      {% for rel in detail.relations_from + detail.relations_to %}
+        {% if rel.target_type and rel.target_type not in seen_entity_types %}
+          {% if seen_entity_types.append(rel.target_type) %}{% endif %}
+        {% endif %}
+      {% endfor %}
+      {% for etype in seen_entity_types %}
+      <span class="rel-type-btn" data-filter="{{ etype }}" onclick="filterRelType(this, '{{ etype }}')">{{ ENTITY_TYPE_ZH.get(etype, etype) }}</span>
       {% endfor %}
     </div>
   </div>
-  {% endfor %}
-  {% endif %}
 
-  {% if detail.relations_to %}
-  {% set seen_to = [] %}
-  {% for rel in detail.relations_to %}{% if rel.relation_type not in seen_to %}{% if seen_to.append(rel.relation_type) %}{% endif %}{% endif %}{% endfor %}
-  {% for rtype in seen_to %}
-  <div class="rel-group">
-    <div class="rel-group-title">
-      <span class="rel-group-badge">{{ REL_TYPE_ZH.get(rtype, rtype) }}</span>
-      关系中，被指向 {{ detail.canonical_name or entity.name }}
-    </div>
-    <div class="rel-items">
-      {% for rel in detail.relations_to if rel.relation_type == rtype %}
-      <div class="rel-item">
-        <a class="rel-entity-link" href="/entity/{{ rel.target_id }}">{{ rel.target_name }}</a>
-        <span class="rel-arrow">→ {{ detail.canonical_name or entity.name }}</span>
-        <span class="rel-entity-type">{{ ENTITY_TYPE_ZH.get(rel.target_type, rel.target_type or '') }}</span>
-      </div>
+  <table class="rel-table" id="rel-table">
+    <thead>
+      <tr>
+        <th>关联实体</th>
+        <th>实体类型</th>
+        <th>关系类型</th>
+        <th>方向</th>
+        <th>来源</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for rel in detail.relations_from %}
+      <tr data-entity-type="{{ rel.target_type or '' }}" data-entity-name="{{ rel.target_name | lower }}">
+        <td>
+          <a class="rel-entity-link" href="/entity/{{ rel.target_id }}">🔗 {{ rel.target_name }}</a>
+        </td>
+        <td><span class="rel-badge rel-badge-type">{{ ENTITY_TYPE_ZH.get(rel.target_type, rel.target_type or '—') }}</span></td>
+        <td><span class="rel-badge rel-badge-rel">{{ REL_TYPE_ZH.get(rel.relation_type, rel.relation_type) }}</span></td>
+        <td><span class="rel-dir">→ 指向</span></td>
+        <td style="font-size:12px;color:var(--text-muted,#94a3b8);">{{ rel.source_count if rel.source_count is defined else '—' }}</td>
+      </tr>
+      {% endfor %}
+      {% for rel in detail.relations_to %}
+      <tr data-entity-type="{{ rel.target_type or '' }}" data-entity-name="{{ rel.target_name | lower }}">
+        <td>
+          <a class="rel-entity-link" href="/entity/{{ rel.target_id }}">🔗 {{ rel.target_name }}</a>
+        </td>
+        <td><span class="rel-badge rel-badge-type">{{ ENTITY_TYPE_ZH.get(rel.target_type, rel.target_type or '—') }}</span></td>
+        <td><span class="rel-badge rel-badge-rel">{{ REL_TYPE_ZH.get(rel.relation_type, rel.relation_type) }}</span></td>
+        <td><span class="rel-dir">← 被指</span></td>
+        <td style="font-size:12px;color:var(--text-muted,#94a3b8);">{{ rel.source_count if rel.source_count is defined else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<!-- ======= TAB: 时间轴 ======= -->
+<div class="ed-tab-panel {% if current_tab == 'timeline' %}active{% endif %}" id="tab-timeline">
+
+  {# ── 筛选栏 ── #}
+  <div class="tl-filter-bar">
+    <span class="tl-filter-label">筛选类别:</span>
+    <div class="tl-filter-chips">
+      <span class="tl-type-chip {% if not active_types %}active{% endif %}"
+            style="{% if not active_types %}background:var(--accent-primary, #2563eb);{% endif %}"
+            onclick="toggleTypeFilter('')">全部</span>
+      {% for ft in available_types %}
+      {% set ft_color = FT_COLORS.get(ft, '#3b82f6') %}
+      <span class="tl-type-chip {% if ft in active_types %}active{% endif %}"
+            data-type="{{ ft }}"
+            style="{% if ft in active_types %}background:{{ ft_color }};{% endif %}--chip-color:{{ ft_color }};"
+            onclick="toggleTypeFilter('{{ ft }}')">{{ FACT_TYPE_NAMES.get(ft, ft) }}</span>
       {% endfor %}
     </div>
+    <span class="tl-count-badge">共 {{ total_count }} 条事实</span>
   </div>
-  {% endfor %}
-  {% endif %}
 
+  {% if facts %}
+  {# ── 垂直时间轴 ── #}
+  <div class="vtl-container" id="vtl-container">
+    {% set ns = namespace(prev_year='', prev_month='') %}
+    {% for fact in facts %}
+    {% set time_str = fact.time_expr or '' %}
+    {# Parse year/month/day from time_expr #}
+    {% set year = '' %}
+    {% set month = '' %}
+    {% set day = '' %}
+    {% if '年' in time_str %}
+      {% set year = time_str.split('年')[0] %}
+      {% if '月' in time_str %}
+        {% set month_part = time_str.split('年')[1] %}
+        {% set month = month_part.split('月')[0] %}
+        {% if '日' in time_str %}
+          {% set day_part = time_str.split('月')[1] if '月' in time_str else '' %}
+          {% set day = day_part.split('日')[0] %}
+        {% endif %}
+      {% endif %}
+    {% elif '-' in time_str %}
+      {% set parts = time_str.split('-') %}
+      {% set year = parts[0] %}
+      {% if parts | length > 1 %}{% set month = parts[1] %}{% endif %}
+      {% if parts | length > 2 %}{% set day = parts[2] %}{% endif %}
+    {% else %}
+      {% set year = time_str %}
+    {% endif %}
+    {% set show_year = (year != ns.prev_year and year) %}
+
+    <div class="vtl-item" data-type="{{ fact.fact_type }}" {% if active_types and fact.fact_type not in active_types %}style="display:none;"{% endif %}>
+      <!-- Date column -->
+      <div class="vtl-date">
+        {% if show_year %}
+        <div class="vtl-date-year">{{ year }}</div>
+        {% endif %}
+        {% if month %}
+        <div class="vtl-date-month">{{ month }}月</div>
+        {% endif %}
+        {% if day %}
+        <div class="vtl-date-day">{{ day }}日</div>
+        {% endif %}
+        {% if not year and not month %}
+        <div class="vtl-date-month" style="color:var(--text-muted,#94a3b8);font-size:11px;">未知</div>
+        {% endif %}
+      </div>
+
+      <!-- Center line + dot -->
+      <div class="vtl-line-col">
+        <div class="vtl-line"></div>
+        <div class="vtl-dot {% if not show_year %}vtl-dot-sm{% endif %}"></div>
+      </div>
+
+      <!-- Event card -->
+      <div class="vtl-card-col">
+        <div class="vtl-card" onclick="toggleTimelineCard(this)">
+          <div class="vtl-card-main">
+            <div class="vtl-card-body">
+              <div class="vtl-card-tags">
+                {% set ft_color = FT_COLORS.get(fact.fact_type, '#3b82f6') %}
+                <span class="vtl-fact-badge" style="background:{{ ft_color }}15;color:{{ ft_color }};">{{ FACT_TYPE_NAMES.get(fact.fact_type, fact.fact_type) }}</span>
+                {% if fact.context_tag %}
+                <span class="vtl-fact-badge" style="background:#f1f5f9;color:var(--text-secondary,#334155);">{{ fact.context_tag }}</span>
+                {% endif %}
+              </div>
+              <div class="vtl-card-title">{{ fact.summary }}</div>
+            </div>
+            <span class="vtl-card-chevron">▼</span>
+          </div>
+
+          <div class="vtl-card-detail">
+            <div class="vtl-detail-row">
+              {% if fact.time_expr %}<span>📅 {{ fact.time_expr }}</span>{% endif %}
+              <a href="/fact/{{ fact.id }}">📄 查看事实详情 ↗</a>
+            </div>
+
+            {% if fact.subject or fact.predicate or fact.object_entity %}
+            <div class="vtl-detail-desc">
+              {% if fact.subject %}<strong>{{ fact.subject }}</strong>{% endif %}
+              {% if fact.predicate %} {{ fact.predicate }}{% endif %}
+              {% if fact.object_entity %} → {{ fact.object_entity }}{% endif %}
+              {% if fact.numeric_value is not none %}: <strong>{{ fact.numeric_value }}{{ ' ' + fact.unit if fact.unit else '' }}</strong>{% endif %}
+            </div>
+            {% endif %}
+
+            {% if fact.qualifiers_display %}
+            <div class="vtl-detail-tags">
+              {% for qk, qv in fact.qualifiers_display.items() %}
+              <span class="vtl-detail-kv"><strong>{{ qk }}</strong>: {{ qv }}</span>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% if year %}{% set ns.prev_year = year %}{% endif %}
+    {% if month %}{% set ns.prev_month = month %}{% endif %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="tl-empty">
+    <div class="tl-empty-icon">📅</div>
+    <p>暂无相关事实数据</p>
+    <p style="font-size:12px;margin-top:4px;">需要已通过审核的事实来展示时间轴</p>
+  </div>
   {% endif %}
 </div>
 {% endblock %}
@@ -504,7 +831,7 @@ const ENTITY_ID = '{{ detail.id | default("") }}';
 
 /* ===== Tab switching ===== */
 function switchTab(tab) {
-  const tabIds = ['overview', 'timeline', 'relations'];
+  const tabIds = ['overview', 'relations', 'timeline'];
   document.querySelectorAll('.ed-tab').forEach((t, i) => {
     t.classList.toggle('active', tabIds[i] === tab);
   });
@@ -516,16 +843,12 @@ function switchTab(tab) {
   history.replaceState(null, '', url.toString());
 }
 
-/* ===== Timeline filter ===== */
-function filterTimeline(type) {
-  const url = new URL(window.location.href);
-  if (type) { url.searchParams.set('fact_type', type); }
-  else { url.searchParams.delete('fact_type'); }
-  url.searchParams.set('tab', 'timeline');
-  window.location.href = url.toString();
+/* ===== Timeline card expand/collapse ===== */
+function toggleTimelineCard(card) {
+  card.classList.toggle('expanded');
 }
 
-/* ===== Type chip toggle (client-side, multi-select) ===== */
+/* ===== Timeline type filter (client-side, multi-select) ===== */
 const _activeTypes = new Set({{ active_types | tojson }});
 
 function toggleTypeFilter(type) {
@@ -536,7 +859,6 @@ function toggleTypeFilter(type) {
   };
 
   if (!type) {
-    // "全部" → 清空选择，显示全部
     _activeTypes.clear();
   } else if (_activeTypes.has(type)) {
     _activeTypes.delete(type);
@@ -546,13 +868,12 @@ function toggleTypeFilter(type) {
 
   const showAll = _activeTypes.size === 0;
 
-  // 更新芯片样式
+  // Update chip styles
   document.querySelectorAll('.tl-type-chip').forEach(c => {
     const ct = c.dataset.type || '';
     if (!ct) {
-      // "全部" 芯片
       c.classList.toggle('active', showAll);
-      c.style.background = showAll ? '#3b82f6' : '';
+      c.style.background = showAll ? 'var(--accent-primary, #2563eb)' : '';
     } else {
       const isActive = _activeTypes.has(ct);
       c.classList.toggle('active', isActive);
@@ -560,9 +881,9 @@ function toggleTypeFilter(type) {
     }
   });
 
-  // 显示/隐藏列
-  document.querySelectorAll('.tl-column').forEach(col => {
-    col.style.display = (showAll || _activeTypes.has(col.dataset.type)) ? '' : 'none';
+  // Show/hide timeline items
+  document.querySelectorAll('.vtl-item').forEach(item => {
+    item.style.display = (showAll || _activeTypes.has(item.dataset.type)) ? '' : 'none';
   });
 
   // Update URL without reload
@@ -576,10 +897,48 @@ function toggleTypeFilter(type) {
   history.replaceState(null, '', url.toString());
 }
 
+/* ===== Relations filter ===== */
+function filterRelType(btn, filterType) {
+  document.querySelectorAll('.rel-type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const rows = document.querySelectorAll('#rel-table tbody tr');
+  rows.forEach(row => {
+    if (filterType === 'all') {
+      row.style.display = '';
+    } else {
+      row.style.display = (row.dataset.entityType === filterType) ? '' : 'none';
+    }
+  });
+}
+
+function filterRelations() {
+  const q = document.getElementById('rel-search-input').value.trim().toLowerCase();
+  const rows = document.querySelectorAll('#rel-table tbody tr');
+  rows.forEach(row => {
+    if (!q || row.dataset.entityName.includes(q) || row.textContent.toLowerCase().includes(q)) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+
 /* ===== Edit panel ===== */
 function toggleEditPanel() {
   const panel = document.getElementById('ed-edit-panel');
   if (panel) panel.classList.toggle('open');
+}
+
+/* ===== Alias input toggle ===== */
+function toggleAliasInput() {
+  const wrap = document.getElementById('alias-input-wrap');
+  if (wrap) {
+    wrap.classList.toggle('open');
+    if (wrap.classList.contains('open')) {
+      wrap.querySelector('input')?.focus();
+    }
+  }
 }
 
 async function saveEntityInfo() {
