@@ -974,14 +974,15 @@ def get_entity_detail(entity_id: str) -> dict | None:
                           e.canonical_name AS target_name,
                           e.entity_type AS target_type,
                           f.predicate AS relation_type,
+                          f.fact_type,
                           COUNT(*) AS fact_count
                    FROM fact_atom f
                    JOIN entity e ON f.object_entity_id = e.id
                    WHERE f.subject_entity_id = ?
                      AND f.object_entity_id IS NOT NULL
                      AND f.review_status IN ('自动通过','人工通过')
-                   GROUP BY f.object_entity_id, f.predicate
-                   ORDER BY fact_count DESC""",
+                   GROUP BY f.fact_type, f.object_entity_id, f.predicate
+                   ORDER BY f.fact_type, fact_count DESC""",
                 (entity_id,),
             ).fetchall()
             derived_to = conn.execute(
@@ -989,14 +990,15 @@ def get_entity_detail(entity_id: str) -> dict | None:
                           e.canonical_name AS target_name,
                           e.entity_type AS target_type,
                           f.predicate AS relation_type,
+                          f.fact_type,
                           COUNT(*) AS fact_count
                    FROM fact_atom f
                    JOIN entity e ON f.subject_entity_id = e.id
                    WHERE f.object_entity_id = ?
                      AND f.subject_entity_id IS NOT NULL
                      AND f.review_status IN ('自动通过','人工通过')
-                   GROUP BY f.subject_entity_id, f.predicate
-                   ORDER BY fact_count DESC""",
+                   GROUP BY f.fact_type, f.subject_entity_id, f.predicate
+                   ORDER BY f.fact_type, fact_count DESC""",
                 (entity_id,),
             ).fetchall()
             info["relations_from"] = [dict(r) for r in derived_from]

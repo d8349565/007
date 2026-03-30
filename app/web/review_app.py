@@ -1493,6 +1493,13 @@ def create_app() -> Flask:
             "品牌": "品牌归属", "合作方": "合作方", "投资": "投资/持有",
         }
 
+        # 合并关系列表，附加方向标记，供模板按 fact_type 分组
+        all_relations = []
+        for r in detail.get("relations_from", []):
+            all_relations.append({**r, "_dir": "from"})
+        for r in detail.get("relations_to", []):
+            all_relations.append({**r, "_dir": "to"})
+
         return render_template(
             "entity_timeline.html",
             entity=data["entity_info"],
@@ -1505,6 +1512,7 @@ def create_app() -> Flask:
             fact_types=valid_types,
             type_counts=dict(type_counts),
             REL_TYPE_ZH=REL_TYPE_ZH,
+            all_relations=all_relations,
         )
 
     @app.route("/api/entity/<entity_id>/detail")

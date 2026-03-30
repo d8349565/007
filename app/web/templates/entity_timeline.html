@@ -230,106 +230,96 @@
   border-color: var(--accent-primary, #2563eb);
 }
 
-/* Relation flow cards */
-.rel-card-list { display: flex; flex-direction: column; gap: 6px; }
+/* Relation layout */
+.rel-card-list { display: flex; flex-direction: column; gap: 0; }
 
-/* Section header */
-.rel-section-header {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 0 8px; margin-bottom: 2px;
-  border-bottom: 2px solid var(--border-subtle, #e2e8f0);
-}
-.rel-section-entity {
-  display: flex; align-items: center; gap: 8px;
-}
-.rel-section-avatar {
-  width: 28px; height: 28px; border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0;
-}
-.rel-section-name {
-  font-size: 14px; font-weight: 700; color: var(--text-primary, #0f172a);
-}
-.rel-section-dir {
-  font-size: 12px; font-weight: 600; color: var(--accent-primary, #2563eb);
-  background: rgba(37,99,235,0.06); padding: 3px 10px; border-radius: 12px;
-}
-.rel-section-count {
-  font-size: 12px; color: var(--text-muted, #94a3b8); margin-left: auto;
+/* Filter pills - active color from CSS var */
+.rel-type-btn.active {
+  background: var(--btn-active-bg, var(--accent-primary, #2563eb)); color: #fff;
+  border-color: var(--btn-active-bg, var(--accent-primary, #2563eb));
 }
 
-/* Card row */
-.rel-card {
-  display: flex; align-items: center; gap: 0;
-  background: var(--bg-card, #fff); border: 1px solid var(--border-subtle, #e2e8f0);
-  border-radius: var(--radius-md, 8px); padding: 12px 16px;
+/* Predicate group */
+.rel-group {
+  margin-bottom: 12px; border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: var(--radius-md, 8px); overflow: hidden;
+  background: var(--bg-card, #fff);
   box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.04));
-  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.rel-card:hover {
-  border-color: var(--accent-primary, #2563eb);
-  box-shadow: 0 2px 8px rgba(37,99,235,0.10);
-}
-
-/* Predicate column */
-.rel-pred-col {
-  display: flex; align-items: center; gap: 6px;
-  flex: 0 0 auto; padding-right: 14px;
-  max-width: 280px;
-}
-.rel-pred-arrow {
-  font-size: 16px; font-weight: 700; color: var(--accent-primary, #2563eb);
-  flex-shrink: 0;
-}
-.rel-predicate {
-  font-size: 12px; font-weight: 600; color: #8b5cf6;
-  background: rgba(139, 92, 246, 0.08); padding: 3px 10px; border-radius: 12px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-/* Target entity column */
-.rel-target-col {
+.rel-group-header {
   display: flex; align-items: center; gap: 10px;
-  flex: 1 1 0; min-width: 0;
+  padding: 10px 16px; background: #f8fafc; cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+  user-select: none;
 }
-.rel-node-avatar {
-  width: 32px; height: 32px; border-radius: 50%;
+.rel-group-header:hover { background: #f1f5f9; }
+.rel-group-arrow {
+  font-size: 12px; color: var(--text-muted, #94a3b8);
+  transition: transform 0.15s; flex-shrink: 0;
+}
+.rel-group.collapsed .rel-group-arrow { transform: rotate(-90deg); }
+.rel-group.collapsed .rel-group-body { display: none; }
+.rel-group-ft-badge {
+  font-size: 13px; font-weight: 600;
+  padding: 2px 10px; border-radius: 12px;
+}
+.rel-group-count {
+  font-size: 11px; color: var(--text-muted, #94a3b8);
+  background: rgba(148,163,184,0.1); padding: 2px 8px; border-radius: 10px;
+  margin-left: auto;
+}
+.rel-group-body { }
+
+/* Entity row inside group */
+.rel-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px 10px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.1s;
+}
+.rel-row:last-child { border-bottom: none; }
+.rel-row:hover { background: #fafbfc; }
+
+/* Direction arrow */
+.rel-row-dir {
+  font-size: 14px; font-weight: 700; flex-shrink: 0;
+  width: 20px; text-align: center;
+}
+.rel-row-dir-from { color: var(--accent-primary, #2563eb); }
+.rel-row-dir-to { color: #8b5cf6; }
+
+.rel-row-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 700; flex-shrink: 0;
-  color: #fff;
+  font-size: 12px; font-weight: 700; flex-shrink: 0; color: #fff;
 }
-.rel-node-avatar-target {
-  background: #8b5cf6;
-}
-.rel-node-info { min-width: 0; }
-.rel-node-name {
-  font-size: 13px; font-weight: 600; color: var(--text-primary, #0f172a);
+.rel-row-info { flex: 1; min-width: 0; }
+.rel-row-name {
+  font-size: 13px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.rel-node-name a {
-  color: var(--accent-primary, #2563eb); text-decoration: none; font-weight: 600;
+.rel-row-name a {
+  color: var(--accent-primary, #2563eb); text-decoration: none;
 }
-.rel-node-name a:hover { text-decoration: underline; }
-.rel-node-type {
-  font-size: 11px; color: var(--text-muted, #94a3b8); margin-top: 1px;
+.rel-row-name a:hover { text-decoration: underline; }
+.rel-row-meta-line {
+  display: flex; align-items: center; gap: 8px; margin-top: 2px;
 }
-
-/* Self mini avatar (for "作为客体" rows) */
-.rel-self-mini {
-  display: flex; align-items: center; padding-left: 8px; flex-shrink: 0;
+.rel-row-type {
+  font-size: 11px; color: var(--text-muted, #94a3b8);
 }
-
-/* Fact count on the right */
-.rel-meta {
-  margin-left: auto; padding-left: 16px; flex-shrink: 0;
-  text-align: right;
+.rel-row-pred {
+  font-size: 11px; color: #8b5cf6; font-weight: 500;
+  background: rgba(139,92,246,0.06); padding: 1px 6px; border-radius: 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 200px;
 }
-.rel-fact-count {
-  font-size: 18px; font-weight: 700; color: var(--accent-primary, #2563eb);
-  line-height: 1;
+.rel-row-count {
+  font-size: 15px; font-weight: 700;
+  flex-shrink: 0; text-align: right; min-width: 36px;
 }
-.rel-fact-label {
-  font-size: 11px; color: var(--text-muted, #94a3b8); margin-top: 2px;
+.rel-row-count-label {
+  font-size: 10px; color: var(--text-muted, #94a3b8); text-align: right;
 }
 
 .rel-empty { color: var(--text-muted, #94a3b8); font-size: 13px; text-align: center; padding: 48px; }
@@ -481,10 +471,8 @@
   .vtl-date { width: 60px; }
   .vtl-date-year { font-size: 15px; }
   .ov-stats-grid { grid-template-columns: repeat(2, 1fr); }
-  .rel-card { flex-wrap: wrap; padding: 10px 12px; gap: 6px; }
-  .rel-pred-col { max-width: 180px; }
-  .rel-predicate { font-size: 11px; }
-  .rel-meta { padding-left: 10px; }
+  .rel-row { padding: 8px 12px 8px 20px; }
+  .rel-group-header { padding: 8px 12px; }
 }
 </style>
 {% endblock %}
@@ -712,86 +700,58 @@
   {% else %}
 
   <div class="rel-toolbar">
-    <input type="text" class="rel-search" placeholder="搜索关联实体…" id="rel-search-input" oninput="filterRelations()">
+    <input type="text" class="rel-search" placeholder="搜索关联实体或谓词…" id="rel-search-input" oninput="filterRelations()">
     <div class="rel-type-filters">
-      <span class="rel-type-btn active" data-filter="all" onclick="filterRelType(this, 'all')">全部</span>
-      {% set seen_entity_types = [] %}
-      {% for rel in detail.relations_from + detail.relations_to %}
-        {% if rel.target_type and rel.target_type not in seen_entity_types %}
-          {% if seen_entity_types.append(rel.target_type) %}{% endif %}
+      <span class="rel-type-btn active" data-filter="all" onclick="filterRelType(this, 'all')">全部类型</span>
+      {% set seen_fact_types = [] %}
+      {% for rel in all_relations %}
+        {% if rel.fact_type and rel.fact_type not in seen_fact_types %}
+          {% if seen_fact_types.append(rel.fact_type) %}{% endif %}
         {% endif %}
       {% endfor %}
-      {% for etype in seen_entity_types %}
-      <span class="rel-type-btn" data-filter="{{ etype }}" onclick="filterRelType(this, '{{ etype }}')">{{ ENTITY_TYPE_ZH.get(etype, etype) }}</span>
+      {% for ftype in seen_fact_types %}
+      {% set ft_c = FT_COLORS.get(ftype, '#3b82f6') %}
+      <span class="rel-type-btn" data-filter="{{ ftype }}" onclick="filterRelType(this, '{{ ftype }}')" style="--btn-active-bg:{{ ft_c }};">{{ FACT_TYPE_NAMES.get(ftype, ftype) }}</span>
       {% endfor %}
     </div>
   </div>
 
   <div class="rel-card-list" id="rel-card-list">
-    {# ── Section: 关系起点 = 当前实体 ── #}
-    {% if detail.relations_from %}
-    <div class="rel-section-header">
-      <div class="rel-section-entity">
-        <span class="rel-section-avatar" style="background:var(--accent-primary,#2563eb);">{{ self_initial }}</span>
-        <span class="rel-section-name">{{ self_name }}</span>
+    {% for ft_group in all_relations | groupby('fact_type') %}
+    {% set ft_key = ft_group.grouper or 'UNKNOWN' %}
+    {% set ft_color = FT_COLORS.get(ft_key, '#94a3b8') %}
+    {% set ft_name = FACT_TYPE_NAMES.get(ft_key, ft_key) %}
+    <div class="rel-group" data-fact-type="{{ ft_key }}">
+      <div class="rel-group-header" onclick="this.parentElement.classList.toggle('collapsed')" style="border-left: 3px solid {{ ft_color }};">
+        <span class="rel-group-arrow">▼</span>
+        <span class="rel-group-ft-badge" style="background:{{ ft_color }}15;color:{{ ft_color }};">{{ ft_name }}</span>
+        <span class="rel-group-count">{{ ft_group.list | length }} 条关系</span>
       </div>
-      <span class="rel-section-dir">作为主体 →</span>
-      <span class="rel-section-count">{{ detail.relations_from | length }} 条关系</span>
-    </div>
-    {% for rel in detail.relations_from %}
-    <div class="rel-card" data-entity-type="{{ rel.target_type or '' }}" data-entity-name="{{ rel.target_name | lower }}" data-predicate="{{ rel.relation_type | lower }}" data-direction="from">
-      <div class="rel-pred-col">
-        <span class="rel-pred-arrow">→</span>
-        <span class="rel-predicate" title="{{ rel.relation_type }}">{{ rel.relation_type }}</span>
-      </div>
-      <div class="rel-target-col">
-        <div class="rel-node-avatar rel-node-avatar-target">{{ rel.target_name[0] if rel.target_name else '?' }}</div>
-        <div class="rel-node-info">
-          <div class="rel-node-name"><a href="/entity/{{ rel.target_id }}">{{ rel.target_name }}</a></div>
-          <div class="rel-node-type">{{ ENTITY_TYPE_ZH.get(rel.target_type, rel.target_type or '未知') }}</div>
+      <div class="rel-group-body">
+        {% for rel in ft_group.list %}
+        <div class="rel-row" data-entity-type="{{ rel.target_type or '' }}" data-entity-name="{{ rel.target_name | lower }}" data-fact-type="{{ ft_key }}" style="border-left: 3px solid {{ ft_color }}20;">
+          {% if rel._dir == 'from' %}
+          <span class="rel-row-dir rel-row-dir-from" title="当前实体 → 目标">→</span>
+          {% else %}
+          <span class="rel-row-dir rel-row-dir-to" title="来源 → 当前实体">←</span>
+          {% endif %}
+          <div class="rel-row-avatar" style="background:{{ ft_color }};">{{ rel.target_name[0] if rel.target_name else '?' }}</div>
+          <div class="rel-row-info">
+            <div class="rel-row-name"><a href="/entity/{{ rel.target_id }}">{{ rel.target_name }}</a></div>
+            <div class="rel-row-meta-line">
+              <span class="rel-row-type">{{ ENTITY_TYPE_ZH.get(rel.target_type, rel.target_type or '未知') }}</span>
+              <span class="rel-row-pred">{{ rel.relation_type }}</span>
+            </div>
+          </div>
+          <div>
+            <div class="rel-row-count" style="color:{{ ft_color }};">{{ rel.fact_count if rel.fact_count is defined else '—' }}</div>
+            <div class="rel-row-count-label">条事实</div>
+          </div>
         </div>
-      </div>
-      <div class="rel-meta">
-        <div class="rel-fact-count">{{ rel.fact_count if rel.fact_count is defined else '—' }}</div>
-        <div class="rel-fact-label">条事实</div>
+        {% endfor %}
       </div>
     </div>
     {% endfor %}
-    {% endif %}
-
-    {# ── Section: 关系终点 = 当前实体 ── #}
-    {% if detail.relations_to %}
-    <div class="rel-section-header" style="{% if detail.relations_from %}margin-top: 24px;{% endif %}">
-      <div class="rel-section-entity">
-        <span class="rel-section-avatar" style="background:#8b5cf6;">{{ self_initial }}</span>
-        <span class="rel-section-name">{{ self_name }}</span>
-      </div>
-      <span class="rel-section-dir">← 作为客体</span>
-      <span class="rel-section-count">{{ detail.relations_to | length }} 条关系</span>
-    </div>
-    {% for rel in detail.relations_to %}
-    <div class="rel-card" data-entity-type="{{ rel.target_type or '' }}" data-entity-name="{{ rel.target_name | lower }}" data-predicate="{{ rel.relation_type | lower }}" data-direction="to">
-      <div class="rel-target-col" style="order:0;">
-        <div class="rel-node-avatar rel-node-avatar-target">{{ rel.target_name[0] if rel.target_name else '?' }}</div>
-        <div class="rel-node-info">
-          <div class="rel-node-name"><a href="/entity/{{ rel.target_id }}">{{ rel.target_name }}</a></div>
-          <div class="rel-node-type">{{ ENTITY_TYPE_ZH.get(rel.target_type, rel.target_type or '未知') }}</div>
-        </div>
-      </div>
-      <div class="rel-pred-col" style="order:1;">
-        <span class="rel-pred-arrow">→</span>
-        <span class="rel-predicate" title="{{ rel.relation_type }}">{{ rel.relation_type }}</span>
-      </div>
-      <div class="rel-self-mini" style="order:2;">
-        <span class="rel-section-avatar" style="background:var(--accent-primary,#2563eb);width:24px;height:24px;font-size:11px;">{{ self_initial }}</span>
-      </div>
-      <div class="rel-meta" style="order:3;">
-        <div class="rel-fact-count">{{ rel.fact_count if rel.fact_count is defined else '—' }}</div>
-        <div class="rel-fact-label">条事实</div>
-      </div>
-    </div>
-    {% endfor %}
-    {% endif %}
   </div>
   {% endif %}
 </div>
@@ -1015,16 +975,28 @@ function filterRelations() {
 function applyRelFilters() {
   const q = (document.getElementById('rel-search-input')?.value || '').trim().toLowerCase();
   const typeFilter = window._relTypeFilter || 'all';
-  const cards = document.querySelectorAll('#rel-card-list .rel-card');
-  cards.forEach(card => {
-    let show = true;
-    if (typeFilter !== 'all' && card.dataset.entityType !== typeFilter) show = false;
-    if (show && q) {
-      const name = card.dataset.entityName || '';
-      const pred = card.dataset.predicate || '';
-      if (!name.includes(q) && !pred.includes(q) && !card.textContent.toLowerCase().includes(q)) show = false;
+
+  document.querySelectorAll('.rel-group').forEach(group => {
+    const factType = group.dataset.factType || '';
+
+    // If filtering by fact_type, hide entire group if it doesn't match
+    if (typeFilter !== 'all' && factType !== typeFilter) {
+      group.style.display = 'none';
+      return;
     }
-    card.style.display = show ? '' : 'none';
+
+    let groupHasVisible = false;
+    group.querySelectorAll('.rel-row').forEach(row => {
+      let show = true;
+      if (show && q) {
+        const name = row.dataset.entityName || '';
+        if (!name.includes(q) && !row.textContent.toLowerCase().includes(q)) show = false;
+      }
+      row.style.display = show ? '' : 'none';
+      if (show) groupHasVisible = true;
+    });
+
+    group.style.display = groupHasVisible ? '' : 'none';
   });
 }
 
