@@ -967,6 +967,41 @@ def get_entity_detail(entity_id: str) -> dict | None:
         info["relations_from"] = [dict(r) for r in rels_from]  # 当前实体 → target
         info["relations_to"] = [dict(r) for r in rels_to]      # target → 当前实体
 
+        # 如果 entity_relation 表为空，从事实中推导关系
+        if not rels_from and not rels_to:
+            derived_from = conn.execute(
+                """SELECT f.object_entity_id AS target_id,
+                          e.canonical_name AS target_name,
+                          e.entity_type AS target_type,
+                          f.predicate AS relation_type,
+                          COUNT(*) AS fact_count
+                   FROM fact_atom f
+                   JOIN entity e ON f.object_entity_id = e.id
+                   WHERE f.subject_entity_id = ?
+                     AND f.object_entity_id IS NOT NULL
+                     AND f.review_status IN ('自动通过','人工通过')
+                   GROUP BY f.object_entity_id, f.predicate
+                   ORDER BY fact_count DESC""",
+                (entity_id,),
+            ).fetchall()
+            derived_to = conn.execute(
+                """SELECT f.subject_entity_id AS target_id,
+                          e.canonical_name AS target_name,
+                          e.entity_type AS target_type,
+                          f.predicate AS relation_type,
+                          COUNT(*) AS fact_count
+                   FROM fact_atom f
+                   JOIN entity e ON f.subject_entity_id = e.id
+                   WHERE f.object_entity_id = ?
+                     AND f.subject_entity_id IS NOT NULL
+                     AND f.review_status IN ('自动通过','人工通过')
+                   GROUP BY f.subject_entity_id, f.predicate
+                   ORDER BY fact_count DESC""",
+                (entity_id,),
+            ).fetchall()
+            info["relations_from"] = [dict(r) for r in derived_from]
+            info["relations_to"] = [dict(r) for r in derived_to]
+
         # 事实统计（按 fact_type 分组）
         type_stats = conn.execute(
             """SELECT f.fact_type, COUNT(*) AS cnt

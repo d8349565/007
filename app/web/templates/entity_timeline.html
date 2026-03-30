@@ -660,9 +660,9 @@
       <tr>
         <th>关联实体</th>
         <th>实体类型</th>
-        <th>关系类型</th>
+        <th>关系/谓词</th>
         <th>方向</th>
-        <th>来源</th>
+        <th>事实数</th>
       </tr>
     </thead>
     <tbody>
@@ -674,7 +674,7 @@
         <td><span class="rel-badge rel-badge-type">{{ ENTITY_TYPE_ZH.get(rel.target_type, rel.target_type or '—') }}</span></td>
         <td><span class="rel-badge rel-badge-rel">{{ REL_TYPE_ZH.get(rel.relation_type, rel.relation_type) }}</span></td>
         <td><span class="rel-dir">→ 指向</span></td>
-        <td style="font-size:12px;color:var(--text-muted,#94a3b8);">{{ rel.source_count if rel.source_count is defined else '—' }}</td>
+        <td style="font-size:12px;color:var(--text-muted,#94a3b8);">{{ rel.fact_count if rel.fact_count is defined else (rel.source_count if rel.source_count is defined else '—') }}</td>
       </tr>
       {% endfor %}
       {% for rel in detail.relations_to %}
@@ -685,7 +685,7 @@
         <td><span class="rel-badge rel-badge-type">{{ ENTITY_TYPE_ZH.get(rel.target_type, rel.target_type or '—') }}</span></td>
         <td><span class="rel-badge rel-badge-rel">{{ REL_TYPE_ZH.get(rel.relation_type, rel.relation_type) }}</span></td>
         <td><span class="rel-dir">← 被指</span></td>
-        <td style="font-size:12px;color:var(--text-muted,#94a3b8);">{{ rel.source_count if rel.source_count is defined else '—' }}</td>
+        <td style="font-size:12px;color:var(--text-muted,#94a3b8);">{{ rel.fact_count if rel.fact_count is defined else (rel.source_count if rel.source_count is defined else '—') }}</td>
       </tr>
       {% endfor %}
     </tbody>
