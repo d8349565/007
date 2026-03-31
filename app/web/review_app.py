@@ -123,6 +123,78 @@ QUALIFIER_VALUE_ZH = {
     "market": "市场价",
 }
 
+# qualifier_json 字段名 → 中文显示名
+QUALIFIER_KEY_ZH = {
+    "metric_name": "指标名称",
+    "stage": "阶段",
+    "product_type": "产品类型",
+    "segment": "细分领域",
+    "project_name": "项目名称",
+    "is_planned": "是否规划",
+    "investment_type": "投资类型",
+    "yoy": "同比",
+    "ranking_scope": "排名范围",
+    "purpose": "用途",
+    "is_approximate": "是否近似",
+    "is_forecast": "是否预测",
+    "scope": "范围",
+    "cooperation_type": "合作类型",
+    "ranking_name": "排名名称",
+    "market_scope": "市场范围",
+    "equivalent_usd": "折合美元",
+    "equivalent_usd_unit": "美元单位",
+    "phase": "阶段",
+    "is_historical": "是否历史",
+    "equivalent_cny": "折合人民币",
+    "equivalent_cny_unit": "人民币单位",
+    "equivalent_tons": "折合吨数",
+    "note": "备注",
+    "is_yoy": "是否同比",
+    "price_type": "价格类型",
+    "report_scope": "报告范围",
+    "source": "来源",
+    "stake_percentage": "持股比例",
+    "product_name": "产品名称",
+    "is_estimate": "是否估算",
+    "qualifier": "限定条件",
+    "plant_location": "工厂位置",
+    "consecutive_years": "连续年数",
+    "joint_venture": "合资公司",
+    "ranking": "排名",
+    "ranking_position": "排名位次",
+    "ranking_period": "排名期间",
+    "equivalent_ton": "折合吨数",
+    "equivalent_ton_unit": "吨数单位",
+    "is_first": "是否首次",
+    "cagr": "复合增长率",
+    "condition": "条件",
+    "application": "应用领域",
+    "product_scope": "产品范围",
+    "hhi_threshold": "HHI阈值",
+    "direction": "方向",
+    "currency_adjusted_yoy": "汇率调整同比",
+    "entry_threshold": "准入门槛",
+    "measurement_basis": "计量基准",
+    "change_amount": "变化量",
+    "change_amount_unit": "变化量单位",
+    "competitors": "竞争对手",
+    "bid_project": "招标项目",
+    "product_details": "产品详情",
+    "is_current": "是否当前",
+    "equivalent_unit": "折算单位",
+    "equivalent_value": "折算值",
+    "capacity_increase": "产能增量",
+    "capacity_increase_unit": "产能增量单位",
+    "duration": "时长",
+    "from_capacity": "原产能",
+    "from_unit": "原单位",
+    "to_capacity": "目标产能",
+    "to_unit": "目标单位",
+    "partners": "合作伙伴",
+    "exclusive_agent": "独家代理",
+    "product": "产品",
+}
+
 
 def _build_fact_summary(fact: dict) -> str:
     """为事实生成摘要文本，同时在 fact 上设置 context_tag 字段。
@@ -228,6 +300,7 @@ def create_app() -> Flask:
             FACT_TYPE_NAMES=FACT_TYPE_NAMES,
             ENTITY_TYPE_ZH=ENTITY_TYPE_ZH,
             QUALIFIER_VALUE_ZH=QUALIFIER_VALUE_ZH,
+            QUALIFIER_KEY_ZH=QUALIFIER_KEY_ZH,
         )
 
     @app.route("/")
@@ -1468,6 +1541,7 @@ def create_app() -> Flask:
                 "fact_type_stats": [],
                 "total_fact_count": data["total_count"],
                 "source_doc_count": 0,
+                "source_docs": [],
                 "time_earliest": None,
                 "time_latest": None,
             }
@@ -1635,21 +1709,9 @@ def create_app() -> Flask:
         fact["qualifiers_display"] = qd
         fact["summary"] = _build_fact_summary(fact)
 
-        QUAL_KEY_ZH = {
-            'metric_name': '指标', 'segment': '细分领域', 'yoy': '同比',
-            'qoq': '环比', 'report_scope': '报告范围', 'product_type': '产品类型',
-            'project_name': '项目名称', 'investment_type': '投资类型',
-            'market_scope': '市场范围', 'ranking_name': '排名名称',
-            'ranking_scope': '排名范围', 'cooperation_type': '合作类型',
-            'product_name': '产品名称', 'price_type': '价格类型',
-            'stage': '阶段', 'scope': '范围', 'purpose': '目的',
-            'phase': '期次', 'duration': '期限', 'reason': '原因',
-            'rank': '排名', 'ranking_year': '排名年份',
-        }
         return render_template(
             "fact_detail.html",
             fact=fact,
-            QUAL_KEY_ZH=QUAL_KEY_ZH,
         )
 
     @app.route("/fact/<fact_id>/delete", methods=["POST"])
@@ -1703,6 +1765,7 @@ def create_app() -> Flask:
                 "fact_type_stats": [],
                 "total_fact_count": data["total_count"],
                 "source_doc_count": 0,
+                "source_docs": [],
                 "time_earliest": None,
                 "time_latest": None,
             }

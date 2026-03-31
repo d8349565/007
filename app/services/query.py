@@ -969,40 +969,152 @@ def get_entity_detail(entity_id: str) -> dict | None:
 
         # 如果 entity_relation 表为空，从事实中推导关系
         if not rels_from and not rels_to:
+            # fact_type → 关系类别 映射
+            _FT_TO_REL = {
+                "COOPERATION": "合作",
+                "INVESTMENT": "投资",
+                "EXPANSION": "扩建",
+            }
+            # 查询：逐条获取事实（含 qualifier_json），Python 端分组
             derived_from = conn.execute(
-                """SELECT f.object_entity_id AS target_id,
+                """SELECT f.id AS fact_id,
+                          f.object_entity_id AS target_id,
                           e.canonical_name AS target_name,
                           e.entity_type AS target_type,
-                          f.predicate AS relation_type,
                           f.fact_type,
-                          COUNT(*) AS fact_count
+                          f.predicate,
+                          f.object_text,
+                          f.qualifier_json
                    FROM fact_atom f
                    JOIN entity e ON f.object_entity_id = e.id
                    WHERE f.subject_entity_id = ?
                      AND f.object_entity_id IS NOT NULL
+                     AND f.object_entity_id != ?
                      AND f.review_status IN ('自动通过','人工通过')
-                   GROUP BY f.fact_type, f.object_entity_id, f.predicate
-                   ORDER BY f.fact_type, fact_count DESC""",
-                (entity_id,),
+                     AND e.entity_type IN ('COMPANY','GROUP','企业','集团')
+                   ORDER BY f.fact_type, f.object_entity_id""",
+                (entity_id, entity_id),
             ).fetchall()
             derived_to = conn.execute(
-                """SELECT f.subject_entity_id AS target_id,
+                """SELECT f.id AS fact_id,
+                          f.subject_entity_id AS target_id,
                           e.canonical_name AS target_name,
                           e.entity_type AS target_type,
-                          f.predicate AS relation_type,
                           f.fact_type,
-                          COUNT(*) AS fact_count
+                          f.predicate,
+                          f.object_text,
+                          f.qualifier_json
                    FROM fact_atom f
                    JOIN entity e ON f.subject_entity_id = e.id
                    WHERE f.object_entity_id = ?
                      AND f.subject_entity_id IS NOT NULL
+                     AND f.subject_entity_id != ?
                      AND f.review_status IN ('自动通过','人工通过')
-                   GROUP BY f.fact_type, f.subject_entity_id, f.predicate
-                   ORDER BY f.fact_type, fact_count DESC""",
-                (entity_id,),
+                     AND e.entity_type IN ('COMPANY','GROUP','企业','集团')
+                   ORDER BY f.fact_type, f.subject_entity_id""",
+                (entity_id, entity_id),
             ).fetchall()
-            info["relations_from"] = [dict(r) for r in derived_from]
-            info["relations_to"] = [dict(r) for r in derived_to]
+
+            import re
+            import json as _json
+
+            # 限定词英文枚举值 → 中文
+            _QUAL_VAL_ZH = {
+                "equity_cooperation": "股权合作", "strategic_cooperation": "战略合作",
+                "joint_venture": "合资合作", "research_cooperation": "科研合作",
+                "technical_cooperation": "技术合作", "supply_partnership": "供应合作",
+                "co_development": "联合开发", "equity_investment": "股权投资",
+                "distribution": "销售合作", "licensing": "许可授权",
+                "investment": "投资合作", "partnership": "合作共建",
+                "planned": "规划中", "under_construction": "在建",
+                "completed": "竣工", "commissioned": "投产",
+            }
+            from app.web.review_app import QUALIFIER_VALUE_ZH
+
+            # qualifier 中对关系描述有补充价值的字段
+            _REL_QUALIFIER_KEYS = (
+                "joint_venture", "project_name", "cooperation_type",
+                "investment_type", "purpose", "plant_location",
+                "partners", "exclusive_agent", "product_type",
+            )
+
+            def _merge_derived(rows):
+                """按 (fact_type, target_id) 合并，拼接谓词+限定词为关系描述，收集事实 ID"""
+                merged = {}
+                for r in rows:
+                    key = (r["fact_type"], r["target_id"])
+                    if key not in merged:
+                        merged[key] = {
+                            "target_id": r["target_id"],
+                            "target_name": r["target_name"],
+                            "target_type": r["target_type"],
+                            "fact_type": r["fact_type"],
+                            "fact_count": 0,
+                            "_preds": [],
+                            "_qual_parts": [],
+                            "fact_ids": [],
+                        }
+                    m = merged[key]
+                    m["fact_count"] += 1
+                    m["fact_ids"].append(r["fact_id"])
+                    desc = (r["predicate"] or "").strip()
+                    # 跳过数值性谓词（以"为"/"达"/"约"/"超"结尾），它们描述指标不描述关系
+                    if desc and not re.search(r"[为达约超]$", desc):
+                        if desc not in m["_preds"]:
+                            m["_preds"].append(desc)
+                    # 从 qualifier_json 提取补充描述
+                    qj = r["qualifier_json"]
+                    if qj:
+                        try:
+                            qd = _json.loads(qj)
+                        except (ValueError, TypeError):
+                            qd = {}
+                        for qk in _REL_QUALIFIER_KEYS:
+                            qv = qd.get(qk)
+                            if not qv:
+                                continue
+                            sv = str(qv).strip()
+                            # 跳过布尔值
+                            if sv.lower() in ("true", "false"):
+                                continue
+                            if sv and sv not in m["_qual_parts"]:
+                                # 翻译已知英文枚举值
+                                sv = _QUAL_VAL_ZH.get(sv, sv)
+                                if sv not in m["_qual_parts"]:
+                                    m["_qual_parts"].append(sv)
+                result = []
+                for m in merged.values():
+                    preds = m.pop("_preds")
+                    qual_parts = m.pop("_qual_parts")
+                    m["fact_ids"] = m["fact_ids"][:5]  # 只保留前 5 个事实 ID
+                    ft = m["fact_type"]
+                    category = _FT_TO_REL.get(ft, ft)
+                    if preds:
+                        desc = "、".join(preds[:3])
+                        # 补充限定词信息（如合资公司名称）
+                        if qual_parts:
+                            desc += "（" + "、".join(qual_parts[:2]) + "）"
+                        m["relation_type"] = desc
+                    else:
+                        m["relation_type"] = category
+                    result.append(m)
+                return result
+
+            info["relations_from"] = _merge_derived(derived_from)
+            info["relations_to"] = _merge_derived(derived_to)
+
+            # 名称级过滤：排除 target_name 看起来像项目/设施/产品的记录
+            _PROJECT_NAME_RE = re.compile(
+                r"(?:项目|工程|工厂|基地|园区|产品|涂料供应|涂料生产|产能|专项)$"
+            )
+            info["relations_from"] = [
+                r for r in info["relations_from"]
+                if not _PROJECT_NAME_RE.search(r["target_name"])
+            ]
+            info["relations_to"] = [
+                r for r in info["relations_to"]
+                if not _PROJECT_NAME_RE.search(r["target_name"])
+            ]
 
         # 事实统计（按 fact_type 分组）
         type_stats = conn.execute(
@@ -1026,6 +1138,21 @@ def get_entity_detail(entity_id: str) -> dict | None:
             (entity_id, entity_id),
         ).fetchone()["cnt"]
         info["source_doc_count"] = doc_count
+
+        # 关联文档列表（最多 10 篇）
+        source_docs = conn.execute(
+            """SELECT sd.id, sd.title, sd.crawl_time,
+                      COUNT(f.id) AS fact_count
+               FROM fact_atom f
+               JOIN source_document sd ON f.document_id = sd.id
+               WHERE (f.subject_entity_id = ? OR f.object_entity_id = ?)
+                 AND f.review_status IN ('自动通过','人工通过')
+               GROUP BY sd.id
+               ORDER BY fact_count DESC
+               LIMIT 10""",
+            (entity_id, entity_id),
+        ).fetchall()
+        info["source_docs"] = [dict(d) for d in source_docs]
 
         # 时间跨度
         time_range = conn.execute(

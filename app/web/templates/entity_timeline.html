@@ -311,9 +311,16 @@
 .rel-row-pred {
   font-size: 11px; color: #8b5cf6; font-weight: 500;
   background: rgba(139,92,246,0.06); padding: 1px 6px; border-radius: 8px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 200px;
+  max-width: 360px; word-break: break-all;
 }
+.rel-row-fact-links {
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.rel-fact-link {
+  font-size: 11px; color: var(--accent-primary, #2563eb); text-decoration: none;
+  padding: 1px 5px; border-radius: 4px; background: rgba(37,99,235,0.06);
+}
+.rel-fact-link:hover { background: rgba(37,99,235,0.14); }
 .rel-row-count {
   font-size: 15px; font-weight: 700;
   flex-shrink: 0; text-align: right; min-width: 36px;
@@ -487,7 +494,6 @@
 <!-- ===== Header ===== -->
 <div class="ed-header">
   <div class="ed-breadcrumb">
-    <a href="/graph">知识图谱</a><span class="ed-bc-sep">›</span>
     <a href="/graph">实体库</a><span class="ed-bc-sep">›</span>
     {{ detail.canonical_name or entity.name }}
   </div>
@@ -598,13 +604,7 @@
             <span class="ov-kv-val">{{ ENTITY_TYPE_ZH.get(detail.entity_type, detail.entity_type) }}</span>
           </div>
           {% endif %}
-          {% if detail.normalized_name and detail.normalized_name != detail.canonical_name %}
-          <div class="ov-kv-row">
-            <span class="ov-kv-icon">🔤</span>
-            <span class="ov-kv-label">标准名称</span>
-            <span class="ov-kv-val">{{ detail.normalized_name }}</span>
-          </div>
-          {% endif %}
+
           {% if detail.time_earliest %}
           <div class="ov-kv-row">
             <span class="ov-kv-icon">📅</span>
@@ -636,12 +636,13 @@
         <div class="ov-card-body">
           {% set max_cnt = detail.fact_type_stats[0].cnt %}
           {% for stat in detail.fact_type_stats %}
+          {% set pct = (stat.cnt * 100 / detail.total_fact_count) | round(0) | int %}
           <div class="ov-ft-row">
             <span class="ov-ft-label">{{ FACT_TYPE_NAMES.get(stat.fact_type, stat.fact_type) }}</span>
             <div class="ov-ft-bar-wrap">
               <div class="ov-ft-bar" style="width:{{ [stat.cnt * 100 // max_cnt, 100] | min }}%;background:{{ FT_COLORS.get(stat.fact_type, '#3b82f6') }};"></div>
             </div>
-            <span class="ov-ft-cnt">{{ stat.cnt }}</span>
+            <span class="ov-ft-cnt">{{ stat.cnt }}<span style="font-size:10px;color:var(--text-muted,#94a3b8);margin-left:2px;">{{ pct }}%</span></span>
           </div>
           {% endfor %}
         </div>
@@ -679,8 +680,19 @@
           <span style="font-size:12px;color:var(--text-muted,#94a3b8);font-weight:400;">共 {{ detail.source_doc_count or 0 }} 篇</span>
         </div>
         <div class="ov-card-body" style="{% if not detail.source_doc_count %}padding:32px;text-align:center;color:var(--text-muted,#94a3b8);font-size:13px;{% endif %}">
-          {% if detail.source_doc_count %}
-          <p style="font-size:13px;color:var(--text-muted,#94a3b8);margin:0;">来源文档信息可在各事实详情中查看</p>
+          {% if detail.source_docs %}
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            {% for doc in detail.source_docs %}
+            <a href="/documents/{{ doc.id }}" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;padding:4px 6px;border-radius:6px;transition:background .15s;font-size:13px;" onmouseover="this.style.background='rgba(37,99,235,0.06)'" onmouseout="this.style.background='transparent'">
+              <span style="color:var(--accent-primary,#2563eb);">📄</span>
+              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ doc.title or '未命名文档' }}</span>
+              <span style="font-size:11px;color:var(--text-muted,#94a3b8);flex-shrink:0;">{{ doc.fact_count }}条事实</span>
+            </a>
+            {% endfor %}
+            {% if detail.source_doc_count > detail.source_docs | length %}
+            <span style="font-size:11px;color:var(--text-muted,#94a3b8);text-align:center;">共 {{ detail.source_doc_count }} 篇文档</span>
+            {% endif %}
+          </div>
           {% else %}
           暂无关联文档
           {% endif %}
@@ -742,6 +754,16 @@
               <span class="rel-row-type">{{ ENTITY_TYPE_ZH.get(rel.target_type, rel.target_type or '未知') }}</span>
               <span class="rel-row-pred">{{ rel.relation_type }}</span>
             </div>
+            {% if rel.fact_ids %}
+            <div class="rel-row-fact-links" style="margin-top:4px;">
+              {% for fid in rel.fact_ids[:3] %}
+              <a href="/fact/{{ fid }}" class="rel-fact-link" title="查看事实详情">📄 事实{{ loop.index }}</a>
+              {% endfor %}
+              {% if rel.fact_ids | length > 3 %}
+              <span style="color:var(--text-muted,#94a3b8);font-size:11px;">等{{ rel.fact_ids | length }}条</span>
+              {% endif %}
+            </div>
+            {% endif %}
           </div>
           <div>
             <div class="rel-row-count" style="color:{{ ft_color }};">{{ rel.fact_count if rel.fact_count is defined else '—' }}</div>
@@ -865,7 +887,7 @@
             {% if fact.qualifiers_display %}
             <div class="vtl-detail-tags">
               {% for qk, qv in fact.qualifiers_display.items() %}
-              <span class="vtl-detail-kv"><strong>{{ qk }}</strong>: {{ qv }}</span>
+              <span class="vtl-detail-kv"><strong>{{ QUALIFIER_KEY_ZH.get(qk, qk) }}</strong>: {{ QUALIFIER_VALUE_ZH.get(qv, qv) if qv is string else qv }}</span>
               {% endfor %}
             </div>
             {% endif %}
