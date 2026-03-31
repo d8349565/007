@@ -152,6 +152,8 @@
         <option value="COMPANY">企业</option>
         <option value="GROUP">群体/排名</option>
         <option value="PROJECT">项目</option>
+        <option value="MARKET">市场</option>
+        <option value="INDUSTRY">行业</option>
         <option value="COUNTRY">国家/地区</option>
         <option value="REGION">地区/城市</option>
         <option value="PRODUCT">产品/品牌</option>
@@ -227,6 +229,7 @@ const TYPE_ZH = {
   'COMPANY': '企业', 'GROUP': '群体/排名', 'PROJECT': '项目',
   'REGION': '地区', 'PRODUCT': '产品', 'PERSON': '人物',
   'ORG': '机构', 'OTHER': '其他', 'UNKNOWN': '未知', 'COUNTRY': '国家/地区',
+  'MARKET': '市场', 'INDUSTRY': '行业',
 };
 const COLORS = ['#f472b6','#60a5fa','#a78bfa','#34d399','#f87171','#fbbf24','#2dd4bf','#c084fc','#fb923c','#818cf8'];
 
@@ -236,7 +239,7 @@ let linkLabelsEl = null;
 let linkLabelBgEl = null;
 
 // 节点颜色（模块级，供 renderGraph 和 applyClientFilter 共用）
-const TYPE_COLORS = { COMPANY: '#3b82f6', PROJECT: '#f472b6', GROUP: '#f59e0b', REGION: '#94a3b8', COUNTRY: '#a78bfa', PRODUCT: '#2dd4bf', PERSON: '#fb923c', ORG: '#818cf8', OTHER: '#6b6b6b', UNKNOWN: '#60a5fa' };
+const TYPE_COLORS = { COMPANY: '#3b82f6', PROJECT: '#f472b6', GROUP: '#f59e0b', REGION: '#94a3b8', COUNTRY: '#a78bfa', PRODUCT: '#2dd4bf', PERSON: '#fb923c', ORG: '#818cf8', OTHER: '#6b6b6b', UNKNOWN: '#60a5fa', MARKET: '#14b8a6', INDUSTRY: '#e879f9' };
 const TEXT_PALETTE = ['#34d399','#f87171','#fbbf24','#2dd4bf','#c084fc','#fb923c','#818cf8','#4ade80','#e879f9','#38bdf8','#a3e635','#fd8a8a','#67e8f9','#fdba74','#d8b4fe'];
 function strHash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
 function getNodeColor(d) {

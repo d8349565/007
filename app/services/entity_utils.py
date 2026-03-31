@@ -73,12 +73,13 @@ PRIMARY_TYPE_PRIORITY = {
 PROJECT_ENDINGS = ("项目", "工程", "专项", "计划")
 
 # 独立设施关键词
-FACILITY_KEYWORDS = ("工厂", "生产基地", "研发基地", "产业基地", "产业园区")
+FACILITY_KEYWORDS = ("工厂", "生产基地", "研发基地", "产业基地", "产业园区", "基地")
 
 # 公司类后缀词
 COMPANY_SUFFIXES = (
     "公司", "集团", "股份", "有限", "企业", "涂料", "化工", "科技",
     "工业", "实业", "控股", "国际", "材料", "制造",
+    "化学", "新材", "颜料", "防水", "油漆",
 )
 
 # 最短参与候选的字符数
@@ -204,7 +205,8 @@ def infer_entity_type(text: str, fact_type: str = "") -> tuple[str, list[str]]:
     tags: list[str] = []
 
     # 0. 含指标/概念后缀 → 非实体，直接返回 UNKNOWN
-    _METRIC_ENDINGS = ("产能", "产量", "销量", "份额", "价格", "市场", "营收", "利润", "增速", "增长率")
+    # 注意："市场"不在此列，因为"XX市场"是有效的 MARKET 类型实体
+    _METRIC_ENDINGS = ("产能", "产量", "销量", "份额", "价格", "营收", "利润", "增速", "增长率")
     for me in _METRIC_ENDINGS:
         if text.endswith(me):
             return ("UNKNOWN", tags)
@@ -225,7 +227,17 @@ def infer_entity_type(text: str, fact_type: str = "") -> tuple[str, list[str]]:
     if "品牌" in text and any(kw in text for kw in ("外资", "国产", "本土")):
         return ("GROUP", tags)
 
-    # 4. 含公司法人后缀 → COMPANY
+    # 4. 以"市场"结尾且有实质前缀 → MARKET（优先于公司后缀检测）
+    if text.endswith("市场") and len(text) > 2:
+        return ("MARKET", tags)
+
+    # 5. 以"行业/产业"结尾 → INDUSTRY（优先于公司后缀检测）
+    # 注意：不匹配单独的"业"，因为"X漆业""X实业"通常是公司名
+    for suffix in ("行业", "产业"):
+        if text.endswith(suffix) and len(text) > len(suffix):
+            return ("INDUSTRY", tags)
+
+    # 6. 含公司法人后缀 → COMPANY
     has_company_suffix = False
     for suffix in COMPANY_SUFFIXES:
         if suffix in text:
@@ -238,7 +250,23 @@ def infer_entity_type(text: str, fact_type: str = "") -> tuple[str, list[str]]:
             tags.append("brand")
         return ("COMPANY", tags)
 
-    # 5. COOPERATION 类型的 object 通常是项目
+    # 7. "X造船业/X制造业" 等描述性行业名（含"业"但前面是动词/名词描述）
+    if text.endswith("业") and len(text) > 2:
+        _INDUSTRY_CORES = ("造船", "制造", "建筑", "化工", "汽车", "航运",
+                           "船舶", "涂装", "防腐", "房地产", "金融")
+        for core in _INDUSTRY_CORES:
+            if text.endswith(core + "业"):
+                return ("INDUSTRY", tags)
+
+    # 8. 地域/国家检测
+    _REGION_ENDINGS = ("省", "市", "区", "县", "自治区", "自治州")
+    for suf in _REGION_ENDINGS:
+        if text.endswith(suf):
+            return ("REGION", tags)
+    if text in LOCATION_KEYWORDS:
+        return (LOCATION_KEYWORDS[text], tags)
+
+    # 9. COOPERATION 类型的 object 通常是项目
     if fact_type == "COOPERATION":
         return ("PROJECT", tags)
 
