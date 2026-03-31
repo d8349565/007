@@ -132,7 +132,10 @@
     <!-- Filter panel -->
     <div class="graph-filter">
       <label>搜索实体</label>
-      <input type="text" id="filterSearch" placeholder="输入实体名称…" onkeydown="if(event.key==='Enter') searchGraphNode()" />
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="filterSearch" placeholder="输入实体名称…" style="flex:1;" oninput="searchGraphNode()" onkeydown="if(event.key==='Enter'&&!event.isComposing) searchGraphNode()" />
+        <button onclick="document.getElementById('filterSearch').value=''; searchGraphNode();" title="清除搜索" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:5px;background:#f8fafc;color:#94a3b8;cursor:pointer;font-size:13px;flex-shrink:0;">✕</button>
+      </div>
       <div id="searchMatchHint" class="search-match-hint"></div>
 
       <label>事实类型</label>
@@ -161,6 +164,8 @@
 
       <label>最少事实数 <span id="minFactLabel" style="color:#0f172a;">0</span></label>
       <input type="range" id="filterMinFacts" min="0" max="20" value="0" oninput="document.getElementById('minFactLabel').textContent=this.value; applyClientFilter()" />
+
+      <button id="btnClearFilter" onclick="clearAllFilters()" style="margin-top:12px;width:100%;padding:6px 0;border:1px solid #cbd5e1;border-radius:5px;background:#f8fafc;color:#64748b;font-size:12px;cursor:pointer;transition:all 0.15s;" onmouseenter="this.style.background='#e2e8f0';this.style.color='#0f172a'" onmouseleave="this.style.background='#f8fafc';this.style.color='#64748b'">✕ 清除筛选</button>
 
       <div class="filter-stats" id="graphStats"></div>
     </div>
@@ -230,6 +235,19 @@ let graphData = null;
 let linkLabelsEl = null;
 let linkLabelBgEl = null;
 
+// 节点颜色（模块级，供 renderGraph 和 applyClientFilter 共用）
+const TYPE_COLORS = { COMPANY: '#3b82f6', PROJECT: '#f472b6', GROUP: '#f59e0b', REGION: '#94a3b8', COUNTRY: '#a78bfa', PRODUCT: '#2dd4bf', PERSON: '#fb923c', ORG: '#818cf8', OTHER: '#6b6b6b', UNKNOWN: '#60a5fa' };
+const TEXT_PALETTE = ['#34d399','#f87171','#fbbf24','#2dd4bf','#c084fc','#fb923c','#818cf8','#4ade80','#e879f9','#38bdf8','#a3e635','#fd8a8a','#67e8f9','#fdba74','#d8b4fe'];
+function strHash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+function getNodeColor(d) {
+  if (!d.is_text_node) return TYPE_COLORS[d.entity_type] || '#60a5fa';
+  return TEXT_PALETTE[strHash(d.name) % TEXT_PALETTE.length];
+}
+function getNodeFill(d) {
+  if (!d.is_text_node) return TYPE_COLORS[d.entity_type] || '#60a5fa';
+  return TEXT_PALETTE[strHash(d.name) % TEXT_PALETTE.length] + '22';
+}
+
 // Load data
 async function loadGraph() {
   const type = document.getElementById('filterType').value;
@@ -269,23 +287,7 @@ function renderGraph() {
   const nodes = graphData.nodes.map(n => ({...n}));
   const edges = graphData.edges;
 
-  // 每个节点分配独立颜色：标准化实体用实体类型激光色，文本节点用按名称哈希分配的柔和色
   const TEXT_NODE_COLOR = '#6b6b6b';
-  // 标准化实体类型颜色
-  const TYPE_COLORS = { COMPANY: '#3b82f6', PROJECT: '#f472b6', GROUP: '#f59e0b', REGION: '#94a3b8', COUNTRY: '#a78bfa', PRODUCT: '#2dd4bf', PERSON: '#fb923c', ORG: '#818cf8', OTHER: '#6b6b6b', UNKNOWN: '#60a5fa' };
-  // 文本节点可用颜色查找表（柔和富色）
-  const TEXT_PALETTE = ['#34d399','#f87171','#fbbf24','#2dd4bf','#c084fc','#fb923c','#818cf8','#4ade80','#e879f9','#38bdf8','#a3e635','#fd8a8a','#67e8f9','#fdba74','#d8b4fe'];
-  function strHash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
-  const getNodeColor = (d) => {
-    if (!d.is_text_node) return TYPE_COLORS[d.entity_type] || '#60a5fa';
-    return TEXT_PALETTE[strHash(d.name) % TEXT_PALETTE.length];
-  };
-  const getNodeFill = (d) => {
-    if (!d.is_text_node) return TYPE_COLORS[d.entity_type] || '#60a5fa';
-    // 文本节点：同色超低透明底
-    const c = TEXT_PALETTE[strHash(d.name) % TEXT_PALETTE.length];
-    return c + '22';
-  };
 
   if (nodes.length === 0) {
     document.getElementById('graphLegend').style.display = 'none';
@@ -295,31 +297,8 @@ function renderGraph() {
   // Build node id set
   const nodeIdSet = new Set(nodes.map(n => n.id));
 
-  // Entity type colors (for legend - standard nodes only)
-  const typeMap = {};
-  nodes.forEach(n => {
-    if (n.is_text_node) return;
-    if (!typeMap[n.entity_type]) {
-      typeMap[n.entity_type] = { name: n.entity_type, count: 0, color: TYPE_COLORS[n.entity_type] || '#60a5fa' };
-    }
-    typeMap[n.entity_type].count++;
-  });
-  const getColor = (type) => typeMap[type] ? typeMap[type].color : '#60a5fa';
-
-  // Build legend
-  const legendPanel = document.getElementById('graphLegend');
-  legendPanel.style.display = 'block';
-
-  const textNodeCount = nodes.filter(n => n.is_text_node).length;
-  const legendTypeItems = Object.values(typeMap).map(t =>
-    `<div class="graph-legend-item"><span class="graph-legend-dot" style="background:${t.color}"></span>${TYPE_ZH[t.name] || t.name} (${t.count})</div>`
-  );
-  if (textNodeCount > 0) {
-    legendTypeItems.push(
-      `<div class="graph-legend-item"><span class="graph-legend-dot" style="background:none;border:1.5px dashed ${TEXT_NODE_COLOR};display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;"></span>未标准化 (${textNodeCount})</div>`
-    );
-  }
-  legendPanel.innerHTML = '<span class="graph-legend-title">实体类型</span><div class="graph-legend-items">' + legendTypeItems.join('') + '</div>';
+  // Build legend (initial render, will be updated by filters)
+  updateLegend();
 
   // Count edges per pair for curvature
   const edgePairCount = {};
@@ -346,14 +325,18 @@ function renderGraph() {
     return { ...e, curvature, pairTotal: total };
   });
 
-  // Simulation
+  // Simulation（性能优化：加速收敛，减少迭代次数）
+  const nodeCount = nodes.length;
+  const chargeStrength = nodeCount > 200 ? -200 : (nodeCount > 100 ? -300 : -400);
   const simulation = d3.forceSimulation(nodes)
     .force('link', d3.forceLink(links).id(d => d.id).distance(d => 150 + (d.pairTotal - 1) * 50))
-    .force('charge', d3.forceManyBody().strength(-400))
+    .force('charge', d3.forceManyBody().strength(chargeStrength).distanceMax(500))
     .force('center', d3.forceCenter(width / 2, height / 2))
     .force('collide', d3.forceCollide(50))
     .force('x', d3.forceX(width / 2).strength(0.04))
-    .force('y', d3.forceY(height / 2).strength(0.04));
+    .force('y', d3.forceY(height / 2).strength(0.04))
+    .alphaDecay(0.04)
+    .velocityDecay(0.4);
   currentSimulation = simulation;
 
   // Arrow marker
@@ -465,19 +448,27 @@ function renderGraph() {
     .attr('dx',14).attr('dy',4).style('pointer-events','none')
     .style('font-family','system-ui,sans-serif');
 
-  // Tick
+  // Tick（性能优化：每 N 帧更新标签背景，减少 getBBox 开销）
+  let tickCount = 0;
   simulation.on('tick', () => {
     link.attr('d', d => getLinkPath(d));
     linkLabels.each(function(d){
       const m=getLinkMid(d); d3.select(this).attr('x',m.x).attr('y',m.y);
     });
-    linkLabelBg.each(function(d,i){
-      const m=getLinkMid(d); const tb=linkLabels.nodes()[i].getBBox();
-      d3.select(this).attr('x',m.x-tb.width/2-4).attr('y',m.y-tb.height/2-2).attr('width',tb.width+8).attr('height',tb.height+4);
-    });
+    // 标签背景的 getBBox 计算开销大，每 3 帧更新一次
+    if (tickCount % 3 === 0) {
+      linkLabelBg.each(function(d,i){
+        const m=getLinkMid(d); const tb=linkLabels.nodes()[i].getBBox();
+        d3.select(this).attr('x',m.x-tb.width/2-4).attr('y',m.y-tb.height/2-2).attr('width',tb.width+8).attr('height',tb.height+4);
+      });
+    }
     node.attr('cx', d=>d.x).attr('cy', d=>d.y);
     nodeLabels.attr('x', d=>d.x).attr('y', d=>d.y);
+    tickCount++;
   });
+
+  // 模拟稳定后停止以释放 CPU
+  simulation.on('end', () => { console.log('Force simulation settled'); });
 
   // Click blank to close detail
   svg.on('click', () => {
@@ -577,88 +568,86 @@ document.getElementById('edgeLabelToggle').addEventListener('change', function()
 // Filter change
 document.getElementById('filterType').addEventListener('change', loadGraph);
 
-// 搜索实体节点：高亮 + 平移居中
-function searchGraphNode() {
-  const q = (document.getElementById('filterSearch').value || '').trim().toLowerCase();
-  const hint = document.getElementById('searchMatchHint');
-  if (!q || !graphData) { hint.textContent = ''; resetHighlight(); return; }
-  const matches = graphData.nodes.filter(n => n.name.toLowerCase().includes(q));
-  hint.textContent = matches.length ? `匹配 ${matches.length} 个节点` : '未找到匹配节点';
-  hint.style.color = matches.length ? '#fbbf24' : '#dc2626';
-  if (!matches.length) { resetHighlight(); return; }
-  // 高亮匹配节点，其余变暗
-  const matchIds = new Set(matches.map(n => n.id));
-  d3.selectAll('#graphSvg circle').attr('opacity', d => matchIds.has(d.id) ? 1 : 0.1)
-    .attr('stroke-width', d => matchIds.has(d.id) ? 4 : 1);
-  d3.selectAll('#graphSvg text').attr('opacity', function(d) {
-    if (!d) return 1;
-    // 边标签：有 source 属性的是边数据
-    if (d.source !== undefined) {
-      const sid = typeof d.source === 'object' ? d.source.id : d.source;
-      const tid = typeof d.target === 'object' ? d.target.id : d.target;
-      return (matchIds.has(sid) || matchIds.has(tid)) ? 1 : 0.05;
-    }
-    // 节点标签
-    return d.id ? (matchIds.has(d.id) ? 1 : 0.1) : 0.3;
-  });
-  d3.selectAll('#graphSvg path').attr('opacity', d => {
-    if (!d || !d.source) return 0.3;
-    const sid = typeof d.source === 'object' ? d.source.id : d.source;
-    const tid = typeof d.target === 'object' ? d.target.id : d.target;
-    return (matchIds.has(sid) || matchIds.has(tid)) ? 1 : 0.05;
-  });
-  // 平移到第一个匹配节点
-  const first = matches[0];
-  if (first.x != null && first.y != null) {
-    const svg = d3.select('#graphSvg');
-    const container = svg.node().parentElement;
-    const w = container.clientWidth, h = container.clientHeight;
-    const k = 1.5;
-    svg.transition().duration(500)
-      .call(d3.zoom().scaleExtent([0.1, 4]).on('zoom', e => d3.select('#graphSvg > g').attr('transform', e.transform))
-        .transform, d3.zoomIdentity.translate(w/2 - first.x * k, h/2 - first.y * k).scale(k));
-  }
-}
-
-function resetHighlight() {
-  d3.selectAll('#graphSvg circle').attr('opacity', 1).attr('stroke-width', d => d && d.is_text_node ? 1.5 : 2.5);
-  d3.selectAll('#graphSvg text').attr('opacity', 1);
-  d3.selectAll('#graphSvg path').attr('opacity', 1);
-}
-
-// 客户端筛选（实体类型 + 最少事实数）
+// 统一可见性计算：综合 搜索 + 实体类型 + 最少事实数
 function applyClientFilter() {
   if (!graphData) return;
   const etFilter = document.getElementById('filterEntityType').value;
   const minFacts = parseInt(document.getElementById('filterMinFacts').value) || 0;
+  const searchQ = (document.getElementById('filterSearch').value || '').trim().toLowerCase();
+  const hint = document.getElementById('searchMatchHint');
 
-  d3.selectAll('#graphSvg circle').each(function(d) {
-    let visible = true;
-    if (minFacts > 0 && (d.fact_count || 0) < minFacts) visible = false;
+  // 无任何筛选条件 → 全部显示
+  if (!etFilter && !minFacts && !searchQ) {
+    d3.selectAll('#graphSvg circle').attr('opacity', 1)
+      .attr('stroke-width', d => d && d.is_text_node ? 1.5 : 2.5)
+      .attr('stroke', d => d ? getNodeColor(d) : '#e2e8f0')
+      .attr('r', d => d ? Math.max(8, Math.min(16, 6 + (d.fact_count || 1))) : 8);
+    d3.selectAll('#graphSvg text').attr('opacity', 1);
+    d3.selectAll('#graphSvg path').attr('opacity', 1);
+    d3.selectAll('#graphSvg rect').attr('opacity', 1);
+    hint.textContent = '';
+    updateLegend();
+    return;
+  }
+
+  // 第一步：按实体类型 + 最少事实数得到筛选通过集合
+  const filterPassIds = new Set();
+  graphData.nodes.forEach(n => {
+    let pass = true;
+    if (minFacts > 0 && (n.fact_count || 0) < minFacts) pass = false;
     if (etFilter) {
-      if (etFilter === '__TEXT__') {
-        if (!d.is_text_node) visible = false;
-      } else {
-        if (d.is_text_node || d.entity_type !== etFilter) visible = false;
-      }
+      if (etFilter === '__TEXT__') { if (!n.is_text_node) pass = false; }
+      else { if (n.is_text_node || n.entity_type !== etFilter) pass = false; }
     }
-    d3.select(this).attr('opacity', visible ? 1 : 0.06).attr('r', visible ? Math.max(8, Math.min(16, 6 + (d.fact_count || 1))) : 3);
+    if (pass) filterPassIds.add(n.id);
   });
 
-  const visibleIds = new Set();
+  // 第二步：如果有搜索词，在筛选通过集合上做搜索 + 邻居扩展
+  let visibleIds, matchIds = new Set(), neighborIds = new Set();
+  if (searchQ) {
+    // 搜索匹配：在筛选通过集合中搜索（防止 null 名称报错）
+    graphData.nodes.forEach(n => {
+      if (filterPassIds.has(n.id) && (n.name || '').toLowerCase().includes(searchQ)) matchIds.add(n.id);
+    });
+    // 邻居扩展：邻居也需通过筛选条件
+    graphData.edges.forEach(e => {
+      const sid = typeof e.source === 'object' ? e.source.id : e.source;
+      const tid = typeof e.target === 'object' ? e.target.id : e.target;
+      if (matchIds.has(sid) && filterPassIds.has(tid)) neighborIds.add(tid);
+      if (matchIds.has(tid) && filterPassIds.has(sid)) neighborIds.add(sid);
+    });
+    visibleIds = new Set([...matchIds, ...neighborIds]);
+
+    // 更新搜索提示
+    const pureNeighbors = [...neighborIds].filter(id => !matchIds.has(id));
+    if (matchIds.size) {
+      hint.textContent = `匹配 ${matchIds.size} 个节点，关联 ${pureNeighbors.length} 个`;
+      hint.style.color = '#fbbf24';
+    } else {
+      hint.textContent = '未找到匹配节点';
+      hint.style.color = '#dc2626';
+    }
+  } else {
+    visibleIds = filterPassIds;
+    hint.textContent = '';
+  }
+
+  // 第三步：应用到 DOM
   d3.selectAll('#graphSvg circle').each(function(d) {
-    if (d3.select(this).attr('opacity') > 0.5) visibleIds.add(d.id);
+    const vis = visibleIds.has(d.id);
+    d3.select(this)
+      .attr('opacity', vis ? 1 : 0.06)
+      .attr('r', vis ? Math.max(8, Math.min(16, 6 + (d.fact_count || 1))) : 3)
+      .attr('stroke-width', searchQ ? (matchIds.has(d.id) ? 4 : (neighborIds.has(d.id) ? 2.5 : 1)) : (d.is_text_node ? 1.5 : 2.5))
+      .attr('stroke', searchQ ? (matchIds.has(d.id) ? '#f59e0b' : (neighborIds.has(d.id) ? '#3b82f6' : '#e2e8f0')) : getNodeColor(d));
   });
-
   d3.selectAll('#graphSvg text').attr('opacity', function(d) {
     if (!d) return 1;
-    // 边标签：有 source 属性的是边数据
     if (d.source !== undefined) {
       const sid = typeof d.source === 'object' ? d.source.id : d.source;
       const tid = typeof d.target === 'object' ? d.target.id : d.target;
       return (visibleIds.has(sid) && visibleIds.has(tid)) ? 1 : 0.05;
     }
-    // 节点标签
     return d.id ? (visibleIds.has(d.id) ? 1 : 0.06) : 0.3;
   });
   d3.selectAll('#graphSvg path').attr('opacity', d => {
@@ -667,6 +656,94 @@ function applyClientFilter() {
     const tid = typeof d.target === 'object' ? d.target.id : d.target;
     return (visibleIds.has(sid) && visibleIds.has(tid)) ? 1 : 0.03;
   });
+  d3.selectAll('#graphSvg rect').attr('opacity', function(d) {
+    if (!d || !d.source) return 0;
+    const sid = typeof d.source === 'object' ? d.source.id : d.source;
+    const tid = typeof d.target === 'object' ? d.target.id : d.target;
+    return (visibleIds.has(sid) && visibleIds.has(tid)) ? 1 : 0;
+  });
+
+  // 搜索时平移到第一个匹配节点
+  if (searchQ && matchIds.size > 0) {
+    const first = graphData.nodes.find(n => matchIds.has(n.id));
+    if (first && first.x != null && first.y != null) {
+      const svg = d3.select('#graphSvg');
+      const container = svg.node().parentElement;
+      const w = container.clientWidth, h = container.clientHeight;
+      const k = 1.5;
+      svg.transition().duration(500)
+        .call(d3.zoom().scaleExtent([0.1, 4]).on('zoom', e => d3.select('#graphSvg > g').attr('transform', e.transform))
+          .transform, d3.zoomIdentity.translate(w/2 - first.x * k, h/2 - first.y * k).scale(k));
+    }
+  }
+
+  updateLegend(visibleIds);
+}
+
+// 搜索入口：直接调用统一筛选函数
+function searchGraphNode() {
+  applyClientFilter();
+}
+
+function resetHighlight() {
+  applyClientFilter();
+}
+
+// 图例更新：根据当前可见节点动态计算
+function updateLegend(visibleIds) {
+  if (!graphData) return;
+  const legendPanel = document.getElementById('graphLegend');
+  legendPanel.style.display = 'block';
+  const TEXT_NODE_COLOR = '#6b6b6b';
+
+  // 如果没有传入 visibleIds，从 DOM 读取当前可见状态
+  if (!visibleIds) {
+    visibleIds = new Set();
+    d3.selectAll('#graphSvg circle').each(function(d) {
+      if (d && +d3.select(this).attr('opacity') > 0.5) visibleIds.add(d.id);
+    });
+    // 如果 DOM 还没渲染（初次加载），用全部节点
+    if (visibleIds.size === 0) {
+      graphData.nodes.forEach(n => visibleIds.add(n.id));
+    }
+  }
+
+  const visibleNodes = graphData.nodes.filter(n => visibleIds.has(n.id));
+  const typeMap = {};
+  let textNodeCount = 0;
+  visibleNodes.forEach(n => {
+    if (n.is_text_node) { textNodeCount++; return; }
+    if (!typeMap[n.entity_type]) {
+      typeMap[n.entity_type] = { name: n.entity_type, count: 0, color: TYPE_COLORS[n.entity_type] || '#60a5fa' };
+    }
+    typeMap[n.entity_type].count++;
+  });
+
+  const items = Object.values(typeMap).map(t =>
+    `<div class="graph-legend-item"><span class="graph-legend-dot" style="background:${t.color}"></span>${TYPE_ZH[t.name] || t.name} (${t.count})</div>`
+  );
+  if (textNodeCount > 0) {
+    items.push(
+      `<div class="graph-legend-item"><span class="graph-legend-dot" style="background:none;border:1.5px dashed ${TEXT_NODE_COLOR};display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;"></span>未标准化 (${textNodeCount})</div>`
+    );
+  }
+  legendPanel.innerHTML = '<span class="graph-legend-title">实体类型</span><div class="graph-legend-items">' + items.join('') + '</div>';
+}
+
+// 清除所有筛选条件
+function clearAllFilters() {
+  document.getElementById('filterSearch').value = '';
+  document.getElementById('searchMatchHint').textContent = '';
+  document.getElementById('filterEntityType').value = '';
+  document.getElementById('filterMinFacts').value = '0';
+  document.getElementById('minFactLabel').textContent = '0';
+  const filterType = document.getElementById('filterType');
+  if (filterType.value) {
+    filterType.value = '';
+    loadGraph();  // 事实类型变化需重新加载数据
+  } else {
+    resetHighlight();
+  }
 }
 
 // Initial load
