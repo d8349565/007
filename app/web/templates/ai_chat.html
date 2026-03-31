@@ -1,0 +1,828 @@
+{% extends "_base.html" %}
+{% block title %}AI 助手 — 资讯颗粒化{% endblock %}
+
+{% block container_class %}container-fluid{% endblock %}
+
+{% block head %}
+<style>
+/* ── AI Chat Layout (full-height, no scroll on main) ── */
+.ai-layout { display: flex; height: calc(100vh - 52px); overflow: hidden; margin: -20px -24px; }
+
+/* ── Sidebar ── */
+.ai-sidebar {
+  width: 260px; flex-shrink: 0; background: var(--bg-card); border-right: 1px solid var(--border-subtle);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.ai-sidebar-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; }
+.ai-sidebar-head h3 { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.btn-new-chat { display: flex; align-items: center; gap: 4px; padding: 4px 9px; background: var(--accent-glow); color: var(--accent-primary); border: none; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; }
+.btn-new-chat:hover { background: rgba(37,99,235,0.2); }
+.ai-sidebar-search { padding: 10px 12px; border-bottom: 1px solid var(--border-subtle); }
+.ai-sidebar-search input { width: 100%; padding: 6px 10px; border: 1px solid var(--border-subtle); border-radius: 6px; font-size: 12px; color: var(--text-primary); background: var(--bg-input); outline: none; }
+.ai-sidebar-search input:focus { border-color: var(--accent-primary); }
+.history-list { flex: 1; overflow-y: auto; padding: 6px 8px; }
+.history-list::-webkit-scrollbar { width: 3px; }
+.history-list::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 2px; }
+.history-group-label { font-size: 10px; font-weight: 600; color: var(--text-muted); padding: 8px 8px 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+.history-item { padding: 7px 10px; border-radius: 7px; cursor: pointer; font-size: 12px; color: var(--text-secondary); line-height: 1.4; display: flex; align-items: flex-start; gap: 6px; transition: all 0.12s; }
+.history-item:hover { background: var(--bg-card-hover); }
+.history-item.active { background: var(--accent-glow); color: var(--accent-primary); }
+.history-item .h-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; opacity: 0.7; }
+.history-item .h-text { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.history-item .h-time { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+
+/* ── Chat Main ── */
+.chat-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.messages { flex: 1; overflow-y: auto; padding: 24px 0; display: flex; flex-direction: column; gap: 20px; }
+.messages::-webkit-scrollbar { width: 4px; }
+.messages::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 2px; }
+
+.msg-row { display: flex; gap: 12px; padding: 0 24px; max-width: 900px; margin: 0 auto; width: 100%; }
+.msg-row.user { flex-direction: row-reverse; }
+.msg-avatar { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.msg-avatar.ai-av { background: linear-gradient(135deg, var(--accent-primary), #06b6d4); color: #fff; font-weight: 700; font-size: 12px; }
+.msg-avatar.user-av { background: rgba(37,99,235,0.1); font-size: 15px; }
+
+.msg-content { flex: 1; min-width: 0; }
+.msg-bubble { padding: 12px 16px; border-radius: var(--radius-lg); font-size: 13.5px; line-height: 1.7; max-width: 680px; }
+.msg-row.ai .msg-bubble { background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-primary); border-top-left-radius: 4px; box-shadow: var(--shadow-sm); }
+.msg-row.user .msg-bubble { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border-top-right-radius: 4px; margin-left: auto; }
+.msg-meta { font-size: 11px; color: var(--text-muted); margin-top: 5px; display: flex; align-items: center; gap: 8px; }
+.msg-row.user .msg-meta { justify-content: flex-end; }
+
+/* Stat cards in AI bubble */
+.stat-cards { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.stat-card { background: var(--accent-glow); border: 1px solid rgba(37,99,235,0.15); border-radius: var(--radius-md); padding: 8px 12px; min-width: 80px; text-align: center; }
+.stat-card .val { font-size: 20px; font-weight: 800; color: var(--accent-primary); }
+.stat-card .lbl { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+/* Citations */
+.citations { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.citation-card { display: inline-flex; align-items: flex-start; gap: 8px; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 7px 10px; cursor: pointer; transition: all 0.15s; max-width: 280px; text-decoration: none; color: inherit; }
+.citation-card:hover { border-color: var(--accent-primary); background: var(--accent-glow); }
+.citation-badge { background: rgba(37,99,235,0.12); color: var(--accent-primary); border-radius: 4px; font-size: 10px; font-weight: 700; padding: 1px 5px; flex-shrink: 0; margin-top: 1px; }
+.citation-text { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
+.citation-text strong { color: var(--text-primary); }
+
+/* Suggest chips */
+.suggest-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-subtle); }
+.suggest-chip { padding: 5px 11px; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: 20px; font-size: 11px; color: var(--text-secondary); cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+.suggest-chip:hover { background: var(--accent-glow); border-color: var(--accent-primary); color: var(--accent-primary); }
+
+/* Typing indicator */
+.typing { display: flex; align-items: center; gap: 4px; padding: 4px 0; }
+.typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); animation: bounce 1.2s infinite; }
+.typing span:nth-child(2) { animation-delay: 0.2s; }
+.typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+
+/* Tool call indicator */
+.tool-indicator { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--color-info-bg); border: 1px solid rgba(8,145,178,0.15); border-radius: var(--radius-md); font-size: 11px; color: var(--color-info); margin: 6px 0; }
+.tool-indicator .spin { animation: spin 1s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Inline table */
+.facts-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+.facts-table th { background: var(--bg-input); padding: 6px 10px; text-align: left; color: var(--text-muted); font-weight: 600; border-bottom: 2px solid var(--border-subtle); }
+.facts-table td { padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); color: var(--text-secondary); }
+.facts-table tr:hover td { background: var(--bg-card-hover); }
+
+/* Badges */
+.badge-ft { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+.badge-inv { background: rgba(219,39,119,0.1); color: var(--type-investment); }
+.badge-exp { background: rgba(124,58,237,0.1); color: var(--type-expansion); }
+.badge-coop { background: rgba(109,40,217,0.1); color: var(--type-cooperation); }
+.badge-cap { background: rgba(37,99,235,0.1); color: var(--type-capacity); }
+.badge-fin { background: rgba(217,119,6,0.1); color: var(--type-financial); }
+
+.hl { font-weight: 700; color: var(--accent-primary); }
+
+/* ── Input area ── */
+.input-area { background: var(--bg-card); border-top: 1px solid var(--border-subtle); padding: 14px 24px; flex-shrink: 0; }
+.input-wrap { max-width: 860px; margin: 0 auto; }
+.quick-actions { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.quick-btn { padding: 4px 10px; border: 1px solid var(--border-subtle); border-radius: 14px; font-size: 11px; color: var(--text-muted); background: var(--bg-input); cursor: pointer; transition: all 0.15s; }
+.quick-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); background: var(--accent-glow); }
+.input-box { display: flex; align-items: flex-end; gap: 10px; background: var(--bg-input); border: 1.5px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 10px 14px; transition: all 0.2s; }
+.input-box:focus-within { border-color: var(--accent-primary); background: var(--bg-card); box-shadow: 0 0 0 3px var(--accent-glow); }
+.input-box textarea { flex: 1; border: none; background: transparent; resize: none; font-size: 14px; color: var(--text-primary); outline: none; line-height: 1.5; max-height: 120px; font-family: inherit; min-height: 22px; }
+.input-box textarea::placeholder { color: var(--text-muted); }
+.input-actions { display: flex; align-items: center; gap: 6px; }
+.btn-icon-ai { width: 32px; height: 32px; border-radius: var(--radius-md); border: none; background: var(--bg-elevated); color: var(--text-muted); cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+.btn-icon-ai:hover { background: var(--border-subtle); color: var(--text-primary); }
+.btn-send { width: 34px; height: 34px; border-radius: 9px; border: none; background: linear-gradient(135deg, #2563eb, #0ea5e9); color: #fff; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(37,99,235,0.35); transition: all 0.15s; }
+.btn-send:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,0.45); }
+.btn-send:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.input-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; font-size: 11px; color: var(--text-muted); }
+.kb-hint { display: flex; gap: 10px; }
+.kb-hint kbd { background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 1px 5px; font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); }
+
+/* ── Welcome ── */
+.welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 40px 24px; text-align: center; }
+.welcome-icon { font-size: 52px; margin-bottom: 16px; opacity: 0.85; }
+.welcome h2 { font-size: 22px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
+.welcome p { font-size: 14px; color: var(--text-muted); max-width: 480px; line-height: 1.6; }
+.welcome-cards { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; justify-content: center; max-width: 700px; }
+.welcome-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 14px 16px; cursor: pointer; text-align: left; width: calc(50% - 5px); min-width: 220px; box-shadow: var(--shadow-sm); transition: all 0.15s; }
+.welcome-card:hover { border-color: var(--accent-primary); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.welcome-card .card-icon { font-size: 20px; margin-bottom: 7px; }
+.welcome-card .card-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.welcome-card .card-desc { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+
+/* ── Settings Panel (right drawer) ── */
+.settings-panel {
+  width: 0; flex-shrink: 0; background: var(--bg-card); border-left: 1px solid var(--border-subtle);
+  display: flex; flex-direction: column; overflow: hidden; transition: width 0.25s ease;
+}
+.settings-panel.open { width: 360px; }
+.settings-head { padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.settings-head h3 { font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px; }
+.settings-close { background: none; border: none; font-size: 18px; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 4px; }
+.settings-close:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.settings-body { flex: 1; overflow-y: auto; padding: 16px; }
+.settings-body::-webkit-scrollbar { width: 3px; }
+.settings-body::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 2px; }
+
+.s-section { margin-bottom: 20px; }
+.s-section-title { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.s-field { margin-bottom: 12px; }
+.s-label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; font-weight: 500; }
+.s-hint { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+.s-select, .s-input {
+  width: 100%; padding: 7px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  font-size: 12px; color: var(--text-primary); background: var(--bg-input); outline: none; font-family: inherit;
+}
+.s-select:focus, .s-input:focus { border-color: var(--accent-primary); }
+.s-input-group { display: flex; gap: 6px; }
+.s-input-group .s-input { flex: 1; }
+.s-range-wrap { display: flex; align-items: center; gap: 10px; }
+.s-range-wrap input[type=range] { flex: 1; accent-color: var(--accent-primary); }
+.s-range-val { font-size: 12px; font-weight: 600; color: var(--accent-primary); min-width: 35px; text-align: right; font-family: var(--font-mono); }
+
+.s-btn { padding: 7px 14px; border-radius: var(--radius-md); font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--border-subtle); background: var(--bg-input); color: var(--text-secondary); transition: all 0.15s; }
+.s-btn:hover { background: var(--bg-elevated); }
+.s-btn-primary { background: var(--accent-primary); color: #fff; border-color: var(--accent-primary); }
+.s-btn-primary:hover { background: var(--accent-primary-hover); }
+.s-btn-sm { padding: 4px 9px; font-size: 11px; }
+.s-btn-group { display: flex; gap: 6px; margin-top: 8px; }
+
+.s-status { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 3px 8px; border-radius: 10px; }
+.s-status.ok { background: var(--color-success-bg); color: var(--color-success); }
+.s-status.err { background: var(--color-danger-bg); color: var(--color-danger); }
+.s-status.pending { background: var(--color-warning-bg); color: var(--color-warning); }
+
+.provider-card { padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); margin-bottom: 8px; cursor: pointer; transition: all 0.12s; }
+.provider-card:hover { border-color: var(--accent-primary); }
+.provider-card.selected { border-color: var(--accent-primary); background: var(--accent-glow); }
+.provider-card .p-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.provider-card .p-model { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-family: var(--font-mono); }
+.provider-card .p-status { margin-top: 4px; }
+
+.env-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.env-key { font-size: 11px; font-family: var(--font-mono); color: var(--text-secondary); min-width: 130px; }
+.env-val { font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); flex: 1; }
+.env-edit-input { width: 100%; padding: 5px 8px; border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 11px; font-family: var(--font-mono); background: var(--bg-input); color: var(--text-primary); outline: none; }
+.env-edit-input:focus { border-color: var(--accent-primary); }
+
+/* ── Settings toggle button ── */
+.settings-toggle { position: fixed; right: 16px; bottom: 80px; width: 40px; height: 40px; border-radius: 50%; background: var(--bg-card); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-md); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--text-muted); transition: all 0.15s; z-index: 10; }
+.settings-toggle:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+.settings-panel.open ~ .settings-toggle { display: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ai-layout">
+  <!-- ── Sidebar ── -->
+  <div class="ai-sidebar">
+    <div class="ai-sidebar-head">
+      <h3>对话历史</h3>
+      <button class="btn-new-chat" onclick="newChat()">＋ 新建</button>
+    </div>
+    <div class="ai-sidebar-search">
+      <input type="text" placeholder="🔍 搜索历史对话…" id="searchHistory">
+    </div>
+    <div class="history-list" id="historyList">
+      <div class="history-group-label">暂无历史</div>
+    </div>
+  </div>
+
+  <!-- ── Chat Main ── -->
+  <div class="chat-main">
+    <!-- Welcome screen -->
+    <div class="welcome" id="welcomeScreen">
+      <div class="welcome-icon">🧠</div>
+      <h2>AI 数据助手</h2>
+      <p>基于知识库中已审核的事实原子回答问题，所有数据可追溯、有引用。</p>
+      <div class="welcome-cards">
+        <div class="welcome-card" onclick="askQuestion('知识库中一共有多少条事实？按类型分布如何？')">
+          <div class="card-icon">📊</div>
+          <div class="card-title">知识库概况</div>
+          <div class="card-desc">查看事实总数、实体数量、分类统计</div>
+        </div>
+        <div class="welcome-card" onclick="askQuestion('佐敦在中国有哪些工厂和合资公司？')">
+          <div class="card-icon">🏭</div>
+          <div class="card-title">查询实体布局</div>
+          <div class="card-desc">查找企业的工厂、子公司和合资布局</div>
+        </div>
+        <div class="welcome-card" onclick="askQuestion('2024年有哪些企业进行了扩产或投资？')">
+          <div class="card-icon">📈</div>
+          <div class="card-title">行业动态追踪</div>
+          <div class="card-desc">按时间、类型查询扩产投资等事实</div>
+        </div>
+        <div class="welcome-card" onclick="askQuestion('知识库中哪些实体之间有合资或股权关系？')">
+          <div class="card-icon">🤝</div>
+          <div class="card-title">关系网络分析</div>
+          <div class="card-desc">探索实体间的股权、合资、品牌关系</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Messages area -->
+    <div class="messages" id="messagesArea" style="display:none;"></div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <div class="input-wrap">
+        <div class="quick-actions">
+          <button class="quick-btn" onclick="askQuestion('知识库统计概况')">📊 统计概况</button>
+          <button class="quick-btn" onclick="insertText('查找实体 ')">🏭 查实体</button>
+          <button class="quick-btn" onclick="insertText('查询事实 ')">📋 查事实</button>
+          <button class="quick-btn" onclick="insertText('哪些企业之间有')">🤝 查关系</button>
+          <button class="quick-btn" onclick="insertText('2024年')">📅 按时间</button>
+        </div>
+        <div class="input-box">
+          <textarea rows="1" placeholder="输入问题，如 "哪些企业在2024年扩产？"" id="inputTA" onkeydown="handleKey(event)"></textarea>
+          <div class="input-actions">
+            <button class="btn-icon-ai" title="设置" onclick="toggleSettings()">⚙</button>
+            <button class="btn-send" id="btnSend" onclick="sendMessage()" title="发送 (Enter)">↑</button>
+          </div>
+        </div>
+        <div class="input-footer">
+          <span>AI 回答基于已审核通过的事实原子，不会编造数据</span>
+          <div class="kb-hint">
+            <span><kbd>Enter</kbd> 发送</span>
+            <span><kbd>Shift+Enter</kbd> 换行</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Settings Panel ── -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-head">
+      <h3>⚙ 控制台</h3>
+      <button class="settings-close" onclick="toggleSettings()">✕</button>
+    </div>
+    <div class="settings-body">
+      <!-- Provider 选择 -->
+      <div class="s-section">
+        <div class="s-section-title">🤖 模型提供商</div>
+        <div id="providerCards"></div>
+      </div>
+
+      <!-- 模型参数 -->
+      <div class="s-section">
+        <div class="s-section-title">🎛 模型参数</div>
+        <div class="s-field">
+          <label class="s-label">Temperature（创造性）</label>
+          <div class="s-range-wrap">
+            <input type="range" min="0" max="1" step="0.05" value="0.3" id="tempSlider" oninput="document.getElementById('tempVal').textContent=this.value">
+            <span class="s-range-val" id="tempVal">0.3</span>
+          </div>
+          <div class="s-hint">越低越精准，越高越发散（推荐 0.1~0.3）</div>
+        </div>
+        <div class="s-field">
+          <label class="s-label">最大 Tokens</label>
+          <select class="s-select" id="maxTokensSelect">
+            <option value="2048">2048</option>
+            <option value="4096">4096</option>
+            <option value="8192" selected>8192</option>
+            <option value="16384">16384</option>
+          </select>
+        </div>
+        <div class="s-field">
+          <label class="s-label">超时时间（秒）</label>
+          <input type="number" class="s-input" value="120" min="30" max="600" id="timeoutInput">
+        </div>
+        <div class="s-field">
+          <label class="s-label">最大重试次数</label>
+          <input type="number" class="s-input" value="3" min="1" max="10" id="retriesInput">
+        </div>
+        <div class="s-btn-group">
+          <button class="s-btn s-btn-primary" onclick="saveSettings()">💾 保存设置</button>
+          <button class="s-btn" onclick="testConnection()">🔌 测试连接</button>
+        </div>
+        <div id="settingsMsg" style="margin-top:8px;font-size:11px;"></div>
+      </div>
+
+      <!-- API Keys -->
+      <div class="s-section">
+        <div class="s-section-title">🔑 API Keys</div>
+        <div id="envKeys"></div>
+        <div class="s-btn-group">
+          <button class="s-btn s-btn-primary s-btn-sm" onclick="saveEnvKeys()">保存 Keys</button>
+        </div>
+        <div id="envMsg" style="margin-top:8px;font-size:11px;"></div>
+      </div>
+
+      <!-- 系统信息 -->
+      <div class="s-section">
+        <div class="s-section-title">ℹ️ 系统信息</div>
+        <div class="s-field">
+          <label class="s-label">数据库路径</label>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);word-break:break-all;">{{ settings.database_path }}</div>
+        </div>
+        <div class="s-field" id="dbStatsField" style="display:none;">
+          <label class="s-label">数据概况</label>
+          <div id="dbStats" style="font-size:11px;color:var(--text-muted);"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button class="settings-toggle" onclick="toggleSettings()" title="打开控制台">⚙</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── State ──
+let chatHistory = [];      // [{role, content}]
+let conversations = [];    // [{id, title, messages, time}]
+let currentConvId = null;
+let isLoading = false;
+
+const messagesArea = document.getElementById('messagesArea');
+const welcomeScreen = document.getElementById('welcomeScreen');
+const inputTA = document.getElementById('inputTA');
+const btnSend = document.getElementById('btnSend');
+
+// Auto-resize textarea
+inputTA.addEventListener('input', () => {
+  inputTA.style.height = 'auto';
+  inputTA.style.height = Math.min(inputTA.scrollHeight, 120) + 'px';
+});
+
+// ── Chat ──
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function askQuestion(q) {
+  inputTA.value = q;
+  sendMessage();
+}
+
+function insertText(t) {
+  inputTA.value = t;
+  inputTA.focus();
+}
+
+function newChat() {
+  chatHistory = [];
+  currentConvId = null;
+  messagesArea.innerHTML = '';
+  messagesArea.style.display = 'none';
+  welcomeScreen.style.display = 'flex';
+  inputTA.value = '';
+}
+
+async function sendMessage() {
+  const text = inputTA.value.trim();
+  if (!text || isLoading) return;
+
+  isLoading = true;
+  btnSend.disabled = true;
+
+  // Hide welcome, show messages
+  welcomeScreen.style.display = 'none';
+  messagesArea.style.display = 'flex';
+
+  // Add user message
+  chatHistory.push({ role: 'user', content: text });
+  appendMessage('user', text);
+  inputTA.value = '';
+  inputTA.style.height = 'auto';
+
+  // Show typing
+  const typingId = appendTyping();
+  scrollToBottom();
+
+  try {
+    const resp = await fetch('/ai/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: chatHistory,
+        temperature: parseFloat(document.getElementById('tempSlider').value),
+      }),
+    });
+
+    const data = await resp.json();
+    removeTyping(typingId);
+
+    if (data.error) {
+      appendMessage('ai', `⚠️ ${data.error}`, true);
+    } else {
+      const answer = data.answer || '（无回答）';
+      chatHistory.push({ role: 'assistant', content: answer });
+      appendMessage('ai', answer, false, data.tool_calls, data.citations);
+
+      // Save to conversation
+      saveConversation(text);
+    }
+  } catch (err) {
+    removeTyping(typingId);
+    appendMessage('ai', `⚠️ 请求失败: ${err.message}`, true);
+  } finally {
+    isLoading = false;
+    btnSend.disabled = false;
+    scrollToBottom();
+  }
+}
+
+function appendMessage(role, content, isError = false, toolCalls = [], citations = []) {
+  const row = document.createElement('div');
+  row.className = `msg-row ${role === 'user' ? 'user' : 'ai'}`;
+
+  const avatarClass = role === 'user' ? 'user-av' : 'ai-av';
+  const avatarText = role === 'user' ? '👤' : 'AI';
+
+  // Format content (basic markdown)
+  let html = content;
+  if (role !== 'user') {
+    html = formatMarkdown(content);
+  }
+
+  // Tool calls info
+  let toolHtml = '';
+  if (toolCalls && toolCalls.length > 0) {
+    toolHtml = '<div style="margin-top:8px;">';
+    toolCalls.forEach(tc => {
+      toolHtml += `<div class="tool-indicator">🔧 调用 <strong>${tc.name}</strong>(${Object.values(tc.args).join(', ')})</div>`;
+    });
+    toolHtml += '</div>';
+  }
+
+  // Citations
+  let citHtml = '';
+  if (citations && citations.length > 0) {
+    citHtml = '<div class="citations">';
+    citations.forEach(c => {
+      citHtml += `<a class="citation-card" href="/review?fact_id=${c}" target="_blank"><span class="citation-badge">#${c.substring(0, 8)}</span><span class="citation-text">查看事实详情</span></a>`;
+    });
+    citHtml += '</div>';
+  }
+
+  const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+  row.innerHTML = `
+    <div class="msg-avatar ${avatarClass}">${avatarText}</div>
+    <div class="msg-content">
+      <div class="msg-bubble" ${isError ? 'style="border-color:var(--color-danger);background:var(--color-danger-bg);"' : ''}>${html}${toolHtml}${citHtml}</div>
+      <div class="msg-meta">${time}${toolCalls && toolCalls.length ? ' · 调用 ' + toolCalls.length + ' 次工具' : ''}</div>
+    </div>
+  `;
+  messagesArea.appendChild(row);
+
+  // Suggest chip click
+  row.querySelectorAll('.suggest-chip').forEach(chip => {
+    chip.addEventListener('click', () => askQuestion(chip.textContent.replace(/^[^\s]+\s/, '')));
+  });
+}
+
+function appendTyping() {
+  const id = 'typing-' + Date.now();
+  const row = document.createElement('div');
+  row.className = 'msg-row ai';
+  row.id = id;
+  row.innerHTML = `
+    <div class="msg-avatar ai-av">AI</div>
+    <div class="msg-content">
+      <div class="msg-bubble" style="padding:8px 16px;">
+        <div class="typing"><span></span><span></span><span></span></div>
+      </div>
+    </div>
+  `;
+  messagesArea.appendChild(row);
+  return id;
+}
+
+function removeTyping(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+function scrollToBottom() {
+  requestAnimationFrame(() => {
+    messagesArea.scrollTop = messagesArea.scrollHeight;
+  });
+}
+
+function formatMarkdown(text) {
+  // 1) 提取代码块保护起来
+  const codeBlocks = [];
+  text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    codeBlocks.push(`<pre style="background:var(--bg-input);padding:8px;border-radius:6px;font-size:12px;overflow-x:auto;margin:6px 0;"><code>${code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`);
+    return `\x00CB${codeBlocks.length - 1}\x00`;
+  });
+
+  // 2) 提取并渲染 Markdown 表格
+  const tables = [];
+  text = text.replace(/(^\|.+\|$\n?){2,}/gm, (block) => {
+    const rows = block.trim().split('\n').filter(r => r.trim());
+    if (rows.length < 2) return block;
+
+    // 检测分隔行（如 |---|---|）
+    let headerEnd = 1;
+    const isSep = r => /^\|[\s\-:| ]+\|$/.test(r.trim());
+    if (isSep(rows[1])) headerEnd = 1;  // row 0 = header, row 1 = sep
+    else return block;  // 不是标准表格
+
+    const parseRow = r => r.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+    const headers = parseRow(rows[0]);
+    const bodyRows = rows.slice(2);  // skip header + separator
+
+    let html = '<table class="facts-table"><thead><tr>';
+    headers.forEach(h => { html += `<th>${fmtInline(h)}</th>`; });
+    html += '</tr></thead><tbody>';
+    bodyRows.forEach(r => {
+      const cells = parseRow(r);
+      html += '<tr>';
+      cells.forEach(c => { html += `<td>${fmtInline(c)}</td>`; });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    tables.push(html);
+    return `\x00TB${tables.length - 1}\x00`;
+  });
+
+  // 3) HTML 转义（表格和代码块已保护）
+  text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // 4) 内联格式
+  text = text
+    .replace(/`([^`]+)`/g, '<code style="background:var(--bg-input);padding:1px 4px;border-radius:3px;font-size:12px;">$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // 5) 块级格式
+  text = text
+    .replace(/^#### (.+)$/gm, '<h5 style="margin:6px 0 3px;font-size:12.5px;font-weight:700;">$1</h5>')
+    .replace(/^### (.+)$/gm, '<h4 style="margin:8px 0 4px;font-size:13px;font-weight:700;">$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3 style="margin:10px 0 4px;font-size:14px;font-weight:700;">$1</h3>')
+    .replace(/^# (.+)$/gm, '<h2 style="margin:12px 0 4px;font-size:15px;font-weight:700;">$1</h2>')
+    .replace(/^---+$/gm, '<hr style="border:none;border-top:1px solid var(--border-subtle);margin:10px 0;">')
+    .replace(/^- (.+)$/gm, '<li style="margin-left:16px;font-size:12.5px;list-style:disc;">$1</li>')
+    .replace(/^(\d+)\. (.+)$/gm, '<li style="margin-left:16px;font-size:12.5px;list-style:decimal;">$2</li>');
+
+  // 包裹连续 <li> 为 <ul>
+  text = text.replace(/((?:<li[^>]*>.*?<\/li>\n?)+)/g, '<ul style="padding-left:4px;margin:4px 0;">$1</ul>');
+
+  // 6) 换行
+  text = text.replace(/\n/g, '<br>');
+
+  // 7) 还原表格和代码块
+  text = text.replace(/\x00TB(\d+)\x00/g, (_, i) => tables[parseInt(i)]);
+  text = text.replace(/\x00CB(\d+)\x00/g, (_, i) => codeBlocks[parseInt(i)]);
+
+  // 清理多余 <br> 紧邻块级元素
+  text = text.replace(/<br>\s*(<(?:table|pre|h[2-5]|hr|ul))/g, '$1');
+  text = text.replace(/(<\/(?:table|pre|h[2-5]|ul)>)\s*<br>/g, '$1');
+
+  return text;
+}
+
+/** 内联格式（用在表格单元格内，不做 HTML 转义因为表格已提前处理） */
+function fmtInline(s) {
+  return s
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code style="font-size:11px;">$1</code>');
+}
+
+// ── Conversation persistence (localStorage) ──
+function saveConversation(firstMsg) {
+  if (!currentConvId) {
+    currentConvId = 'conv-' + Date.now();
+    conversations.unshift({
+      id: currentConvId,
+      title: firstMsg.substring(0, 30),
+      messages: chatHistory,
+      time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    });
+  } else {
+    const conv = conversations.find(c => c.id === currentConvId);
+    if (conv) conv.messages = [...chatHistory];
+  }
+  try { localStorage.setItem('ai_conversations', JSON.stringify(conversations.slice(0, 50))); } catch(e) {}
+  renderHistory();
+}
+
+function loadConversations() {
+  try { conversations = JSON.parse(localStorage.getItem('ai_conversations') || '[]'); } catch(e) { conversations = []; }
+  renderHistory();
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  if (conversations.length === 0) {
+    list.innerHTML = '<div class="history-group-label">暂无历史</div>';
+    return;
+  }
+  list.innerHTML = conversations.map(c => `
+    <div class="history-item ${c.id === currentConvId ? 'active' : ''}" onclick="loadConversation('${c.id}')">
+      <span class="h-icon">💬</span>
+      <span class="h-text">${c.title}</span>
+      <span class="h-time">${c.time || ''}</span>
+    </div>
+  `).join('');
+}
+
+function loadConversation(id) {
+  const conv = conversations.find(c => c.id === id);
+  if (!conv) return;
+  currentConvId = id;
+  chatHistory = [...conv.messages];
+  welcomeScreen.style.display = 'none';
+  messagesArea.style.display = 'flex';
+  messagesArea.innerHTML = '';
+  chatHistory.forEach(m => appendMessage(m.role === 'user' ? 'user' : 'ai', m.content));
+  scrollToBottom();
+  renderHistory();
+}
+
+// ── Settings ──
+function toggleSettings() {
+  const panel = document.getElementById('settingsPanel');
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open')) {
+    loadSettings();
+    loadEnvKeys();
+  }
+}
+
+async function loadSettings() {
+  try {
+    const resp = await fetch('/ai/api/settings');
+    const s = resp.ok ? await resp.json() : {};
+
+    // Provider cards
+    const cards = document.getElementById('providerCards');
+    cards.innerHTML = (s.providers || []).map(p => `
+      <div class="provider-card ${p.name === s.current_provider ? 'selected' : ''}" onclick="selectProvider('${p.name}', this)">
+        <div class="p-name">${p.name.toUpperCase()}</div>
+        <div class="p-model">${p.model}</div>
+        <div class="p-status">
+          ${p.has_key
+            ? '<span class="s-status ok">● Key 已配置</span>'
+            : '<span class="s-status err">● Key 未配置</span>'}
+        </div>
+      </div>
+    `).join('');
+
+    // Parameters
+    document.getElementById('tempSlider').value = s.temperature || 0.3;
+    document.getElementById('tempVal').textContent = s.temperature || 0.3;
+    document.getElementById('maxTokensSelect').value = s.max_tokens || 8192;
+    document.getElementById('timeoutInput').value = s.timeout || 120;
+    document.getElementById('retriesInput').value = s.max_retries || 3;
+  } catch (e) {
+    console.error('加载设置失败:', e);
+  }
+}
+
+function selectProvider(name, el) {
+  document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+async function saveSettings() {
+  const selected = document.querySelector('.provider-card.selected');
+  const provider = selected ? selected.querySelector('.p-name').textContent.toLowerCase() : '';
+  const model = selected ? selected.querySelector('.p-model').textContent : '';
+
+  const data = {
+    provider,
+    model,
+    temperature: parseFloat(document.getElementById('tempSlider').value),
+    max_tokens: parseInt(document.getElementById('maxTokensSelect').value),
+    timeout: parseInt(document.getElementById('timeoutInput').value),
+    max_retries: parseInt(document.getElementById('retriesInput').value),
+  };
+
+  const msg = document.getElementById('settingsMsg');
+  msg.innerHTML = '<span class="s-status pending">● 保存中…</span>';
+
+  try {
+    const resp = await fetch('/ai/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const r = await resp.json();
+    if (r.ok) {
+      msg.innerHTML = '<span class="s-status ok">✓ 设置已保存</span>';
+    } else {
+      msg.innerHTML = `<span class="s-status err">✕ ${r.error || '保存失败'}</span>`;
+    }
+  } catch (e) {
+    msg.innerHTML = `<span class="s-status err">✕ ${e.message}</span>`;
+  }
+  setTimeout(() => msg.innerHTML = '', 3000);
+}
+
+async function testConnection() {
+  const selected = document.querySelector('.provider-card.selected');
+  const provider = selected ? selected.querySelector('.p-name').textContent.toLowerCase() : '';
+
+  const msg = document.getElementById('settingsMsg');
+  msg.innerHTML = '<span class="s-status pending">🔌 测试连接中…</span>';
+
+  try {
+    const resp = await fetch('/ai/api/test-connection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider }),
+    });
+    const r = await resp.json();
+    if (r.ok) {
+      msg.innerHTML = `<span class="s-status ok">✓ 连接成功 (${r.model})</span>`;
+    } else {
+      msg.innerHTML = `<span class="s-status err">✕ ${r.error}</span>`;
+    }
+  } catch (e) {
+    msg.innerHTML = `<span class="s-status err">✕ ${e.message}</span>`;
+  }
+}
+
+async function loadEnvKeys() {
+  try {
+    const resp = await fetch('/ai/api/env');
+    const data = resp.ok ? await resp.json() : {};
+    const container = document.getElementById('envKeys');
+    container.innerHTML = Object.entries(data).map(([key, info]) => `
+      <div class="s-field">
+        <label class="s-label">${key}</label>
+        <div class="s-input-group">
+          <input type="password" class="s-input env-edit-input" data-key="${key}"
+                 placeholder="${info.set ? info.preview : '未设置'}"
+                 autocomplete="off">
+        </div>
+        <div class="s-hint">${info.set ? '✓ 已配置' : '✕ 未设置'}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('加载环境变量失败:', e);
+  }
+}
+
+async function saveEnvKeys() {
+  const inputs = document.querySelectorAll('.env-edit-input');
+  const data = {};
+  inputs.forEach(input => {
+    if (input.value.trim()) {
+      data[input.dataset.key] = input.value.trim();
+    }
+  });
+
+  if (Object.keys(data).length === 0) {
+    document.getElementById('envMsg').innerHTML = '<span class="s-status pending">● 未输入任何 Key</span>';
+    setTimeout(() => document.getElementById('envMsg').innerHTML = '', 2000);
+    return;
+  }
+
+  const msg = document.getElementById('envMsg');
+  msg.innerHTML = '<span class="s-status pending">● 保存中…</span>';
+
+  try {
+    const resp = await fetch('/ai/api/env', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const r = await resp.json();
+    if (r.ok) {
+      msg.innerHTML = '<span class="s-status ok">✓ Keys 已保存到 .env</span>';
+      inputs.forEach(i => i.value = '');
+      loadEnvKeys();
+      loadSettings();
+    } else {
+      msg.innerHTML = `<span class="s-status err">✕ ${r.error}</span>`;
+    }
+  } catch (e) {
+    msg.innerHTML = `<span class="s-status err">✕ ${e.message}</span>`;
+  }
+  setTimeout(() => msg.innerHTML = '', 3000);
+}
+
+// ── Init ──
+loadConversations();
+</script>
+{% endblock %}

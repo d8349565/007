@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 数据助手 — 资讯颗粒化</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; background: #f0f4f8; height: 100vh; display: flex; flex-direction: column; overflow: hidden; color: #0f172a; }
+
+/* ── Topbar ── */
+.topbar {
+  height: 52px; background: #fff; border-bottom: 1px solid #e2e8f0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; flex-shrink: 0; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.topbar-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; color: #0f172a; }
+.topbar-brand .dot { width: 8px; height: 8px; background: #3b82f6; border-radius: 50%; }
+.topbar-nav { display: flex; gap: 4px; }
+.topbar-nav a { padding: 5px 12px; border-radius: 6px; font-size: 13px; color: #64748b; text-decoration: none; transition: all 0.15s; }
+.topbar-nav a:hover { background: #f1f5f9; color: #0f172a; }
+.topbar-nav a.active { background: #eff6ff; color: #2563eb; font-weight: 600; }
+.topbar-right { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #94a3b8; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ── Layout ── */
+.layout { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 260px; flex-shrink: 0; background: #fff; border-right: 1px solid #e2e8f0;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.sidebar-head {
+  padding: 14px 16px 10px; border-bottom: 1px solid #f1f5f9;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.sidebar-head h3 { font-size: 12px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+.btn-new {
+  display: flex; align-items: center; gap: 4px; padding: 4px 9px;
+  background: #eff6ff; color: #2563eb; border: none; border-radius: 5px;
+  font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+}
+.btn-new:hover { background: #dbeafe; }
+.sidebar-search { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }
+.sidebar-search input {
+  width: 100%; padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px;
+  font-size: 12px; color: #374151; background: #f8fafc; outline: none;
+}
+.sidebar-search input:focus { border-color: #93c5fd; background: #fff; }
+.history-list { flex: 1; overflow-y: auto; padding: 6px 8px; }
+.history-group-label { font-size: 10px; font-weight: 600; color: #94a3b8; padding: 8px 8px 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+.history-item {
+  padding: 7px 10px; border-radius: 7px; cursor: pointer; transition: all 0.12s;
+  font-size: 12px; color: #374151; line-height: 1.4; position: relative;
+  display: flex; align-items: flex-start; gap: 6px;
+}
+.history-item:hover { background: #f8fafc; }
+.history-item.active { background: #eff6ff; color: #1d4ed8; }
+.history-item .icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; opacity: 0.7; }
+.history-item .text { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.history-item .time { font-size: 10px; color: #94a3b8; flex-shrink: 0; }
+.sidebar-footer { padding: 10px 12px; border-top: 1px solid #f1f5f9; }
+.usage-bar { height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden; margin-bottom: 5px; }
+.usage-fill { height: 100%; width: 34%; background: linear-gradient(90deg, #3b82f6, #06b6d4); border-radius: 2px; }
+.usage-label { font-size: 10px; color: #94a3b8; }
+
+/* ── Main chat area ── */
+.chat-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Messages ── */
+.messages {
+  flex: 1; overflow-y: auto; padding: 24px 0;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.messages::-webkit-scrollbar { width: 4px; }
+.messages::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
+
+.msg-row { display: flex; gap: 12px; padding: 0 24px; max-width: 900px; margin: 0 auto; width: 100%; }
+.msg-row.user { flex-direction: row-reverse; }
+.msg-avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 14px;
+}
+.msg-avatar.ai { background: linear-gradient(135deg, #3b82f6, #06b6d4); color: #fff; font-weight: 700; font-size: 12px; }
+.msg-avatar.user { background: #e0f2fe; font-size: 15px; }
+
+.msg-content { flex: 1; min-width: 0; }
+.msg-bubble {
+  padding: 12px 16px; border-radius: 12px; font-size: 13.5px; line-height: 1.7;
+  max-width: 680px;
+}
+.msg-row.ai .msg-bubble {
+  background: #fff; border: 1px solid #e2e8f0; color: #1e293b;
+  border-top-left-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.msg-row.user .msg-bubble {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff;
+  border-top-right-radius: 4px; margin-left: auto;
+}
+.msg-meta { font-size: 11px; color: #94a3b8; margin-top: 5px; display: flex; align-items: center; gap: 8px; }
+.msg-row.user .msg-meta { justify-content: flex-end; }
+
+/* Citations */
+.citations { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.citation-card {
+  display: inline-flex; align-items: flex-start; gap: 8px;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 7px 10px; cursor: pointer; transition: all 0.15s;
+  max-width: 280px; text-decoration: none;
+}
+.citation-card:hover { border-color: #93c5fd; background: #eff6ff; }
+.citation-badge {
+  background: #dbeafe; color: #1d4ed8; border-radius: 4px;
+  font-size: 10px; font-weight: 700; padding: 1px 5px; flex-shrink: 0; margin-top: 1px;
+}
+.citation-text { font-size: 11px; color: #374151; line-height: 1.4; }
+.citation-text strong { color: #0f172a; }
+
+/* Suggestion chips */
+.suggest-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #f1f5f9; }
+.suggest-chip {
+  padding: 5px 11px; background: #f1f5f9; border: 1px solid #e2e8f0;
+  border-radius: 20px; font-size: 11px; color: #475569; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap;
+}
+.suggest-chip:hover { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+
+/* Stat cards */
+.stat-cards { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.stat-card {
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  border: 1px solid #bae6fd; border-radius: 8px; padding: 8px 12px;
+  min-width: 90px; text-align: center;
+}
+.stat-card .val { font-size: 20px; font-weight: 800; color: #0369a1; }
+.stat-card .lbl { font-size: 10px; color: #64748b; margin-top: 2px; }
+
+/* Inline facts table */
+.facts-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+.facts-table th { background: #f8fafc; padding: 6px 10px; text-align: left; color: #64748b; font-weight: 600; border-bottom: 2px solid #e2e8f0; }
+.facts-table td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; color: #374151; }
+.facts-table tr:hover td { background: #f8fafc; }
+.badge {
+  display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 600;
+}
+.badge-inv { background: #fce7f3; color: #be185d; }
+.badge-exp { background: #dcfce7; color: #166534; }
+.badge-coop { background: #e0e7ff; color: #3730a3; }
+.badge-cap { background: #fef9c3; color: #854d0e; }
+
+/* Typing indicator */
+.typing { display: flex; align-items: center; gap: 4px; padding: 10px 16px; }
+.typing span { width: 6px; height: 6px; border-radius: 50%; background: #94a3b8; animation: bounce 1.2s infinite; }
+.typing span:nth-child(2) { animation-delay: 0.2s; }
+.typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+
+/* ── Input area ── */
+.input-area {
+  background: #fff; border-top: 1px solid #e2e8f0; padding: 14px 24px;
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.05); flex-shrink: 0;
+}
+.input-wrap {
+  max-width: 860px; margin: 0 auto;
+}
+.quick-actions { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.quick-btn {
+  padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 14px;
+  font-size: 11px; color: #64748b; background: #f8fafc; cursor: pointer;
+  transition: all 0.15s; display: flex; align-items: center; gap: 4px;
+}
+.quick-btn:hover { border-color: #93c5fd; color: #1d4ed8; background: #eff6ff; }
+.input-box {
+  display: flex; align-items: flex-end; gap: 10px;
+  background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px;
+  padding: 10px 14px; transition: all 0.2s;
+}
+.input-box:focus-within { border-color: #60a5fa; background: #fff; box-shadow: 0 0 0 3px rgba(147,197,253,0.2); }
+.input-box textarea {
+  flex: 1; border: none; background: transparent; resize: none; font-size: 14px;
+  color: #0f172a; outline: none; line-height: 1.5; max-height: 120px;
+  font-family: inherit; min-height: 22px;
+}
+.input-box textarea::placeholder { color: #94a3b8; }
+.input-actions { display: flex; align-items: center; gap: 6px; }
+.btn-icon {
+  width: 32px; height: 32px; border-radius: 8px; border: none;
+  background: #f1f5f9; color: #64748b; cursor: pointer; font-size: 15px;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.btn-icon:hover { background: #e2e8f0; color: #374151; }
+.btn-send {
+  width: 34px; height: 34px; border-radius: 9px; border: none;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9); color: #fff;
+  cursor: pointer; font-size: 16px; display: flex; align-items: center;
+  justify-content: center; transition: all 0.15s; box-shadow: 0 2px 8px rgba(37,99,235,0.35);
+}
+.btn-send:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,0.45); }
+.input-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; font-size: 11px; color: #94a3b8; }
+.kb-hint { display: flex; gap: 10px; }
+.kb-hint kbd {
+  background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px;
+  padding: 1px 5px; font-size: 10px; font-family: monospace; color: #64748b;
+}
+
+/* ── Welcome state ── */
+.welcome {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex: 1; padding: 40px 24px; text-align: center;
+}
+.welcome-icon { font-size: 52px; margin-bottom: 16px; opacity: 0.85; }
+.welcome h2 { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 8px; }
+.welcome p { font-size: 14px; color: #64748b; max-width: 480px; line-height: 1.6; }
+.welcome-cards { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; justify-content: center; max-width: 700px; }
+.welcome-card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  padding: 14px 16px; cursor: pointer; transition: all 0.15s; text-align: left;
+  width: calc(50% - 5px); min-width: 220px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+.welcome-card:hover { border-color: #93c5fd; box-shadow: 0 4px 16px rgba(37,99,235,0.1); transform: translateY(-1px); }
+.welcome-card .card-icon { font-size: 20px; margin-bottom: 7px; }
+.welcome-card .card-title { font-size: 13px; font-weight: 600; color: #0f172a; margin-bottom: 4px; }
+.welcome-card .card-desc { font-size: 11px; color: #64748b; line-height: 1.5; }
+
+/* inline highlight */
+.hl { font-weight: 700; color: #1d4ed8; }
+.hl-r { font-weight: 700; color: #dc2626; }
+em { font-style: normal; background: #fef9c3; padding: 1px 3px; border-radius: 3px; font-size: 12.5px; }
+
+/* right panel */
+.detail-panel {
+  width: 320px; flex-shrink: 0; background: #fff; border-left: 1px solid #e2e8f0;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.detail-head {
+  padding: 14px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px;
+  font-weight: 600; color: #0f172a; display: flex; align-items: center; justify-content: space-between;
+}
+.detail-body { flex: 1; overflow-y: auto; padding: 12px; }
+.entity-card {
+  background: linear-gradient(135deg, #eff6ff, #f0f9ff); border: 1px solid #bae6fd;
+  border-radius: 10px; padding: 14px; margin-bottom: 12px;
+}
+.entity-card .ename { font-size: 16px; font-weight: 800; color: #1e3a5f; margin-bottom: 4px; }
+.entity-card .etype { font-size: 11px; color: #0369a1; background: #e0f2fe; padding: 2px 7px; border-radius: 10px; display: inline-block; margin-bottom: 10px; }
+.entity-card .stat-row { display: flex; gap: 12px; margin-top: 8px; }
+.entity-card .mini-stat .val { font-size: 17px; font-weight: 800; color: #0369a1; }
+.entity-card .mini-stat .lbl { font-size: 10px; color: #64748b; }
+.related-facts { margin-top: 4px; }
+.related-fact { padding: 8px 10px; border-radius: 7px; background: #f8fafc; border: 1px solid #f1f5f9; margin-bottom: 6px; font-size: 11.5px; color: #374151; line-height: 1.5; cursor: pointer; transition: all 0.12s; }
+.related-fact:hover { border-color: #93c5fd; background: #eff6ff; }
+.fact-type-row { display: flex; gap: 4px; margin-bottom: 4px; flex-wrap: wrap; }
+
+/* tab */
+.detail-tabs { display: flex; border-bottom: 1px solid #e2e8f0; }
+.detail-tab { flex: 1; padding: 8px; text-align: center; font-size: 12px; cursor: pointer; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.15s; }
+.detail-tab.active { color: #2563eb; border-bottom-color: #2563eb; font-weight: 600; }
+
+/* scrollbar hide for sidebar */
+.history-list::-webkit-scrollbar { width: 3px; }
+.history-list::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="dot"></div>
+    资讯颗粒化
+  </div>
+  <nav class="topbar-nav">
+    <a href="#">概览</a>
+    <a href="#">导入</a>
+    <a href="#">任务</a>
+    <a href="#">审核</a>
+    <a href="#">结果</a>
+    <a href="#">图谱</a>
+    <a href="#" class="active">AI助手</a>
+    <a href="#">管理</a>
+  </nav>
+  <div class="topbar-right">
+    <div class="status-dot"></div>
+    DeepSeek 已连接 &nbsp;·&nbsp; 404 条事实 · 117 实体
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-head">
+      <h3>对话历史</h3>
+      <button class="btn-new">＋ 新建</button>
+    </div>
+    <div class="sidebar-search">
+      <input type="text" placeholder="🔍 搜索历史对话…">
+    </div>
+    <div class="history-list">
+      <div class="history-group-label">今天</div>
+      <div class="history-item active">
+        <span class="icon">💬</span>
+        <span class="text">佐敦在中国的工厂和合资布局</span>
+        <span class="time">14:22</span>
+      </div>
+      <div class="history-item">
+        <span class="icon">📊</span>
+        <span class="text">立邦 2024 年收入分析</span>
+        <span class="time">11:05</span>
+      </div>
+      <div class="history-group-label">昨天</div>
+      <div class="history-item">
+        <span class="icon">🏭</span>
+        <span class="text">汽车涂料扩产 TOP5 企业</span>
+        <span class="time">周一</span>
+      </div>
+      <div class="history-item">
+        <span class="icon">🤝</span>
+        <span class="text">船舶涂料合作案例梳理</span>
+        <span class="time">周一</span>
+      </div>
+      <div class="history-item">
+        <span class="icon">🌍</span>
+        <span class="text">水性涂料赛道新进入者</span>
+        <span class="time">周日</span>
+      </div>
+      <div class="history-group-label">更早</div>
+      <div class="history-item">
+        <span class="icon">💬</span>
+        <span class="text">PPG 全球市场份额变化</span>
+        <span class="time">3/28</span>
+      </div>
+      <div class="history-item">
+        <span class="icon">💬</span>
+        <span class="text">阿克苏诺贝尔与宣伟对比</span>
+        <span class="time">3/27</span>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="usage-label" style="margin-bottom:5px;">本月用量 &nbsp;<strong style="color:#0369a1;">34%</strong></div>
+      <div class="usage-bar"><div class="usage-fill"></div></div>
+      <div class="usage-label">已用 3,412 / 10,000 tokens</div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="chat-main">
+    <div class="messages" id="messages">
+
+      <!-- User message -->
+      <div class="msg-row user">
+        <div class="msg-avatar user">👤</div>
+        <div class="msg-content">
+          <div class="msg-bubble">佐敦在中国有哪些工厂和合资公司？他们的主要业务方向是什么？</div>
+          <div class="msg-meta">14:20</div>
+        </div>
+      </div>
+
+      <!-- AI message -->
+      <div class="msg-row ai">
+        <div class="msg-avatar ai">AI</div>
+        <div class="msg-content">
+          <div class="msg-bubble">
+            <div class="stat-cards">
+              <div class="stat-card"><div class="val">3</div><div class="lbl">关联实体</div></div>
+              <div class="stat-card"><div class="val">18</div><div class="lbl">相关事实</div></div>
+              <div class="stat-card"><div class="val">6</div><div class="lbl">关系链路</div></div>
+            </div>
+
+            根据知识库数据，<span class="hl">佐敦（Jotun）</span> 在中国的布局主要通过以下实体展开：
+
+            <br><br>
+            <strong>① 中远佐敦船舶涂料（香港）有限公司</strong><br>
+            由 <em>中远集团</em> 与 <em>挪威佐敦集团</em> 合资组建，专注 <span class="badge badge-coop">船舶涂料</span>，在青岛设有生产基地。2023 年完成青岛工厂二期工程。
+
+            <br><br>
+            <strong>② 佐敦涂料（张家港）有限公司</strong><br>
+            张家港独资工厂，已建成 <em>年产 20 万吨高性能涂料</em> 新工厂及液体涂料研发中心，是佐敦<span class="hl">全球规模最大</span>的生产基地。计划投资额约 <span class="hl-r">5,000 万欧元</span>。
+
+            <br><br>
+            <strong>③ 中远佐敦船舶涂料（青岛）有限公司</strong><br>
+            青岛合资工厂，主攻海洋防腐与 <span class="badge badge-exp">船舶涂料</span>，已承接 EOLMED 离岸风电项目等海外订单。
+
+            <br><br>
+            <strong>主要业务方向：</strong> 船舶防腐涂料、海洋工程涂料、高性能液体涂料，重点下沉船舶、能源和工业基础设施领域。
+
+            <!-- Citations -->
+            <div class="citations">
+              <a class="citation-card" href="#">
+                <span class="citation-badge">#1204</span>
+                <span class="citation-text"><strong>合资组建</strong> · 中远集团 → 中远佐敦船舶涂料（香港）有限公司</span>
+              </a>
+              <a class="citation-card" href="#">
+                <span class="citation-badge">#1318</span>
+                <span class="citation-text"><strong>扩建</strong> · 张家港年产20万吨高性能涂料新工厂 · €5000万</span>
+              </a>
+              <a class="citation-card" href="#">
+                <span class="citation-badge">#1401</span>
+                <span class="citation-text"><strong>合作供应</strong> · 中远佐敦→EOLMED项目离岸风电涂料</span>
+              </a>
+            </div>
+
+            <!-- Suggest -->
+            <div class="suggest-row">
+              <span class="suggest-chip">📈 佐敦张家港产能规划？</span>
+              <span class="suggest-chip">🤝 佐敦与中远的持股比例？</span>
+              <span class="suggest-chip">🌊 竞争对手海虹老人怎么样？</span>
+              <span class="suggest-chip">🗺️ 在图谱中查看佐敦</span>
+            </div>
+          </div>
+          <div class="msg-meta">14:22 &nbsp;·&nbsp; 引用 3 条事实</div>
+        </div>
+      </div>
+
+      <!-- User message 2 -->
+      <div class="msg-row user">
+        <div class="msg-avatar user">👤</div>
+        <div class="msg-content">
+          <div class="msg-bubble">张家港项目的具体投资数据和时间线？</div>
+          <div class="msg-meta">14:23</div>
+        </div>
+      </div>
+
+      <!-- AI typing -->
+      <div class="msg-row ai" id="typingRow">
+        <div class="msg-avatar ai">AI</div>
+        <div class="msg-content">
+          <div class="msg-bubble" style="padding:8px 16px;">
+            <div class="typing"><span></span><span></span><span></span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <div class="input-wrap">
+        <div class="quick-actions">
+          <button class="quick-btn">🏭 查实体</button>
+          <button class="quick-btn">📊 查指标</button>
+          <button class="quick-btn">🤝 查关系</button>
+          <button class="quick-btn">📈 行业趋势</button>
+          <button class="quick-btn">⚖️ 对比分析</button>
+          <button class="quick-btn">🗺️ 查项目</button>
+        </div>
+        <div class="input-box">
+          <textarea rows="1" placeholder="输入问题，如"哪些企业在2024年扩产超过10万吨？" 或 @ 一个实体名…" id="inputTA"></textarea>
+          <div class="input-actions">
+            <button class="btn-icon" title="上传文档">📎</button>
+            <button class="btn-icon" title="语音输入">🎙</button>
+            <button class="btn-send" title="发送 (Enter)">↑</button>
+          </div>
+        </div>
+        <div class="input-footer">
+          <span style="color:#94a3b8;">AI 回答基于已审核通过的事实原子，不会编造数据</span>
+          <div class="kb-hint">
+            <span><kbd>Enter</kbd> 发送</span>
+            <span><kbd>Shift+Enter</kbd> 换行</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right detail panel -->
+  <div class="detail-panel">
+    <div class="detail-head">
+      <span>📌 相关实体</span>
+      <span style="font-size:11px;color:#94a3b8;font-weight:400;">本轮对话</span>
+    </div>
+    <div class="detail-tabs">
+      <div class="detail-tab active">实体</div>
+      <div class="detail-tab">事实</div>
+      <div class="detail-tab">图谱</div>
+    </div>
+    <div class="detail-body">
+      <div class="entity-card">
+        <div class="ename">挪威佐敦集团</div>
+        <div class="etype">企业</div>
+        <div style="font-size:11px;color:#374151;line-height:1.5;">全球领先船舶及防腐涂料品牌，总部挪威，中国区通过合资+独资双线布局。</div>
+        <div class="stat-row">
+          <div class="mini-stat"><div class="val">12</div><div class="lbl">关联事实</div></div>
+          <div class="mini-stat"><div class="val">4</div><div class="lbl">关联实体</div></div>
+          <div class="mini-stat"><div class="val">3</div><div class="lbl">关联项目</div></div>
+        </div>
+      </div>
+
+      <div style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.4px;">关联事实摘要</div>
+      <div class="related-facts">
+        <div class="related-fact">
+          <div class="fact-type-row"><span class="badge badge-exp">扩建</span><span class="badge badge-inv">投资</span></div>
+          张家港建设年产 <strong>20万吨</strong> 高性能涂料新工厂，计划投资 <strong>€5,000万</strong>，2025年投产
+        </div>
+        <div class="related-fact">
+          <div class="fact-type-row"><span class="badge badge-coop">合作</span></div>
+          与中远集团合资成立船舶涂料公司，中国区军工船舶涂料覆盖率超 <strong>40%</strong>
+        </div>
+        <div class="related-fact">
+          <div class="fact-type-row"><span class="badge badge-exp">扩建</span></div>
+          青岛工厂二期工程计划开工，新增产能 <strong>5万吨/年</strong> 船舶防腐涂料
+        </div>
+        <div class="related-fact">
+          <div class="fact-type-row"><span class="badge badge-coop">合作</span></div>
+          为 EOLMED 离岸风电浮动平台（法国）提供涂料及技术支持
+        </div>
+        <div class="related-fact">
+          <div class="fact-type-row"><span class="badge badge-coop">合作</span></div>
+          中标卢旺达布格塞拉国际机场钢结构防火涂料供应项目
+        </div>
+      </div>
+
+      <a href="#" style="display:block;text-align:center;margin-top:10px;color:#2563eb;font-size:12px;padding:7px;background:#eff6ff;border-radius:7px;text-decoration:none;font-weight:500;">
+        查看完整实体档案 →
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Textarea auto-resize
+const ta = document.getElementById('inputTA');
+ta.addEventListener('input', () => {
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+});
+
+// Simulate AI response after 1.5s
+setTimeout(() => {
+  const typingRow = document.getElementById('typingRow');
+  typingRow.querySelector('.msg-bubble').innerHTML = `
+    <div class="stat-cards">
+      <div class="stat-card"><div class="val">5</div><div class="lbl">相关事实</div></div>
+      <div class="stat-card"><div class="val">2023—2025</div><div class="lbl">时间跨度</div></div>
+    </div>
+    以下是张家港项目的完整投资数据及时间线：
+    <br><br>
+    <table class="facts-table">
+      <thead>
+        <tr><th>时间</th><th>事件</th><th>数值</th><th>类型</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2022 Q3</td><td>签署张家港投资意向书</td><td>—</td><td><span class="badge badge-inv">投资</span></td></tr>
+        <tr><td>2023 H1</td><td>项目正式开工，计划总投资</td><td><strong>€5,000万</strong></td><td><span class="badge badge-exp">扩建</span></td></tr>
+        <tr><td>2023 H2</td><td>一期工程（液体涂料研发中心）建成</td><td>2万㎡</td><td><span class="badge badge-exp">扩建</span></td></tr>
+        <tr><td>2024 Q2</td><td>主厂房封顶，规划产能</td><td><strong>20万吨/年</strong></td><td><span class="badge badge-cap">产能</span></td></tr>
+        <tr><td>2025 H1</td><td>全面投产（计划）</td><td>达全球最大单体工厂</td><td><span class="badge badge-exp">扩建</span></td></tr>
+      </tbody>
+    </table>
+    该项目建成后，张家港将成为佐敦<span class="hl">全球规模最大</span>的单体生产基地，主要产品覆盖船舶涂料、防腐涂料及工业维护涂料三大品类。
+    <div class="citations">
+      <a class="citation-card" href="#"><span class="citation-badge">#1318</span><span class="citation-text"><strong>扩建</strong> · 张家港20万吨涂料工厂 · €5000万 · 2023</span></a>
+      <a class="citation-card" href="#"><span class="citation-badge">#1355</span><span class="citation-text"><strong>产能</strong> · 一期工程已建成投产 · 2023 H2</span></a>
+    </div>
+    <div class="suggest-row">
+      <span class="suggest-chip">📊 与海虹老人产能对比？</span>
+      <span class="suggest-chip">🌍 海外工厂有哪些？</span>
+      <span class="suggest-chip">💰 其他外资扩产规模？</span>
+    </div>
+  `;
+  typingRow.querySelector('.msg-meta')?.remove();
+  const meta = document.createElement('div');
+  meta.className = 'msg-meta';
+  meta.textContent = '14:24 · 引用 5 条事实';
+  typingRow.querySelector('.msg-content').appendChild(meta);
+}, 1800);
+
+// Suggest chips click
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('suggest-chip')) {
+    ta.value = e.target.textContent.replace(/^[^\s]+\s/, '');
+    ta.focus();
+  }
+  if (e.target.classList.contains('welcome-card') || e.target.closest('.welcome-card')) {
+    const card = e.target.closest('.welcome-card');
+    ta.value = card.querySelector('.card-title').textContent;
+    ta.focus();
+  }
+});
+</script>
+</body>
+</html>

@@ -18,6 +18,7 @@ from app.services.query import (
     get_entity_hierarchy, get_entity_detail,
 )
 from app.web.api_tasks import api_tasks_bp
+from app.web.api_ai_chat import ai_chat_bp
 
 logger = get_logger(__name__)
 
@@ -290,6 +291,7 @@ def create_app() -> Flask:
     # 全局模板上下文：注入事实类型中文名映射
     ENTITY_TYPE_ZH = {
         'COMPANY': '企业', 'GROUP': '群体/排名', 'PROJECT': '项目',
+        'MARKET': '市场', 'INDUSTRY': '行业',
         'REGION': '地区', 'PRODUCT': '产品', 'PERSON': '人物',
         'ORG': '机构', 'OTHER': '其他', 'UNKNOWN': '未知', 'COUNTRY': '国家/地区',
     }
@@ -1857,6 +1859,8 @@ def create_app() -> Flask:
 
     # 注册任务状态 API 蓝图
     app.register_blueprint(api_tasks_bp)
+    # 注册 AI 助手蓝图
+    app.register_blueprint(ai_chat_bp)
 
     return app
 

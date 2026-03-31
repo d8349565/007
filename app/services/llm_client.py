@@ -123,6 +123,60 @@ class LLMClient:
             f"LLM 调用在 {self.max_retries} 次重试后仍然失败: {last_error}"
         )
 
+    def chat_messages(
+        self,
+        messages: list[dict],
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> dict[str, Any]:
+        """
+        发送完整消息列表（支持多轮对话）。
+
+        参数:
+            messages: [{"role": "system"/"user"/"assistant", "content": "..."}]
+
+        返回与 chat() 相同的 dict。
+        """
+        last_error = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature or self.temperature,
+                    max_tokens=max_tokens or self.max_tokens,
+                    timeout=self.timeout,
+                    extra_body=self.extra_body,
+                )
+
+                usage = response.usage
+                content = response.choices[0].message.content or ""
+
+                if "<think>" in content:
+                    import re
+                    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+
+                result = {
+                    "content": content,
+                    "input_tokens": usage.prompt_tokens if usage else 0,
+                    "output_tokens": usage.completion_tokens if usage else 0,
+                    "model": response.model or self.model,
+                }
+                logger.debug(
+                    "LLM chat_messages 成功: model=%s, in=%d, out=%d, msgs=%d",
+                    result["model"], result["input_tokens"],
+                    result["output_tokens"], len(messages),
+                )
+                return result
+
+            except Exception as e:
+                last_error = e
+                logger.warning("LLM chat_messages 失败 (%d/%d): %s", attempt, self.max_retries, e)
+                if attempt < self.max_retries:
+                    time.sleep(self.retry_delay * attempt)
+
+        raise RuntimeError(f"LLM 调用在 {self.max_retries} 次重试后仍然失败: {last_error}")
+
     def chat_json(
         self,
         system_prompt: str,
