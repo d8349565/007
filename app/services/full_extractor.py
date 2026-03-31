@@ -160,32 +160,123 @@ def _validate_record(rec: dict, cfg: dict) -> dict | None:
 # --- 年份/地域/产品前缀的正则 ---
 _RE_YEAR_PREFIX = re.compile(r"^(\d{4}年(?:\d{1,2}月)?)")
 _RE_SCOPE_PREFIX = re.compile(r"^(全球|全国|中国|国内|中国市场)")
-_RE_MISSING_VERB = re.compile(r"^(.+(?:产能|收入|销售额|营收|利润|产值|市场规模|市场份额|募集资金净额|营业收入))$")
+_RE_MISSING_VERB = re.compile(
+    r"^(.+(?:产能|收入|销售额|营收|利润|产值|市场规模|市场份额|"
+    r"募集资金净额|营业收入|销售量|产量|消费量))$"
+)
+
+# "在中国/在青岛/在张家港/在全球" 前缀 → 剥离到 location
+_RE_LOCATION_PREFIX = re.compile(
+    r"^在(中国|全球|全国|国内|"
+    r"[\u4e00-\u9fff]{2,8}(?:省|市|区|县|基地|工厂|园区))"
+)
+
+# "在X建厂/建设" — 国家/地区名不带行政后缀
+_RE_LOC_VERB_PREFIX = re.compile(
+    r"^在([\u4e00-\u9fff]{2,8})(建厂|建设|投产|设厂|投资|扩产)"
+)
+
+# 设施/工厂名前缀 → 剥离到 qualifiers.report_scope
+_RE_FACILITY_PREFIX = re.compile(
+    r"^([\u4e00-\u9fff]{2,10}(?:工厂|基地|厂区|园区|公司|分公司|"
+    r"生产基地|新工厂|旧工厂|总部))"
+    r"(?=(?:产能|产量|销售|生产效率|一次合格率|年产|设计产能|规划|"
+    r"预计|已形成|为集团|年产值))"
+)
+
+# 阶段前缀 → qualifiers.phase
+_RE_PHASE_PREFIX = re.compile(
+    r"^((?:一|二|三|四|两|1|2|3|4)期(?:工程)?)"
+    r"(?=(?:年产|产能|已?建成|计划开工|计划投产|投产|完工|项目))"
+)
+
+# 产品类型前缀 (非产能场景) → qualifiers.product_type
+_RE_PRODUCT_PREFIX = re.compile(
+    r"^([\u4e00-\u9fff]{2,12}(?:涂料|涂层|油漆|树脂|颜料|材料|产品))"
+    r"(产销量|产销|销售量|销量|产量|消费量|出货量|销售额|销售收入|营业收入|营收|收入)"
+)
+
+# "全厂/集团全球" 范围前缀
+_RE_BROAD_SCOPE_PREFIX = re.compile(
+    r"^(全厂|集团全球|全球|国内外|全国)"
+    r"(?=(?:产能|销售|营收|收入|产量|销量))"
+)
+
+# 项目名嵌入谓词 → 剥离到 qualifiers.project_name
+_RE_PROJECT_IN_PRED = re.compile(
+    r"^(?:投建|计划投资建设|投资建设|拟建|计划建设|实施|扩建|签约落地)?"
+    r"([\u4e00-\u9fff\w\uff08\uff09\(\)]{5,60}"
+    r"(?:项目|工程|工厂|研发中心|基地|园区)"
+    r"(?:[\uff08\(][^\uff09\)]*[\uff09\)])?)"
+    r"(计划建设|建设|签约|开工|投产|通过验收|达产|试生产|建成)?$"
+)
+
+# "连续X年" → 剥离到 qualifiers.duration
+_RE_CONSECUTIVE_YEARS = re.compile(r"^(连续\d+年)")
+
+# 排名类谓词中嵌入范围+产品描述
+_RE_RANKING_EMBEDDED = re.compile(
+    r"^(位居|排名|位列|名列|跻身|荣获|入选|是)"
+    r"([\u4e00-\u9fff]+(?:涂料|市场|行业|领域)[\u4e00-\u9fff]*?)"
+    r"的?"
+    r"(第[一二三四五六七八九十\d]+[位名]?|[\u4e00-\u9fff]*领导者|[\u4e00-\u9fff]*前列|[\u4e00-\u9fff]*冠军)"
+    r"$"
+)
+
+# 产品+产能（增强版，覆盖更多结尾动词）
+_RE_PRODUCT_CAPACITY = re.compile(
+    r"^([\u4e00-\u9fff]{2,15}(?:涂料|涂层|油漆|树脂|颜料|材料|产品))"
+    r"(产能(?:为|达到|增加|增加至|扩大至)?)"
+    r"$"
+)
 
 
 def _normalize_record(rec: dict) -> dict:
     """
-    自动修正常见字段错位问题（在验证后、写入 DB 前执行）：
-    1. predicate 含年份前缀 → 剥离到 time_expr
-    2. predicate 含地域前缀 → 剥离到 location 或 qualifiers
-    3. predicate 缺少动词尾 → 补 "为"
-    4. predicate 含产品名+产能 → 拆到 qualifiers.product_type
+    自动修正常见字段错位问题（在验证后、写入 DB 前执行）。
     """
     predicate = rec.get("predicate", "")
+    qualifiers = rec.get("qualifiers", {})
+    if not isinstance(qualifiers, dict):
+        qualifiers = {}
     changed = False
+    original_predicate = predicate
 
-    # 1. 剥离年份前缀：如 "2024年销售额为" → "销售额为"，年份填到 time_expr
+    # 1. 剥离年份前缀
     m = _RE_YEAR_PREFIX.match(predicate)
     if m:
         year_part = m.group(1)
         new_pred = predicate[len(year_part):]
-        if new_pred:  # 确保剥离后还有内容
+        if new_pred:
             if not rec.get("time_expr"):
                 rec["time_expr"] = year_part
             predicate = new_pred
             changed = True
 
-    # 2. 剥离地域前缀：如 "全球销售额为" → "销售额为"，地域填到 location
+    # 2. 剥离"在X"地域前缀
+    m = _RE_LOCATION_PREFIX.match(predicate)
+    if m:
+        loc_part = m.group(1)
+        new_pred = predicate[len("在") + len(loc_part):]
+        if new_pred:
+            if not rec.get("location"):
+                scope_map = {"全国": "中国", "国内": "中国", "中国": "中国", "全球": "全球"}
+                rec["location"] = scope_map.get(loc_part, loc_part)
+            predicate = new_pred
+            changed = True
+
+    # 2b. "在X建厂/建设" — 国家/地区名无行政后缀
+    if not changed or predicate == original_predicate:
+        m = _RE_LOC_VERB_PREFIX.match(predicate)
+        if m:
+            loc_part = m.group(1)
+            verb_part = m.group(2)
+            if not rec.get("location"):
+                rec["location"] = loc_part
+            predicate = verb_part
+            changed = True
+
+    # 3. 剥离基础地域前缀（全球/全国/中国/国内/中国市场）
     m = _RE_SCOPE_PREFIX.match(predicate)
     if m:
         scope_part = m.group(1)
@@ -197,24 +288,131 @@ def _normalize_record(rec: dict) -> dict:
             predicate = new_pred
             changed = True
 
-    # 3. predicate 缺少动词结尾 → 补 "为"
-    # 如 "油性工业涂料产能" → "油性工业涂料产能为"
-    # 如 "IPO计划募集资金净额" → "IPO计划募集资金净额为"
+    # 4. 剥离广域范围前缀（全厂/集团全球等）
+    m = _RE_BROAD_SCOPE_PREFIX.match(predicate)
+    if m:
+        scope_part = m.group(1)
+        new_pred = predicate[len(scope_part):]
+        if new_pred:
+            if not qualifiers.get("report_scope"):
+                qualifiers["report_scope"] = scope_part
+                rec["qualifiers"] = qualifiers
+            predicate = new_pred
+            changed = True
+
+    # 5. 剥离设施/工厂名前缀
+    m = _RE_FACILITY_PREFIX.match(predicate)
+    if m:
+        facility_part = m.group(1)
+        new_pred = predicate[len(facility_part):]
+        if new_pred:
+            if not qualifiers.get("report_scope"):
+                qualifiers["report_scope"] = facility_part
+                rec["qualifiers"] = qualifiers
+            predicate = new_pred
+            changed = True
+
+    # 6. 剥离阶段前缀（一期/二期/三期/两期）
+    m = _RE_PHASE_PREFIX.match(predicate)
+    if m:
+        phase_part = m.group(1)
+        new_pred = predicate[len(phase_part):]
+        if new_pred:
+            if not qualifiers.get("phase"):
+                qualifiers["phase"] = phase_part
+                rec["qualifiers"] = qualifiers
+            predicate = new_pred
+            changed = True
+
+    # 7. 排名类谓词：剥离嵌入的范围+产品描述（优先于产品前缀）
+    m = _RE_RANKING_EMBEDDED.match(predicate)
+    if m:
+        verb_part = m.group(1)
+        scope_part = m.group(2)
+        rank_part = m.group(3)
+        if not qualifiers.get("ranking_scope"):
+            qualifiers["ranking_scope"] = scope_part
+            rec["qualifiers"] = qualifiers
+        predicate = verb_part + rank_part
+        changed = True
+
+    # 8. 剥离产品类型前缀（非产能场景）
+    m = _RE_PRODUCT_PREFIX.match(predicate)
+    if m:
+        product_part = m.group(1)
+        if not qualifiers.get("product_type"):
+            qualifiers["product_type"] = product_part
+            rec["qualifiers"] = qualifiers
+        remaining = predicate[len(product_part):]
+        predicate = remaining
+        changed = True
+
+    # 9. 产品+产能 增强版
+    m = _RE_PRODUCT_CAPACITY.match(predicate)
+    if m:
+        product_part = m.group(1)
+        capacity_verb = m.group(2)
+        if not qualifiers.get("product_type"):
+            qualifiers["product_type"] = product_part
+            rec["qualifiers"] = qualifiers
+        predicate = capacity_verb
+        changed = True
+
+    # 10. 连续X年 → qualifiers.duration
+    m = _RE_CONSECUTIVE_YEARS.match(predicate)
+    if m:
+        consec_part = m.group(1)
+        new_pred = predicate[len(consec_part):]
+        if new_pred:
+            qualifiers["duration"] = consec_part
+            rec["qualifiers"] = qualifiers
+            predicate = new_pred
+            changed = True
+
+    # 10.5 游离字符清理（如 "区2024年销售额接近"）
+    if predicate and re.match(r'^[\u4e00-\u9fff]\d{4}年', predicate):
+        predicate = predicate[1:]
+        changed = True
+        m = _RE_YEAR_PREFIX.match(predicate)
+        if m:
+            year_part = m.group(1)
+            new_pred = predicate[len(year_part):]
+            if new_pred:
+                if not rec.get("time_expr"):
+                    rec["time_expr"] = year_part
+                predicate = new_pred
+
+    # 11. 项目名嵌入谓词
+    m = _RE_PROJECT_IN_PRED.match(predicate)
+    if m:
+        project_name = m.group(1)
+        action_verb = m.group(2) or "建设"
+        if not qualifiers.get("project_name"):
+            qualifiers["project_name"] = project_name
+            rec["qualifiers"] = qualifiers
+        pre_project = predicate[:predicate.find(project_name)].rstrip()
+        if pre_project:
+            if action_verb in pre_project:
+                predicate = pre_project
+            else:
+                predicate = pre_project + action_verb
+        else:
+            if "计划" in original_predicate and "计划" not in action_verb:
+                predicate = "计划" + action_verb
+            else:
+                predicate = action_verb
+        changed = True
+
+    # 12. 缺少动词结尾 → 补"为"
     if _RE_MISSING_VERB.match(predicate) and not predicate.endswith("为"):
         predicate = predicate + "为"
         changed = True
 
-    # 4. predicate 含 "[产品名]产能为" → 把产品名拆到 qualifiers.product_type
-    # 如 "油性工业涂料产能为" → "产能为"  qualifiers.product_type="油性工业涂料"
-    # 如 "高性能涂料项目产能为" → "产能为"  qualifiers.product_type="高性能涂料"
+    # 13. 产品+产能为 拆分（原有逻辑）
     if predicate.endswith("产能为") and len(predicate) > len("产能为"):
         product_part = predicate[:-len("产能为")]
-        # 去掉可能的"项目"后缀
         product_part = re.sub(r"项目$", "", product_part).strip()
         if product_part:
-            qualifiers = rec.get("qualifiers", {})
-            if not isinstance(qualifiers, dict):
-                qualifiers = {}
             if not qualifiers.get("product_type"):
                 qualifiers["product_type"] = product_part
                 rec["qualifiers"] = qualifiers
@@ -222,11 +420,8 @@ def _normalize_record(rec: dict) -> dict:
             changed = True
 
     if changed:
-        logger.debug(
-            "predicate 自动修正: '%s' → '%s'",
-            rec.get("predicate", ""), predicate,
-        )
         rec["predicate"] = predicate
+        logger.debug("predicate 修正: '%s' → '%s'", original_predicate, predicate)
 
     return rec
 
