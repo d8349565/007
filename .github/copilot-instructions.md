@@ -73,5 +73,62 @@ docker run -p 5000:5000 -v ./data:/app/data --env-file .env fact-extractor
 ## Documentation
 
 设计文档和计划在 `docs/superpowers/` 下，按日期命名：
+
 - `specs/` — 功能设计文档
 - `plans/` — 实施计划
+
+
+# 修改前必做
+
+- 确认相关代码路径、输入输出和副作用
+- 阅读周围代码，理解调用契约
+- 检查相关 schema、config.yaml 白名单、数据库字段
+- 保持公共函数签名不变（除非明确要求）
+
+## 修改规则
+
+- 做能解决问题的最小变更
+- 保持现有架构、命名和文件结构
+- 不引入未被要求的新依赖
+- 修改抽取逻辑时，验证下游 schema 兼容性
+- 修改 Prompt 时，验证输出 JSON 的字段仍与 `fact_atom` 表对应
+- 使用 `app/logger.py` 的 `get_logger()` 而非 `print`
+- API Key、路径、机密使用 `.env` 而非硬编码
+
+## 验证要求
+
+每次非平凡改动后：
+
+- 检查语法正确性
+- 检查 import 和类型一致性
+- 检查受影响的调用路径
+- 检查边界和失败路径
+- 运行相关 pytest 测试（若存在）
+- 若无测试，增加最小验证路径
+
+## 项目特定禁止事项
+
+- 不静默吞掉异常（除非明确要求 fallback）
+- 不用 `print` 替换结构化日志（`app/logger.py`）
+- 不硬编码 API Key、路径或机密（使用 `.env`）
+- 不在全局作用域产生副作用
+- 不跳过清洗直接切分
+- 不在 `extraction_task` 失败时丢弃数据（应置 UNCERTAIN）
+- 不在 Prompt 文件中内联配置（配置走 config.yaml）
+
+## 终端和环境规则
+
+- Windows 优先使用 PowerShell
+- 运行任何 Python 命令前，先确认虚拟环境是否存在（`Test-Path .venv`）
+- 若存在项目虚拟环境，优先使用该环境
+- 不向全局 Python 环境安装包（除非明确要求）
+- 使用 pip 前，确认它属于正确环境
+
+## 响应格式
+
+提出或实施任何修改时，始终说明：
+
+1. 改了什么
+2. 为什么改
+3. 潜在风险
+4. 如何验证
